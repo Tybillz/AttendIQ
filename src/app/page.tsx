@@ -9,7 +9,7 @@ import { SubjectGradebook } from '@/components/SubjectGradebook';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { GateCheckIn } from '@/components/GateCheckIn';
 import { AuthScreen } from '@/components/AuthScreen';
-import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud, initInactivityTracker } from '@/lib/auth';
+import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud, initInactivityTracker, loginAsAdmin, saveAuthSession } from '@/lib/auth';
 import { getTeacherRecordForDate } from '@/lib/teacherAttendance';
 import { StudentProfileModal } from '@/components/StudentProfileModal';
 import { AlertSettingsModal } from '@/components/AlertSettingsModal';
@@ -182,6 +182,43 @@ export default function Home() {
     setAuthSession(null);
   };
 
+  // Administrator authorized switch to Staff Console (Teacher View)
+  const handleAdminSwitchToTeacher = (teacherId?: string) => {
+    const targetTeacher = teachers.find((t) => t.id === teacherId) || activeTeacher || teachers[0];
+    const session: AuthSession = {
+      role: 'teacher',
+      teacherId: targetTeacher.id,
+      teacherName: targetTeacher.name,
+      loginTime: new Date().toISOString(),
+    };
+    saveAuthSession(session);
+    setAuthSession(session);
+    setCurrentRole('teacher');
+    setCurrentTeacherId(targetTeacher.id);
+  };
+
+  // Administrator authorized switch to Gate Security Post
+  const handleAdminSwitchToGate = () => {
+    const session: AuthSession = {
+      role: 'gate',
+      loginTime: new Date().toISOString(),
+    };
+    saveAuthSession(session);
+    setAuthSession(session);
+    setCurrentRole('gate');
+  };
+
+  // Protected Switch back to Admin Console (Strictly requires Master Passcode)
+  const handleSwitchToAdmin = (passcode: string): { success: boolean; message: string } => {
+    const res = loginAsAdmin(passcode);
+    if (res.success && res.session) {
+      setAuthSession(res.session);
+      setCurrentRole('admin');
+      return { success: true, message: 'Principal & School Management access granted.' };
+    }
+    return { success: false, message: res.message || 'Incorrect Management Passcode.' };
+  };
+
   // STRICT CLASS ACCESS RESTRICTION:
   // When in teacher mode, the teacher can ONLY see and access their assigned classroom section(s).
   // When in management/admin mode, management has full access to the whole school.
@@ -241,6 +278,9 @@ export default function Home() {
         auditWarningCount={auditLogs.filter((l) => l.severity === 'critical' || l.severity === 'warning').length}
         onLogout={handleLogout}
         activeTeacher={activeTeacher}
+        onSwitchToTeacher={handleAdminSwitchToTeacher}
+        onSwitchToGate={handleAdminSwitchToGate}
+        onSwitchToAdmin={handleSwitchToAdmin}
       />
 
       {/* Main Content Area */}

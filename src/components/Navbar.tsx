@@ -21,6 +21,7 @@ import {
   LogOut,
   WifiOff,
   CheckCircle2,
+  X,
 } from 'lucide-react';
 import { AlertSettings, Teacher, ClassSection } from '@/types/attendance';
 import { flushOfflineQueue } from '@/lib/storage';
@@ -42,6 +43,9 @@ interface NavbarProps {
   auditWarningCount?: number;
   onLogout?: () => void;
   activeTeacher?: Teacher;
+  onSwitchToTeacher?: (teacherId?: string) => void;
+  onSwitchToGate?: () => void;
+  onSwitchToAdmin?: (passcode: string) => { success: boolean; message: string };
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -61,6 +65,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   auditWarningCount = 0,
   onLogout,
   activeTeacher,
+  onSwitchToTeacher,
+  onSwitchToGate,
+  onSwitchToAdmin,
 }) => {
   const [todayStr, setTodayStr] = React.useState<string>('');
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
@@ -68,6 +75,32 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isDarkMode, setIsDarkMode] = React.useState(true);
   const [isOnline, setIsOnline] = React.useState<boolean>(true);
   const [syncNotice, setSyncNotice] = React.useState<string | null>(null);
+
+  // Admin PIN / Passcode Verification Modal state
+  const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
+  const [adminPasscodeInput, setAdminPasscodeInput] = React.useState('');
+  const [adminModalError, setAdminModalError] = React.useState<string | null>(null);
+  const [isVerifyingPin, setIsVerifyingPin] = React.useState(false);
+
+  const handleVerifyAdminPasscode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminModalError(null);
+    if (!adminPasscodeInput.trim()) {
+      setAdminModalError('Please enter the Admin Master Passcode.');
+      return;
+    }
+    if (onSwitchToAdmin) {
+      setIsVerifyingPin(true);
+      const res = onSwitchToAdmin(adminPasscodeInput.trim());
+      setIsVerifyingPin(false);
+      if (res.success) {
+        setAdminPasscodeInput('');
+        setIsAdminModalOpen(false);
+      } else {
+        setAdminModalError(res.message || 'Incorrect Passcode. Access denied.');
+      }
+    }
+  };
 
   React.useEffect(() => {
     try {
@@ -214,6 +247,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </div>
 
+                {/* Switch to Admin Console Button (Protected with Master Passcode) */}
+                <button
+                  onClick={() => {
+                    setAdminPasscodeInput('');
+                    setAdminModalError(null);
+                    setIsAdminModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs border border-slate-700 transition"
+                  title="Switch to Admin Console (Requires Master Passcode)"
+                >
+                  <Lock className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Admin Console</span>
+                </button>
+
                 {/* Sign Out Button */}
                 {onLogout && (
                   <button
@@ -233,6 +280,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>Gate Security Post</span>
                 </div>
 
+                {/* Switch to Admin Console Button (Protected with Master Passcode) */}
+                <button
+                  onClick={() => {
+                    setAdminPasscodeInput('');
+                    setAdminModalError(null);
+                    setIsAdminModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs border border-slate-700 transition"
+                  title="Switch to Admin Console (Requires Master Passcode)"
+                >
+                  <Lock className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Admin Console</span>
+                </button>
+
                 {onLogout && (
                   <button
                     onClick={onLogout}
@@ -249,6 +310,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" />
                   <span>Principal Console</span>
                 </div>
+
+                {onSwitchToTeacher && (
+                  <button
+                    onClick={() => onSwitchToTeacher()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition"
+                    title="Authorized Administrator Access to Staff Console (Teacher View)"
+                  >
+                    <UserCheck className="h-3.5 w-3.5 text-indigo-600" />
+                    <span className="hidden sm:inline">Staff Console</span>
+                  </button>
+                )}
+
+                {onSwitchToGate && (
+                  <button
+                    onClick={onSwitchToGate}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs border border-amber-200 transition"
+                    title="Authorized Administrator Access to Gate Security Post"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                    <span className="hidden sm:inline">Gate Post</span>
+                  </button>
+                )}
 
                 {onLogout && (
                   <button
@@ -379,6 +462,94 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Admin Passcode Verification Modal */}
+      {isAdminModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 relative overflow-hidden animate-in zoom-in-95">
+            <div className="h-1.5 w-full absolute top-0 left-0 bg-gradient-to-r from-indigo-600 via-sky-500 to-indigo-600" />
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 rounded-2xl bg-slate-900 text-amber-400 flex items-center justify-center shadow-sm">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base leading-tight">Admin Verification</h3>
+                  <span className="text-[11px] text-slate-500 font-medium">Principal & Management Access</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdminModalOpen(false);
+                  setAdminPasscodeInput('');
+                  setAdminModalError(null);
+                }}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 mb-4 leading-relaxed">
+              Enter your Master Administration Passcode to return to the Principal & Management Console.
+            </p>
+
+            {adminModalError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 shrink-0" />
+                <span>{adminModalError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyAdminPasscode} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Master Passcode
+                </label>
+                <div className="relative">
+                  <KeyRound className="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    autoFocus
+                    maxLength={10}
+                    value={adminPasscodeInput}
+                    onChange={(e) => {
+                      setAdminPasscodeInput(e.target.value);
+                      if (adminModalError) setAdminModalError(null);
+                    }}
+                    placeholder="Enter Passcode"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 font-mono tracking-widest text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminModalOpen(false);
+                    setAdminPasscodeInput('');
+                    setAdminModalError(null);
+                  }}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVerifyingPin || !adminPasscodeInput.trim()}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>{isVerifyingPin ? 'Verifying...' : 'Unlock Console'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
