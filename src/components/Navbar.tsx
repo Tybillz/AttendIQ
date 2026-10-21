@@ -27,7 +27,6 @@ import { flushOfflineQueue } from '@/lib/storage';
 
 interface NavbarProps {
   currentRole: 'teacher' | 'gate' | 'admin';
-  onRoleChange: (role: 'teacher' | 'gate' | 'admin') => void;
   selectedDate: string;
   onDateChange: (date: string) => void;
   alertCount: number;
@@ -47,7 +46,6 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentRole,
-  onRoleChange,
   selectedDate,
   onDateChange,
   alertCount,
@@ -251,24 +249,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" />
                   <span>Principal Console</span>
                 </div>
-
-                <button
-                  onClick={() => onRoleChange('teacher')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition"
-                  title="Switch to Teacher Attendance Portal"
-                >
-                  <UserCheck className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Teacher View</span>
-                </button>
-
-                <button
-                  onClick={() => onRoleChange('gate')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs border border-amber-200 transition"
-                  title="Switch to Gate Security Register"
-                >
-                  <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
-                  <span className="hidden sm:inline">Gate Register</span>
-                </button>
 
                 {onLogout && (
                   <button

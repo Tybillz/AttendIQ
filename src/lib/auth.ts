@@ -289,7 +289,7 @@ export function loginAsTeacher(teacherId: string, enteredPin: string): { success
 
 export function loginAsAdmin(passcode: string): { success: boolean; message: string; session?: AuthSession } {
   const creds = getPortalCredentials();
-  if (passcode.trim() !== creds.adminPasscode && passcode.trim() !== 'admin') {
+  if (passcode.trim() !== creds.adminPasscode) {
     return { success: false, message: 'Incorrect Management Passcode.' };
   }
 
@@ -304,7 +304,7 @@ export function loginAsAdmin(passcode: string): { success: boolean; message: str
 
 export function loginAsGate(passcode: string): { success: boolean; message: string; session?: AuthSession } {
   const creds = getPortalCredentials();
-  if (passcode.trim() !== creds.gatePasscode && passcode.trim() !== 'gate') {
+  if (passcode.trim() !== creds.gatePasscode) {
     return { success: false, message: 'Incorrect Gate Security Passcode.' };
   }
 

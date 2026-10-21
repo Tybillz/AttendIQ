@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   },
   // Allow phone and tablet connections on local Wi-Fi network
   allowedDevOrigins: ['192.168.0.143', '192.168.0.*', 'localhost', '127.0.0.1'],
+  serverExternalPackages: ['jspdf', 'canvg', 'jspdf-autotable'],
   turbopack: {
     rules: {
       "*.css": {

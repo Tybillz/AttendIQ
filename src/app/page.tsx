@@ -223,7 +223,6 @@ export default function Home() {
       {/* Top Navigation */}
       <Navbar
         currentRole={currentRole}
-        onRoleChange={setCurrentRole}
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
         alertCount={alerts.length}
