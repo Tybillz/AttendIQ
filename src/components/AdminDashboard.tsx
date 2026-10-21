@@ -210,7 +210,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       radiusMeters: radius,
       resumptionTime: resumptionInput,
       closingTime: closingInput,
-      portalWebUrl: portalUrlInput.trim() || 'https://attend-iq.vercel.app',
+      portalWebUrl: portalUrlInput.trim() || 'https://attendiq.vercel.app',
     };
     savePerimeterConfig(updated);
     setPerimeterConfig(updated);
@@ -1810,7 +1810,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     type="url"
                     value={portalUrlInput}
                     onChange={(e) => setPortalUrlInput(e.target.value)}
-                    placeholder="https://attend-iq.vercel.app"
+                    placeholder="https://attendiq.vercel.app"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">

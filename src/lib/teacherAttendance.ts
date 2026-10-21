@@ -7,7 +7,7 @@ export const DEFAULT_PERIMETER_CONFIG: SchoolPerimeterConfig = {
   radiusMeters: 250, // 250m school perimeter
   resumptionTime: '08:00 AM',
   closingTime: '02:30 PM',
-  portalWebUrl: 'https://attend-iq.vercel.app',
+  portalWebUrl: 'https://attendiq.vercel.app',
   dailyEntranceCodeOverride: {},
 };
 
@@ -34,7 +34,7 @@ export function getLivePortalUrl(config?: SchoolPerimeterConfig): string {
     }
   }
 
-  return 'https://attend-iq.vercel.app';
+  return 'https://attendiq.vercel.app';
 }
 
 // Safe storage access
