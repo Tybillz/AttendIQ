@@ -16,12 +16,14 @@ let inMemoryStore: {
   teacherPins?: Record<string, string>;
   adminPasscode?: string;
   gatePasscode?: string;
+  parentExcuses?: any[];
 } = {
   teachers: [],
   classes: [],
   teacherPins: {},
   adminPasscode: '1234',
   gatePasscode: '1234',
+  parentExcuses: [],
 };
 
 async function getCloudStore() {

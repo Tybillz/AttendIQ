@@ -35,6 +35,8 @@ import {
   deleteBehavioralNote,
   addParentAlert,
 } from '@/lib/storage';
+import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
+import { generateWhatsAppUrl } from '@/lib/notifications';
 
 interface StudentProfileModalProps {
   student: Student | null;
@@ -372,6 +374,20 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 >
                   <Send className="h-3 w-3" /> Send Parent SMS
                 </button>
+
+                {student.parentPhone && (
+                  <a
+                    href={generateWhatsAppUrl(
+                      student.parentPhone,
+                      `Hello ${student.parentName}, this is a notice from Apex Crest Academy regarding your child ${student.name} (${classNameTitle}). Current attendance compliance is ${attendanceRate}%.`
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-200 hover:text-white bg-emerald-600/40 hover:bg-emerald-600/60 px-2.5 py-1 rounded-lg border border-emerald-400/40 transition"
+                  >
+                    WhatsApp Parent
+                  </a>
+                )}
               </div>
 
               {smsSentNotice && (
@@ -457,6 +473,18 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           >
             <FileText className="h-4 w-4 text-emerald-600" /> Official Terminal Report Sheet
           </button>
+
+          <div className="ml-auto flex items-center pr-2 py-1.5">
+            <button
+              type="button"
+              onClick={() => downloadStudentReportCardPDF(student, { id: student.classId, name: classNameTitle } as any)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition shadow-xs cursor-pointer"
+              title="Download official PDF report card with Apex Crest letterhead"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>Download PDF</span>
+            </button>
+          </div>
         </div>
 
         {/* Tab Body */}

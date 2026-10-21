@@ -113,7 +113,7 @@ export interface ParentAlert {
   parentEmail: string;
   type: 'absence_notice' | 'chronic_threshold_exceeded' | 'late_notice';
   status: 'delivered' | 'pending' | 'failed';
-  channel: 'SMS' | 'Email' | 'Both';
+  channel: 'WhatsApp' | 'SMS' | 'Email' | 'Both' | 'WhatsApp+SMS';
   message: string;
   triggerReason: string;
 }
@@ -130,6 +130,27 @@ export interface AlertSettings {
   smsEnabled: boolean;
   emailEnabled: boolean;
   lateAlertEnabled: boolean;
+  whatsappEnabled?: boolean;
+  whatsappTemplate?: string;
+  smsProvider?: 'browser_direct' | 'termii_nigeria' | 'twilio' | 'webhook';
+}
+
+export interface ParentExcuse {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  parentName: string;
+  parentPhone: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  reasonCategory: 'Illness / Medical' | 'Doctor Appointment' | 'Family Emergency' | 'Travel / Official' | 'Religious Observance' | 'Other';
+  explanation: string;
+  doctorClinicName?: string;
+  medicalNoteAttached?: boolean;
+  medicalNoteUrl?: string;
+  status: 'pending' | 'approved' | 'acknowledged';
+  submittedAt: string;
 }
 
 export interface TeacherAnalytics {

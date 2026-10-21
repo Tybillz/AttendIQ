@@ -13,6 +13,7 @@ import {
   BehavioralNote,
   AuditLogEntry,
   AuditActionType,
+  ParentExcuse,
 } from '@/types/attendance';
 import {
   INITIAL_CLASSES,
@@ -35,6 +36,8 @@ const KEYS = {
   ANALYTICS: 'attend_iq_analytics_v2',
   GRADES: 'attend_iq_subject_grades_v2',
   AUDIT_LOGS: 'attend_iq_audit_logs_v2',
+  EXCUSES: 'attend_iq_excuses_v2',
+  OFFLINE_QUEUE: 'attend_iq_offline_queue_v2',
 };
 
 // Safe LocalStorage helpers
@@ -244,6 +247,15 @@ export async function syncDataFromCloud(): Promise<{ teachers: Teacher[]; classe
         updatedAny = true;
       }
 
+      if (Array.isArray(data.parentExcuses) && data.parentExcuses.length > 0) {
+        const localExcuses = getParentExcuses();
+        const excuseMap = new Map<string, ParentExcuse>();
+        localExcuses.forEach((e) => excuseMap.set(e.id, e));
+        data.parentExcuses.forEach((e: ParentExcuse) => excuseMap.set(e.id, e));
+        setStored(KEYS.EXCUSES, Array.from(excuseMap.values()));
+        updatedAny = true;
+      }
+
       if (updatedAny) {
         window.dispatchEvent(new Event('attend-iq-storage-update'));
       }
@@ -394,6 +406,85 @@ export function addParentAlert(alertData: Omit<ParentAlert, 'id' | 'timestamp' |
   alerts.unshift(newAlert);
   setStored(KEYS.ALERTS, alerts);
   return newAlert;
+}
+
+// Parent Pre-Excused Absence & Doctor's Notes
+export function getParentExcuses(): ParentExcuse[] {
+  return getStored<ParentExcuse[]>(KEYS.EXCUSES, []);
+}
+
+export function saveParentExcuses(excuses: ParentExcuse[]): void {
+  setStored(KEYS.EXCUSES, excuses);
+  if (typeof window !== 'undefined') {
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentExcuses: excuses }),
+    }).catch(() => {});
+  }
+}
+
+export function addParentExcuse(excuseData: Omit<ParentExcuse, 'id' | 'submittedAt' | 'status'>): ParentExcuse {
+  const excuses = getParentExcuses();
+  const created: ParentExcuse = {
+    ...excuseData,
+    id: `exc-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+    submittedAt: new Date().toISOString(),
+    status: 'pending',
+  };
+  excuses.unshift(created);
+  saveParentExcuses(excuses);
+  return created;
+}
+
+export function getExcuseForStudentOnDate(studentId: string, dateStr: string): ParentExcuse | undefined {
+  const excuses = getParentExcuses();
+  return excuses.find(
+    (e) => e.studentId === studentId && dateStr >= e.startDate && dateStr <= e.endDate
+  );
+}
+
+// Offline Action Queue
+export interface OfflineAction {
+  id: string;
+  type: 'attendance' | 'grade' | 'excuse';
+  payload: any;
+  timestamp: string;
+}
+
+export function getOfflineQueue(): OfflineAction[] {
+  return getStored<OfflineAction[]>(KEYS.OFFLINE_QUEUE, []);
+}
+
+export function queueOfflineAction(action: Omit<OfflineAction, 'id' | 'timestamp'>): void {
+  const queue = getOfflineQueue();
+  queue.push({
+    ...action,
+    id: `off-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    timestamp: new Date().toISOString(),
+  });
+  setStored(KEYS.OFFLINE_QUEUE, queue);
+}
+
+export async function flushOfflineQueue(): Promise<{ synced: number }> {
+  if (typeof window === 'undefined' || !navigator.onLine) return { synced: 0 };
+  const queue = getOfflineQueue();
+  if (queue.length === 0) return { synced: 0 };
+
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ offlineActions: queue }),
+    });
+    if (res.ok) {
+      setStored(KEYS.OFFLINE_QUEUE, []);
+      return { synced: queue.length };
+    }
+  } catch (err) {
+    console.warn('Failed to flush offline queue:', err);
+  }
+  return { synced: 0 };
 }
 
 // Attendance Sessions

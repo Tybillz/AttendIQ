@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   GraduationCap,
   Lock,
@@ -380,7 +381,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </form>
           )}
 
-          <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-slate-400 text-[11px]">
+          {/* Parent Absence Notice Portal Link */}
+          <div className="mt-4 pt-3 border-t border-slate-100 text-center">
+            <Link
+              href="/excuse"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 px-3.5 py-1.5 rounded-xl border border-indigo-200/80 transition"
+            >
+              <span>Are you a Parent reporting an absence? Submit note here &rarr;</span>
+            </Link>
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-slate-100/60 flex items-center justify-center gap-1.5 text-slate-400 text-[11px]">
             <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
             <span>Apex Crest Academy • Secure Cloud Portal Gateway</span>
           </div>

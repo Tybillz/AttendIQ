@@ -19,8 +19,11 @@ import {
   Moon,
   Sun,
   LogOut,
+  WifiOff,
+  CheckCircle2,
 } from 'lucide-react';
 import { AlertSettings, Teacher, ClassSection } from '@/types/attendance';
+import { flushOfflineQueue } from '@/lib/storage';
 
 interface NavbarProps {
   currentRole: 'teacher' | 'gate' | 'admin';
@@ -65,9 +68,28 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
   const [isInstalled, setIsInstalled] = React.useState(false);
   const [isDarkMode, setIsDarkMode] = React.useState(true);
+  const [isOnline, setIsOnline] = React.useState<boolean>(true);
+  const [syncNotice, setSyncNotice] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     try {
+      setIsOnline(navigator.onLine);
+      const handleOnline = () => {
+        setIsOnline(true);
+        flushOfflineQueue().then(({ synced }) => {
+          if (synced > 0) {
+            setSyncNotice(`Synced ${synced} updates!`);
+            setTimeout(() => setSyncNotice(null), 4000);
+          }
+        });
+      };
+      const handleOffline = () => {
+        setIsOnline(false);
+      };
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
       setTodayStr(new Date().toISOString().split('T')[0]);
       const savedTheme = localStorage.getItem('attend_iq_theme');
       if (savedTheme === 'light') {
@@ -79,6 +101,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         document.body.classList.add('dark-theme');
         document.body.classList.remove('light-theme');
       }
+
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
     } catch {}
 
     const handleBeforeInstall = (e: any) => {
@@ -152,6 +179,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60 hidden sm:inline-block">
                   School Portal
                 </span>
+                {!isOnline && (
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 flex items-center gap-1 animate-pulse">
+                    <WifiOff className="h-3 w-3" /> Offline Mode (Local Cache)
+                  </span>
+                )}
+                {syncNotice && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1 animate-in fade-in">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-600" /> {syncNotice}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 hidden md:block">
                 Apex Crest Academy, Abuja (FCT) • First Term (2026/2027 Session)

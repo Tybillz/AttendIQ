@@ -30,6 +30,7 @@ import {
   exportSubjectGradesCSV,
   downloadCSVFile,
 } from '@/lib/storage';
+import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
 
 interface SubjectGradebookProps {
   currentTeacher: Teacher | undefined;
@@ -329,6 +330,21 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
             >
               <Printer className="h-4 w-4" />
               <span className="hidden sm:inline">Export BroadSheet</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (targetStudents.length > 0) {
+                  const targetClass = assignedClasses.find((c) => c.id === selectedClassId) || assignedClasses[0];
+                  downloadStudentReportCardPDF(targetStudents[0], targetClass);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Generate Official PDF Report Card"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              <span>PDF Report Card</span>
             </button>
           </div>
         </div>

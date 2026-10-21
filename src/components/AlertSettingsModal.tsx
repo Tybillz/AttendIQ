@@ -12,6 +12,7 @@ import {
   Smartphone,
   Mail,
   Zap,
+  MessageSquare,
 } from 'lucide-react';
 import { AlertSettings } from '@/types/attendance';
 import { saveAlertSettings } from '@/lib/storage';
@@ -331,7 +332,19 @@ export const AlertSettingsModal: React.FC<AlertSettingsModalProps> = ({
             <div className="space-y-2">
               <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                 <span className="flex items-center gap-2 text-slate-700 font-medium">
-                  <Smartphone className="h-4 w-4 text-emerald-600" /> Auto-send SMS to Parents
+                  <MessageSquare className="h-4 w-4 text-emerald-600" /> WhatsApp Notifications to Parents
+                </span>
+                <input
+                  type="checkbox"
+                  checked={formData.whatsappEnabled ?? true}
+                  onChange={(e) => setFormData({ ...formData, whatsappEnabled: e.target.checked })}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <span className="flex items-center gap-2 text-slate-700 font-medium">
+                  <Smartphone className="h-4 w-4 text-sky-600" /> Auto-send SMS to Parents
                 </span>
                 <input
                   type="checkbox"

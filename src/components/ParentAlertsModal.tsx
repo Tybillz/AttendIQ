@@ -11,9 +11,12 @@ import {
   CheckCircle2,
   Filter,
   Search,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 import { ParentAlert, Student } from '@/types/attendance';
 import { addParentAlert } from '@/lib/storage';
+import { generateWhatsAppUrl, generateSmsUrl, sendLiveNotification } from '@/lib/notifications';
 
 interface ParentAlertsModalProps {
   isOpen: boolean;
@@ -37,7 +40,7 @@ export const ParentAlertsModal: React.FC<ParentAlertsModalProps> = ({
   const [showComposer, setShowComposer] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');
   const [customMessage, setCustomMessage] = useState('');
-  const [sendChannel, setSendChannel] = useState<'SMS' | 'Email' | 'Both'>('SMS');
+  const [sendChannel, setSendChannel] = useState<'WhatsApp' | 'SMS' | 'Both' | 'Email'>('WhatsApp');
   const [sendSuccess, setSendSuccess] = useState(false);
 
   if (!isOpen) return null;
@@ -56,7 +59,7 @@ export const ParentAlertsModal: React.FC<ParentAlertsModalProps> = ({
     return true;
   });
 
-  const handleSendManualAlert = (e: React.FormEvent) => {
+  const handleSendManualAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customMessage.trim()) return;
 
@@ -74,6 +77,23 @@ export const ParentAlertsModal: React.FC<ParentAlertsModalProps> = ({
       message: customMessage.trim(),
       triggerReason: 'Administrative manual broadcast',
     });
+
+    // If WhatsApp is chosen, open WhatsApp directly with prefilled message
+    if ((sendChannel === 'WhatsApp' || sendChannel === 'Both') && student.parentPhone) {
+      const waUrl = generateWhatsAppUrl(student.parentPhone, customMessage.trim());
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    // Trigger backend notification dispatch
+    sendLiveNotification({
+      studentName: student.name,
+      parentName: student.parentName,
+      parentPhone: student.parentPhone,
+      parentEmail: student.parentEmail,
+      message: customMessage.trim(),
+      channel: sendChannel,
+      type: 'absence_notice',
+    }).catch(() => {});
 
     setCustomMessage('');
     setShowComposer(false);
@@ -186,16 +206,18 @@ export const ParentAlertsModal: React.FC<ParentAlertsModalProps> = ({
                 <label className="text-[11px] font-semibold text-slate-700 block mb-1">
                   Dispatch Channel
                 </label>
-                <div className="flex gap-2">
-                  {(['SMS', 'Email', 'Both'] as const).map((channel) => (
+                <div className="flex gap-1.5">
+                  {(['WhatsApp', 'SMS', 'Both', 'Email'] as const).map((channel) => (
                     <button
                       key={channel}
                       type="button"
                       onClick={() => setSendChannel(channel)}
-                      className={`text-xs px-3 py-1.5 rounded-lg border font-semibold flex-1 ${
+                      className={`text-[11px] px-2 py-1.5 rounded-lg border font-semibold flex-1 transition ${
                         sendChannel === channel
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-slate-700 border-slate-300'
+                          ? channel === 'WhatsApp'
+                            ? 'bg-emerald-600 text-white border-emerald-600'
+                            : 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                       }`}
                     >
                       {channel}
@@ -298,6 +320,28 @@ export const ParentAlertsModal: React.FC<ParentAlertsModalProps> = ({
                   <span>Trigger: {alt.triggerReason}</span>
                   <span>Recipient: {alt.parentPhone || alt.parentEmail}</span>
                 </div>
+
+                {alt.parentPhone && (
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                    <a
+                      href={generateWhatsAppUrl(alt.parentPhone, alt.message)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-2xs"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      <span>WhatsApp Parent</span>
+                      <ExternalLink className="h-2.5 w-2.5 opacity-70" />
+                    </a>
+                    <a
+                      href={generateSmsUrl(alt.parentPhone, alt.message)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+                    >
+                      <Smartphone className="h-3 w-3" />
+                      <span>SMS</span>
+                    </a>
+                  </div>
+                )}
               </div>
             ))
           ) : (

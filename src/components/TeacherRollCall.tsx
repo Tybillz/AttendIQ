@@ -23,6 +23,8 @@ import {
   Phone,
   Lock,
   Unlock,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -42,7 +44,10 @@ import {
   getAlertSettings,
   isSessionTimeLocked,
   toggleAdminSessionUnlock,
+  getExcuseForStudentOnDate,
 } from '@/lib/storage';
+import { downloadClassAttendanceDossierPDF } from '@/lib/pdfReportGenerator';
+import { generateWhatsAppUrl } from '@/lib/notifications';
 
 interface TeacherRollCallProps {
   classes: ClassSection[];
@@ -384,6 +389,20 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
           >
             <Printer className="h-4 w-4" />
           </button>
+
+          {/* Export Official PDF Register */}
+          <button
+            onClick={() => {
+              if (currentClass) {
+                downloadClassAttendanceDossierPDF(currentClass, classStudents, currentSession, selectedDate);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition shadow-2xs cursor-pointer"
+            title="Download Official PDF Attendance Dossier & Register"
+          >
+            <FileText className="h-4 w-4" />
+            <span>PDF Register</span>
+          </button>
         </div>
       </div>
 
@@ -592,8 +611,10 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
             const isPresent = entry?.status === 'present';
             const isLate = entry?.status === 'late';
             const isAbsent = entry?.status === 'absent';
+            const isExcused = entry?.status === 'excused';
             const isExpanded = Boolean(expandedPupilIds[student.id]);
             const isAddingNote = activeNotePupilId === student.id;
+            const excuse = getExcuseForStudentOnDate(student.id, selectedDate);
 
             const totalStudentDays = student.totalPresent + student.totalAbsent;
             const studentRate =
@@ -672,6 +693,13 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                           </span>
                         ) : null}
 
+                        {excuse && (
+                          <span className="text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300 px-2 py-0.5 rounded-full flex items-center gap-1" title={excuse.explanation}>
+                            <CheckCircle2 className="h-3 w-3 text-purple-700" />
+                            Parent Excuse: {excuse.reasonCategory}
+                          </span>
+                        )}
+
                         {entry?.flag && !isLate && (
                           <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full capitalize">
                             Flag: {entry.flag}
@@ -683,6 +711,22 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                         <span>Parent: {student.parentName}</span>
                         <span className="hidden sm:inline">•</span>
                         <span className="hidden sm:inline">Phone: {student.parentPhone}</span>
+                        {student.parentPhone && (
+                          <>
+                            <span className="hidden sm:inline">•</span>
+                            <a
+                              href={generateWhatsAppUrl(
+                                student.parentPhone,
+                                `Hello ${student.parentName}, this is a notice from Apex Crest Academy regarding ${student.name} in ${currentClass?.name || 'class'}.`
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 transition"
+                            >
+                              <MessageSquare className="h-3 w-3" /> WhatsApp Parent
+                            </a>
+                          </>
+                        )}
                         {entry?.markedAt && (
                           <>
                             <span>•</span>
@@ -690,6 +734,33 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                           </>
                         )}
                       </div>
+
+                      {excuse && !isPresent && !isExcused && (
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              recordAttendanceEntry(
+                                selectedDate,
+                                selectedClassId,
+                                student.id,
+                                'excused',
+                                undefined,
+                                `Doctor/Parent Note: ${excuse.reasonCategory} - ${excuse.explanation}`,
+                                currentClass ? { id: currentClass.teacherId, name: currentClass.teacherName } : undefined
+                              );
+                              onDataUpdated();
+                            }}
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-2xs cursor-pointer flex items-center gap-1"
+                            title="Auto-apply submitted doctor/parent excuse"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Apply Excused Absence
+                          </button>
+                          <span className="text-[10px] text-slate-500 italic">
+                            &ldquo;{excuse.explanation}&rdquo;
+                          </span>
+                        </div>
+                      )}
 
                       {entry?.note && (
                         <div className="mt-1 text-xs text-slate-700 italic bg-slate-50 px-2 py-1 rounded-lg border border-slate-200/60 inline-block">
