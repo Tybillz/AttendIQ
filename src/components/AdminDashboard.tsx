@@ -51,6 +51,7 @@ import {
   getTeacherClockRecords,
   getDeviceLocks,
   unpairTeacherDevice,
+  getLivePortalUrl,
 } from '@/lib/teacherAttendance';
 import { TeacherDeviceLock } from '@/types/attendance';
 import {
@@ -115,6 +116,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [radiusInput, setRadiusInput] = useState(perimeterConfig.radiusMeters.toString());
   const [resumptionInput, setResumptionInput] = useState(perimeterConfig.resumptionTime);
   const [closingInput, setClosingInput] = useState(perimeterConfig.closingTime);
+  const [portalUrlInput, setPortalUrlInput] = useState(getLivePortalUrl(perimeterConfig));
 
   React.useEffect(() => {
     const loadClockRecords = () => {
@@ -126,6 +128,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setRadiusInput(pConf.radiusMeters.toString());
       setResumptionInput(pConf.resumptionTime);
       setClosingInput(pConf.closingTime);
+      setPortalUrlInput(getLivePortalUrl(pConf));
       setDeviceLocks(getDeviceLocks());
       const currentCreds = getPortalCredentials();
       setCreds(currentCreds);
@@ -207,10 +210,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       radiusMeters: radius,
       resumptionTime: resumptionInput,
       closingTime: closingInput,
+      portalWebUrl: portalUrlInput.trim() || 'https://attend-iq.vercel.app',
     };
     savePerimeterConfig(updated);
     setPerimeterConfig(updated);
-    setAccessFeedback('School perimeter geofence and bell schedule updated successfully!');
+    setAccessFeedback('School perimeter geofence, portal web URL, and bell schedule updated successfully!');
     setTimeout(() => setAccessFeedback(null), 4000);
   };
 
@@ -277,12 +281,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSendTeacherWhatsAppSlip = (teacher: Teacher) => {
-    const assignedClass = classes.find((c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id));
+    const assignedClasses = classes.filter(
+      (c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id)
+    );
+    const homeroomDisplay = assignedClasses.length > 0
+      ? assignedClasses.map((c) => c.name).join(', ')
+      : 'Assigned Subject Teacher';
+
     const subjectsList = teacher.subjects && teacher.subjects.length > 0 
       ? teacher.subjects.join(', ') 
-      : teacher.subject || 'All Assigned Subjects';
+      : teacher.subject || 'All Class Subjects';
+
     const currentPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
-    const portalUrl = typeof window !== 'undefined' ? window.location.origin : 'https://attend-iq.vercel.app';
+    const portalUrl = getLivePortalUrl(perimeterConfig);
 
     const message = 
       `🏫 *APEX CREST ACADEMY — OFFICIAL STAFF PORTAL CREDENTIALS*\n\n` +
@@ -290,7 +301,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       `Your official staff portal access has been provisioned:\n\n` +
       `🌐 *Portal Link:* ${portalUrl}\n` +
       `👤 *Staff Profile:* ${teacher.name}\n` +
-      `🏫 *Homeroom Section:* ${assignedClass ? assignedClass.name : 'Assigned Subject Teacher'}\n` +
+      `🏫 *Homeroom Section:* ${homeroomDisplay}\n` +
       `📚 *Assigned Subject(s):* ${subjectsList}\n` +
       `🔑 *Your Confidential 4-Digit Login PIN:* *${currentPin}*\n\n` +
       `--------------------------------------------\n` +
@@ -315,23 +326,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     
     window.open(waUrl, '_blank');
-    setAccessFeedback(`WhatsApp credentials slip opened for ${teacher.name} (also copied to clipboard)!`);
+    setAccessFeedback(`WhatsApp credentials slip opened for ${teacher.name} with live URL: ${portalUrl}!`);
     setTimeout(() => setAccessFeedback(null), 5000);
   };
 
   const handleCopyAllWhatsAppSlips = () => {
-    const portalUrl = typeof window !== 'undefined' ? window.location.origin : 'https://attend-iq.vercel.app';
+    const portalUrl = getLivePortalUrl(perimeterConfig);
     const slips = teachers.map((teacher) => {
-      const assignedClass = classes.find((c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id));
+      const assignedClasses = classes.filter(
+        (c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id)
+      );
+      const homeroomDisplay = assignedClasses.length > 0
+        ? assignedClasses.map((c) => c.name).join(', ')
+        : 'Assigned Subject Teacher';
+
       const subjectsList = teacher.subjects && teacher.subjects.length > 0 
         ? teacher.subjects.join(', ') 
-        : teacher.subject || 'All Assigned Subjects';
+        : teacher.subject || 'All Class Subjects';
+
       const currentPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
       return (
         `*Apex Crest Academy — Staff Credentials*\n` +
         `👤 Teacher: ${teacher.name}\n` +
         `📱 Phone: ${teacher.phone || 'N/A'}\n` +
-        `🏫 Class: ${assignedClass ? assignedClass.name : 'Subject Teacher'}\n` +
+        `🏫 Class: ${homeroomDisplay}\n` +
         `📚 Subject(s): ${subjectsList}\n` +
         `🔑 Login PIN: *${currentPin}*\n` +
         `🌐 Portal: ${portalUrl}`
@@ -1777,6 +1795,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     placeholder="02:30 PM"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                   />
+                </div>
+
+                <div className="sm:col-span-2 md:col-span-3 lg:col-span-5 pt-1">
+                  <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-indigo-900 font-bold">
+                      <span>🌐 Production School Portal Web URL (Embedded in WhatsApp Slips)</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Live Link (Never Localhost)
+                    </span>
+                  </label>
+                  <input
+                    type="url"
+                    value={portalUrlInput}
+                    onChange={(e) => setPortalUrlInput(e.target.value)}
+                    placeholder="https://attend-iq.vercel.app"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    This live production URL is automatically embedded in all staff WhatsApp credential messages so teachers can tap and log in directly from their phones.
+                  </p>
                 </div>
               </div>
 

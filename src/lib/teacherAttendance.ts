@@ -1,12 +1,13 @@
 import { TeacherClockRecord, SchoolPerimeterConfig, TeacherDeviceLock } from '@/types/attendance';
 
 export const DEFAULT_PERIMETER_CONFIG: SchoolPerimeterConfig = {
-  schoolName: 'AttendIQ Model Academy',
+  schoolName: 'Apex Crest Academy',
   schoolLat: 6.5244, // Default Lagos Coordinates (Customizable in Admin Console)
   schoolLng: 3.3792,
   radiusMeters: 250, // 250m school perimeter
   resumptionTime: '08:00 AM',
   closingTime: '02:30 PM',
+  portalWebUrl: 'https://attend-iq.vercel.app',
   dailyEntranceCodeOverride: {},
 };
 
@@ -15,6 +16,26 @@ const STORAGE_KEYS = {
   TEACHER_CLOCK_RECORDS: 'attend_iq_teacher_clock_records_v1',
   DEVICE_LOCKS: 'attend_iq_device_locks_v1',
 };
+
+// Safe storage access
+export function getLivePortalUrl(config?: SchoolPerimeterConfig): string {
+  const currentConfig = config || getPerimeterConfig();
+  if (currentConfig.portalWebUrl && currentConfig.portalWebUrl.trim()) {
+    const custom = currentConfig.portalWebUrl.trim();
+    if (!custom.includes('localhost') && !custom.includes('127.0.0.1')) {
+      return custom.replace(/\/$/, '');
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (origin && !origin.includes('localhost') && !origin.includes('127.0.0.1') && !origin.includes('192.168.')) {
+      return origin.replace(/\/$/, '');
+    }
+  }
+
+  return 'https://attend-iq.vercel.app';
+}
 
 // Safe storage access
 export function getPerimeterConfig(): SchoolPerimeterConfig {

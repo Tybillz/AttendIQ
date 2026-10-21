@@ -204,6 +204,7 @@ export interface SchoolPerimeterConfig {
   radiusMeters: number;
   resumptionTime: string; // "08:00 AM"
   closingTime: string; // "02:00 PM"
+  portalWebUrl?: string; // Live production URL for WhatsApp slips (e.g. https://attend-iq.vercel.app)
   dailyEntranceCodeOverride?: Record<string, string>; // date -> 4-digit code
 }
 
