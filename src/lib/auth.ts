@@ -18,29 +18,13 @@ const DEFAULT_TEACHER_PIN = '1234';
 
 export function getAuthSession(): AuthSession | null {
   if (typeof window === 'undefined') {
-    // Default fallback during SSR
-    return {
-      role: 'teacher',
-      teacherId: 't-103', // Mal. Ibrahim Danladi default for demo
-      teacherName: 'Mal. Ibrahim Danladi',
-      className: 'JSS 2 - Sapphire',
-      loginTime: new Date().toISOString(),
-    };
+    return null;
   }
 
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) {
-      // By default, start logged in as Mal. Ibrahim Danladi so teachers see their immediate workspace
-      const defaultSession: AuthSession = {
-        role: 'teacher',
-        teacherId: 't-103',
-        teacherName: 'Mal. Ibrahim Danladi',
-        className: 'JSS 2 - Sapphire',
-        loginTime: new Date().toISOString(),
-      };
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(defaultSession));
-      return defaultSession;
+      return null;
     }
     return JSON.parse(raw);
   } catch {

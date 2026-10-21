@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, BookOpen, Users, FolderOpen } from 'lucide-react';
+import { Calendar, BookOpen, Users, FolderOpen, Lock, ShieldAlert } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { TeacherRollCall } from '@/components/TeacherRollCall';
 import { TeacherClockCard } from '@/components/TeacherClockCard';
@@ -10,6 +10,7 @@ import { AdminDashboard } from '@/components/AdminDashboard';
 import { GateCheckIn } from '@/components/GateCheckIn';
 import { AuthScreen } from '@/components/AuthScreen';
 import { getAuthSession, logout as performLogout, AuthSession } from '@/lib/auth';
+import { getTeacherRecordForDate } from '@/lib/teacherAttendance';
 import { StudentProfileModal } from '@/components/StudentProfileModal';
 import { AlertSettingsModal } from '@/components/AlertSettingsModal';
 import { ParentAlertsModal } from '@/components/ParentAlertsModal';
@@ -65,6 +66,29 @@ export default function Home() {
   const [teacherAnalytics, setTeacherAnalytics] = useState<TeacherAnalytics[]>(INITIAL_TEACHER_ANALYTICS);
   const [teacherActiveTab, setTeacherActiveTab] = useState<'attendance' | 'dossiers' | 'gradebook'>('attendance');
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [isTeacherClockedIn, setIsTeacherClockedIn] = useState<boolean>(false);
+
+  const checkTeacherClockStatus = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const rec = getTeacherRecordForDate(currentTeacherId, selectedDate);
+    setIsTeacherClockedIn(Boolean(rec && rec.clockInTime));
+  }, [currentTeacherId, selectedDate]);
+
+  useEffect(() => {
+    checkTeacherClockStatus();
+    const handleClockUpdate = () => checkTeacherClockStatus();
+    window.addEventListener('attend-iq-teacher-clock-update', handleClockUpdate);
+    return () => {
+      window.removeEventListener('attend-iq-teacher-clock-update', handleClockUpdate);
+    };
+  }, [checkTeacherClockStatus]);
+
+  // RESTRICTION: If staff is unable to clock in, lock access so they can ONLY access daily attendance roll call
+  useEffect(() => {
+    if (currentRole === 'teacher' && !isTeacherClockedIn && teacherActiveTab !== 'attendance') {
+      setTeacherActiveTab('attendance');
+    }
+  }, [currentRole, isTeacherClockedIn, teacherActiveTab]);
 
   // Modals state
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
@@ -240,9 +264,37 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Security restriction banner when teacher has not clocked in */}
+            {!isTeacherClockedIn && (
+              <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700 shrink-0">
+                    <ShieldAlert className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-amber-950">
+                      Staff Clock-In Pending — Restricted Access Mode
+                    </p>
+                    <p className="text-amber-800 text-[11px] mt-0.5">
+                      You are currently restricted to taking the <strong>Daily Attendance Roll Call</strong>. Complete your morning gate clock-in above to unlock <strong>Pupil Dossiers</strong> and the <strong>Subject Gradebook</strong>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 shrink-0"
+                >
+                  <Lock className="h-3.5 w-3.5" />
+                  <span>Clock In Above</span>
+                </button>
+              </div>
+            )}
+
             {/* Sub-navigation Tabs: Roll Call vs Dossiers vs Gradebook */}
             <div className="mb-6 flex items-center justify-between flex-wrap gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200 flex-wrap">
                 <button
                   onClick={() => setTeacherActiveTab('attendance')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
@@ -254,27 +306,65 @@ export default function Home() {
                   <Calendar className="h-4 w-4 text-indigo-600" />
                   <span>Daily Attendance Roll Call</span>
                 </button>
+
                 <button
-                  onClick={() => setTeacherActiveTab('dossiers')}
+                  onClick={() => {
+                    if (!isTeacherClockedIn) {
+                      alert('🔒 Staff Clock-In Required: You must clock in within school grounds before accessing sensitive pupil dossiers and emergency parent contacts.');
+                      return;
+                    }
+                    setTeacherActiveTab('dossiers');
+                  }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
-                    teacherActiveTab === 'dossiers'
+                    !isTeacherClockedIn
+                      ? 'text-slate-400 bg-slate-100/60 cursor-not-allowed opacity-80'
+                      : teacherActiveTab === 'dossiers'
                       ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title={!isTeacherClockedIn ? 'Clock-in required to unlock pupil dossiers' : undefined}
                 >
-                  <FolderOpen className="h-4 w-4 text-sky-600" />
+                  {!isTeacherClockedIn ? (
+                    <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4 text-sky-600" />
+                  )}
                   <span>Pupil Dossiers & Profiles ({classStudents.length})</span>
+                  {!isTeacherClockedIn && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                      Locked
+                    </span>
+                  )}
                 </button>
+
                 <button
-                  onClick={() => setTeacherActiveTab('gradebook')}
+                  onClick={() => {
+                    if (!isTeacherClockedIn) {
+                      alert('🔒 Staff Clock-In Required: You must clock in within school grounds before accessing the continuous assessment and exam gradebook.');
+                      return;
+                    }
+                    setTeacherActiveTab('gradebook');
+                  }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
-                    teacherActiveTab === 'gradebook'
+                    !isTeacherClockedIn
+                      ? 'text-slate-400 bg-slate-100/60 cursor-not-allowed opacity-80'
+                      : teacherActiveTab === 'gradebook'
                       ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title={!isTeacherClockedIn ? 'Clock-in required to unlock gradebook' : undefined}
                 >
-                  <BookOpen className="h-4 w-4 text-emerald-600" />
+                  {!isTeacherClockedIn ? (
+                    <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  ) : (
+                    <BookOpen className="h-4 w-4 text-emerald-600" />
+                  )}
                   <span>Subject Gradebook (CA & Exams)</span>
+                  {!isTeacherClockedIn && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                      Locked
+                    </span>
+                  )}
                 </button>
               </div>
 
@@ -303,10 +393,32 @@ export default function Home() {
                   selectedDate={selectedDate}
                   students={students}
                   currentSession={currentSession}
-                  onSelectStudentProfile={(student) => setSelectedStudentForProfile(student)}
+                  onSelectStudentProfile={(student) => {
+                    if (currentRole === 'teacher' && !isTeacherClockedIn) {
+                      alert('🔒 Staff Clock-In Required: Pupil dossiers and medical records are locked until you clock in within school grounds.');
+                      return;
+                    }
+                    setSelectedStudentForProfile(student);
+                  }}
                   onDataUpdated={syncData}
                   currentRole={currentRole}
                 />
+              </div>
+            ) : !isTeacherClockedIn ? (
+              <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm text-center max-w-lg mx-auto my-6 space-y-4">
+                <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                  <Lock className="h-8 w-8" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900">Clock-In Required for Academic Records</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  In accordance with school policy, pupil profiles, emergency parent telephone numbers, and continuous assessment gradebooks are strictly locked until your morning clock-in is registered within school grounds.
+                </p>
+                <button
+                  onClick={() => setTeacherActiveTab('attendance')}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition"
+                >
+                  Return to Daily Attendance Roll Call
+                </button>
               </div>
             ) : teacherActiveTab === 'dossiers' ? (
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
