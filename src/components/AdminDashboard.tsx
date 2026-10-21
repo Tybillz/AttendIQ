@@ -276,6 +276,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTimeout(() => setAccessFeedback(null), 4000);
   };
 
+  const handleSendTeacherWhatsAppSlip = (teacher: Teacher) => {
+    const assignedClass = classes.find((c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id));
+    const subjectsList = teacher.subjects && teacher.subjects.length > 0 
+      ? teacher.subjects.join(', ') 
+      : teacher.subject || 'All Assigned Subjects';
+    const currentPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
+    const portalUrl = typeof window !== 'undefined' ? window.location.origin : 'https://attend-iq.vercel.app';
+
+    const message = 
+      `🏫 *APEX CREST ACADEMY — OFFICIAL STAFF PORTAL CREDENTIALS*\n\n` +
+      `Dear *${teacher.name}*,\n` +
+      `Your official staff portal access has been provisioned:\n\n` +
+      `🌐 *Portal Link:* ${portalUrl}\n` +
+      `👤 *Staff Profile:* ${teacher.name}\n` +
+      `🏫 *Homeroom Section:* ${assignedClass ? assignedClass.name : 'Assigned Subject Teacher'}\n` +
+      `📚 *Assigned Subject(s):* ${subjectsList}\n` +
+      `🔑 *Your Confidential 4-Digit Login PIN:* *${currentPin}*\n\n` +
+      `--------------------------------------------\n` +
+      `📋 *Daily Clock-In & Roll Call Protocol:*\n` +
+      `1. Open the portal link above on your smartphone.\n` +
+      `2. Select your teacher profile from the dropdown.\n` +
+      `3. Enter your confidential 4-digit PIN.\n` +
+      `4. Verify school GPS perimeter and clock in using the daily rotating code.\n` +
+      `5. Your smartphone will securely pair on your first clock-in.\n\n` +
+      `⚠️ *Confidentiality Notice:* Please keep your PIN secure and do not share it.\n\n` +
+      `Warm regards,\n` +
+      `*Office of the School Administrator*\n` +
+      `Apex Crest Academy, Abuja`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(message);
+    }
+
+    const cleanPhone = (teacher.phone || '').replace(/\D/g, '');
+    const waUrl = cleanPhone 
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+    
+    window.open(waUrl, '_blank');
+    setAccessFeedback(`WhatsApp credentials slip opened for ${teacher.name} (also copied to clipboard)!`);
+    setTimeout(() => setAccessFeedback(null), 5000);
+  };
+
+  const handleCopyAllWhatsAppSlips = () => {
+    const portalUrl = typeof window !== 'undefined' ? window.location.origin : 'https://attend-iq.vercel.app';
+    const slips = teachers.map((teacher) => {
+      const assignedClass = classes.find((c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id));
+      const subjectsList = teacher.subjects && teacher.subjects.length > 0 
+        ? teacher.subjects.join(', ') 
+        : teacher.subject || 'All Assigned Subjects';
+      const currentPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
+      return (
+        `*Apex Crest Academy — Staff Credentials*\n` +
+        `👤 Teacher: ${teacher.name}\n` +
+        `📱 Phone: ${teacher.phone || 'N/A'}\n` +
+        `🏫 Class: ${assignedClass ? assignedClass.name : 'Subject Teacher'}\n` +
+        `📚 Subject(s): ${subjectsList}\n` +
+        `🔑 Login PIN: *${currentPin}*\n` +
+        `🌐 Portal: ${portalUrl}`
+      );
+    });
+    navigator.clipboard.writeText(slips.join('\n\n========================================\n\n'));
+    setAccessFeedback('All staff WhatsApp credential slips copied to clipboard!');
+    setTimeout(() => setAccessFeedback(null), 4000);
+  };
+
   const handleSetDailyCodeOverride = (e: React.FormEvent) => {
     e.preventDefault();
     if (customDailyCodeInput.trim().length !== 4) {
@@ -1840,6 +1906,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                   <button
                     type="button"
+                    onClick={handleCopyAllWhatsAppSlips}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                    title="Copy pre-formatted WhatsApp credential messages for all teachers"
+                  >
+                    <Send className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Copy All WhatsApp Slips</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleCopyPinRoster}
                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
                     title="Copy confidential staff PIN directory to clipboard"
@@ -1854,26 +1929,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100/80 text-slate-600 border-b border-slate-200 font-bold uppercase text-[10px]">
                     <tr>
-                      <th className="py-2.5 px-4">Staff Member</th>
-                      <th className="py-2.5 px-4">Assigned Section</th>
+                      <th className="py-2.5 px-4">Staff Member & Contact</th>
+                      <th className="py-2.5 px-4">Assigned Section & Subjects</th>
                       <th className="py-2.5 px-4">Individual 4-Digit PIN</th>
-                      <th className="py-2.5 px-4 text-right">Actions</th>
+                      <th className="py-2.5 px-4 text-right">Dispatch & Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {teachers.map((teacher) => {
                       const teacherPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
-                      const assignedClass = classes.find((c) => c.teacherId === teacher.id);
+                      const assignedClass = classes.find((c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id));
+                      const subjectsList = teacher.subjects && teacher.subjects.length > 0 
+                        ? teacher.subjects.join(', ') 
+                        : teacher.subject || 'All Subjects';
+
                       return (
                         <tr key={teacher.id} className="hover:bg-slate-50/60 transition">
-                          <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
-                            <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[11px]">
-                              {teacher.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-                            </span>
-                            <span>{teacher.name}</span>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 font-black flex items-center justify-center text-xs shrink-0">
+                                {teacher.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                              </span>
+                              <div>
+                                <p className="font-bold text-slate-900">{teacher.name}</p>
+                                <p className="text-[11px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
+                                  <Phone className="h-3 w-3 text-slate-400" />
+                                  <span>{teacher.phone || 'No phone set'}</span>
+                                </p>
+                              </div>
+                            </div>
                           </td>
-                          <td className="py-3 px-4 text-slate-600 font-medium">
-                            {assignedClass ? assignedClass.name : 'Subject Teacher'}
+                          <td className="py-3 px-4">
+                            <p className="font-bold text-indigo-950">{assignedClass ? assignedClass.name : 'Subject Teacher'}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{subjectsList}</p>
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-1.5">
@@ -1885,7 +1973,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   const val = e.target.value.replace(/\D/g, '');
                                   setTeacherPinsState((prev) => ({ ...prev, [teacher.id]: val }));
                                 }}
-                                className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                                className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs font-black text-center focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                               />
                               <button
                                 type="button"
@@ -1898,12 +1986,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </div>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => handleUpdateSingleTeacherPin(teacher.id, teacherPin)}
-                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition shadow-xs"
-                            >
-                              Save PIN
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleSendTeacherWhatsAppSlip(teacher)}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+                                title={`Send official PIN, class & subject assignment slip to ${teacher.name} on WhatsApp`}
+                              >
+                                <Send className="h-3 w-3" />
+                                <span>WhatsApp Slip</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateSingleTeacherPin(teacher.id, teacherPin)}
+                                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition shadow-xs"
+                              >
+                                Save PIN
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

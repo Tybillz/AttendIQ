@@ -30,18 +30,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const defaultTeacherId = teachers.find((t) => t.name.includes('Danladi'))?.id || teachers[0]?.id || '';
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(defaultTeacherId);
   
-  const initialCreds = getPortalCredentials();
-  const [pin, setPin] = useState<string>(initialCreds.teacherPins[defaultTeacherId] || '7314');
-  const [adminPasscode, setAdminPasscode] = useState<string>('1234');
-  const [gatePasscode, setGatePasscode] = useState<string>('1234');
+  const [pin, setPin] = useState<string>('');
+  const [adminPasscode, setAdminPasscode] = useState<string>('');
+  const [gatePasscode, setGatePasscode] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   const handleTeacherChange = (newTeacherId: string) => {
     setSelectedTeacherId(newTeacherId);
     setError(null);
-    const creds = getPortalCredentials();
-    setPin(creds.teacherPins[newTeacherId] || '7314');
+    setPin(''); // Completely clear PIN field for security
   };
 
   const handleTeacherLogin = (e: React.FormEvent) => {
@@ -189,31 +187,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5 flex items-center justify-between">
-                  <span>Your Individual 4-Digit Teacher PIN:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const creds = getPortalCredentials();
-                      setPin(creds.teacherPins[selectedTeacherId] || '7314');
-                    }}
-                    className="text-[10px] text-indigo-600 font-bold hover:underline flex items-center gap-1"
-                    title="Auto-fill this teacher's assigned PIN"
-                  >
-                    <span>Auto-Fill PIN ({getPortalCredentials().teacherPins[selectedTeacherId] || '7314'})</span>
-                  </button>
+                  <span>Enter Your 4-Digit Login PIN:</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Confidential Access</span>
                 </label>
                 <div className="relative">
                   <input
                     type="password"
                     maxLength={4}
                     value={pin}
-                    onChange={(e) => setPin(e.target.value)}
-                    placeholder="Enter 4-digit PIN"
-                    className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-lg tracking-widest font-black text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="••••"
+                    className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-xl tracking-[0.3em] font-black text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none placeholder:text-slate-300"
                     required
                   />
                   <KeyRound className="h-4 w-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
+                <p className="text-[11px] text-slate-400 mt-1.5 text-center">
+                  PINs are assigned privately by the School Administrator.
+                </p>
               </div>
 
               {error && (
@@ -246,15 +237,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
                 <label className="text-xs font-bold text-slate-700 block mb-1.5 flex items-center justify-between">
                   <span>Enter Management Passcode:</span>
-                  <span className="text-[10px] text-slate-400">(Default: 1234)</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Administrator</span>
                 </label>
                 <div className="relative">
                   <input
                     type="password"
                     value={adminPasscode}
                     onChange={(e) => setAdminPasscode(e.target.value)}
-                    placeholder="1234"
-                    className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-lg tracking-widest font-black text-slate-900 focus:ring-2 focus:ring-slate-900 focus:outline-none"
+                    placeholder="••••"
+                    className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-xl tracking-[0.3em] font-black text-slate-900 focus:ring-2 focus:ring-slate-900 focus:outline-none placeholder:text-slate-300"
                     required
                   />
                   <Lock className="h-4 w-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -291,15 +282,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
                 <label className="text-xs font-bold text-slate-700 block mb-1.5 flex items-center justify-between">
                   <span>Enter Gate Security Passcode:</span>
-                  <span className="text-[10px] text-slate-400">(Default: 1234)</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Gatehouse</span>
                 </label>
                 <div className="relative">
                   <input
                     type="password"
                     value={gatePasscode}
                     onChange={(e) => setGatePasscode(e.target.value)}
-                    placeholder="1234"
-                    className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-lg tracking-widest font-black text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    placeholder="••••"
+                    className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-xl tracking-[0.3em] font-black text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none placeholder:text-slate-300"
                     required
                   />
                   <Lock className="h-4 w-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -323,10 +314,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </form>
           )}
 
-          <div className="mt-5 pt-4 border-t border-slate-100 text-center">
-            <span className="text-[11px] text-slate-400">
-              💡 Demo Passcode for all portals is <strong className="text-slate-600">1234</strong>
-            </span>
+          <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-slate-400 text-[11px]">
+            <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
+            <span>Apex Crest Academy • Secure Cloud Portal Gateway</span>
           </div>
         </div>
       </div>
