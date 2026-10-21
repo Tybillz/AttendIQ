@@ -11,10 +11,8 @@ export interface AuthSession {
   loginTime: string;
 }
 
-const AUTH_STORAGE_KEY = 'attend_iq_active_auth_session_v1';
-const ADMIN_PASSCODE = '1234';
-const GATE_PASSCODE = '1234';
-const DEFAULT_TEACHER_PIN = '1234';
+const AUTH_STORAGE_KEY = 'attend_iq_active_auth_session_v2';
+const LOGGED_OUT_KEY = 'attend_iq_user_logged_out_v2';
 
 export function getAuthSession(): AuthSession | null {
   if (typeof window === 'undefined') {
@@ -22,11 +20,18 @@ export function getAuthSession(): AuthSession | null {
   }
 
   try {
+    // If explicitly logged out or no session exists, strictly return null
+    if (localStorage.getItem(LOGGED_OUT_KEY) === 'true') {
+      return null;
+    }
+
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) {
       return null;
     }
-    return JSON.parse(raw);
+    const session = JSON.parse(raw);
+    if (!session || !session.role) return null;
+    return session;
   } catch {
     return null;
   }
@@ -36,9 +41,12 @@ export function saveAuthSession(session: AuthSession | null): void {
   if (typeof window === 'undefined') return;
   try {
     if (session) {
+      localStorage.removeItem(LOGGED_OUT_KEY);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
     } else {
+      localStorage.setItem(LOGGED_OUT_KEY, 'true');
       localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem('attend_iq_active_auth_session_v1');
     }
     window.dispatchEvent(new Event('attend-iq-auth-update'));
   } catch (e) {
@@ -183,5 +191,13 @@ export function loginAsGate(passcode: string): { success: boolean; message: stri
 
 export function logout(): void {
   saveAuthSession(null);
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(LOGGED_OUT_KEY, 'true');
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem('attend_iq_active_auth_session_v1');
+      sessionStorage.clear();
+    } catch {}
+  }
 }
 

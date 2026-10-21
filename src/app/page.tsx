@@ -143,6 +143,8 @@ export default function Home() {
         if (activeSession.teacherId) {
           setCurrentTeacherId(activeSession.teacherId);
         }
+      } else {
+        setAuthSession(null);
       }
     };
 
