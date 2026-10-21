@@ -2,6 +2,8 @@
 
 AttendIQ is a full-featured, web and mobile-ready school attendance tracker built with **Next.js**, **TypeScript**, and **Tailwind CSS**. Designed for teachers, school administrators, and parents.
 
+- **Production Portal**: [https://attendiq.vercel.app](https://attendiq.vercel.app)
+
 ---
 
 ## 🚀 Key Features
