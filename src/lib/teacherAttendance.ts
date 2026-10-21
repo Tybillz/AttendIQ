@@ -2,8 +2,8 @@ import { TeacherClockRecord, SchoolPerimeterConfig, TeacherDeviceLock } from '@/
 
 export const DEFAULT_PERIMETER_CONFIG: SchoolPerimeterConfig = {
   schoolName: 'Apex Crest Academy',
-  schoolLat: 6.5244, // Default Lagos Coordinates (Customizable in Admin Console)
-  schoolLng: 3.3792,
+  schoolLat: 9.121251, // Calibrated School Coordinates (Apex Crest Academy, Abuja)
+  schoolLng: 7.384811,
   radiusMeters: 250, // 250m school perimeter
   resumptionTime: '08:00 AM',
   closingTime: '02:30 PM',
@@ -37,12 +37,20 @@ export function getLivePortalUrl(config?: SchoolPerimeterConfig): string {
   return 'https://attendiq.vercel.app';
 }
 
-// Safe storage access
+// Safe storage access with automatic cloud migration
 export function getPerimeterConfig(): SchoolPerimeterConfig {
   if (typeof window === 'undefined') return DEFAULT_PERIMETER_CONFIG;
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.PERIMETER_CONFIG);
-    return raw ? { ...DEFAULT_PERIMETER_CONFIG, ...JSON.parse(raw) } : DEFAULT_PERIMETER_CONFIG;
+    if (!raw) return DEFAULT_PERIMETER_CONFIG;
+    const parsed = JSON.parse(raw);
+    // If client had the old Lagos coordinates stored, auto-migrate to the calibrated school location
+    if (parsed.schoolLat === 6.5244 && parsed.schoolLng === 3.3792) {
+      parsed.schoolLat = DEFAULT_PERIMETER_CONFIG.schoolLat;
+      parsed.schoolLng = DEFAULT_PERIMETER_CONFIG.schoolLng;
+      localStorage.setItem(STORAGE_KEYS.PERIMETER_CONFIG, JSON.stringify(parsed));
+    }
+    return { ...DEFAULT_PERIMETER_CONFIG, ...parsed };
   } catch {
     return DEFAULT_PERIMETER_CONFIG;
   }
@@ -53,9 +61,37 @@ export function savePerimeterConfig(config: SchoolPerimeterConfig): void {
   try {
     localStorage.setItem(STORAGE_KEYS.PERIMETER_CONFIG, JSON.stringify(config));
     window.dispatchEvent(new Event('attend-iq-perimeter-update'));
+    // Asynchronously sync to cloud API so all staff phones immediately get the update
+    fetch('/api/perimeter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    }).catch(() => {
+      // Offline fallback silent catch
+    });
   } catch (e) {
     console.error('Failed to save perimeter config', e);
   }
+}
+
+export async function syncPerimeterConfigFromCloud(): Promise<SchoolPerimeterConfig> {
+  if (typeof window === 'undefined') return DEFAULT_PERIMETER_CONFIG;
+  try {
+    const res = await fetch('/api/perimeter');
+    if (res.ok) {
+      const cloudConfig = await res.json();
+      if (cloudConfig && typeof cloudConfig.schoolLat === 'number') {
+        const local = getPerimeterConfig();
+        const merged = { ...local, ...cloudConfig };
+        localStorage.setItem(STORAGE_KEYS.PERIMETER_CONFIG, JSON.stringify(merged));
+        window.dispatchEvent(new Event('attend-iq-perimeter-update'));
+        return merged;
+      }
+    }
+  } catch {
+    // Offline / network fallback
+  }
+  return getPerimeterConfig();
 }
 
 /**

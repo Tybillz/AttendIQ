@@ -46,6 +46,7 @@ import { exportAttendanceReportCSV, downloadCSVFile, getSubjectGrades } from '@/
 import {
   getPerimeterConfig,
   savePerimeterConfig,
+  syncPerimeterConfigFromCloud,
   getDailyEntranceCode,
   setDailyEntranceCodeOverride,
   getTeacherClockRecords,
@@ -137,6 +138,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setTeacherPinsState({ ...currentCreds.teacherPins });
     };
     loadClockRecords();
+    syncPerimeterConfigFromCloud().then(() => {
+      loadClockRecords();
+    });
 
     window.addEventListener('attend-iq-teacher-clock-update', loadClockRecords);
     window.addEventListener('attend-iq-perimeter-update', loadClockRecords);

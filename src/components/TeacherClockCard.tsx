@@ -16,6 +16,7 @@ import {
 import confetti from 'canvas-confetti';
 import {
   getPerimeterConfig,
+  syncPerimeterConfigFromCloud,
   getDailyEntranceCode,
   getTeacherRecordForDate,
   getTeacherDeviceLock,
@@ -55,11 +56,15 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
 
   const digitInputs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Refresh record and device lock when teacher or date changes
+  // Refresh record, perimeter config, and device lock when teacher or date changes
   useEffect(() => {
     loadRecord();
     setPerimeterConfig(getPerimeterConfig());
     setDeviceLock(getTeacherDeviceLock(teacher.id));
+
+    syncPerimeterConfigFromCloud().then((conf) => {
+      setPerimeterConfig(conf);
+    });
 
     getHardwareDeviceProfile().then((profile) => {
       setHardwareProfile(profile);
