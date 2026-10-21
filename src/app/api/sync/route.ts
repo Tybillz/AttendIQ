@@ -6,6 +6,9 @@ const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPAB
   ? process.env.SUPABASE_SERVICE_ROLE_KEY
   : CLOUD_KEY;
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Fallback in-memory cache
 let inMemoryStore: {
   teachers?: any[];
@@ -28,14 +31,15 @@ async function getCloudStore() {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
       },
-      next: { revalidate: 0 },
+      cache: 'no-store',
     });
 
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0 && data[0].attachment_data) {
         try {
-          const parsed = JSON.parse(data[0].attachment_data);
+          const raw = data[0].attachment_data;
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
           inMemoryStore = {
             ...inMemoryStore,
             ...parsed,
