@@ -100,9 +100,43 @@ export function savePortalCredentials(creds: PortalCredentials): void {
   try {
     localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(creds));
     window.dispatchEvent(new Event('attend-iq-credentials-update'));
+    // Asynchronously push to centralized cloud API
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        teacherPins: creds.teacherPins,
+        adminPasscode: creds.adminPasscode,
+        gatePasscode: creds.gatePasscode,
+      }),
+    }).catch(() => {});
   } catch (e) {
     console.error('Failed to save credentials', e);
   }
+}
+
+export async function syncCredentialsFromCloud(): Promise<PortalCredentials> {
+  if (typeof window === 'undefined') return DEFAULT_CREDENTIALS;
+  try {
+    const res = await fetch('/api/sync');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.teacherPins && Object.keys(data.teacherPins).length > 0) {
+        const local = getPortalCredentials();
+        const merged: PortalCredentials = {
+          adminPasscode: data.adminPasscode || local.adminPasscode,
+          gatePasscode: data.gatePasscode || local.gatePasscode,
+          teacherPins: { ...DEFAULT_CREDENTIALS.teacherPins, ...local.teacherPins, ...data.teacherPins },
+        };
+        localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new Event('attend-iq-credentials-update'));
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to sync credentials from cloud:', err);
+  }
+  return getPortalCredentials();
 }
 
 export function updateTeacherPin(teacherId: string, newPin: string): void {

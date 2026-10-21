@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
   Lock,
@@ -13,7 +13,8 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Teacher, ClassSection } from '@/types/attendance';
-import { loginAsTeacher, loginAsAdmin, loginAsGate, AuthSession, getPortalCredentials } from '@/lib/auth';
+import { loginAsTeacher, loginAsAdmin, loginAsGate, AuthSession, getPortalCredentials, syncCredentialsFromCloud } from '@/lib/auth';
+import { getTeachers, getClasses, syncDataFromCloud } from '@/lib/storage';
 
 interface AuthScreenProps {
   teachers: Teacher[];
@@ -22,12 +23,15 @@ interface AuthScreenProps {
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({
-  teachers,
-  classes,
+  teachers: initialTeachers,
+  classes: initialClasses,
   onLoginSuccess,
 }) => {
   const [tab, setTab] = useState<'teacher' | 'admin' | 'gate'>('teacher');
-  const defaultTeacherId = teachers.find((t) => t.name.includes('Danladi'))?.id || teachers[0]?.id || '';
+  const [teacherList, setTeacherList] = useState<Teacher[]>(initialTeachers);
+  const [classList, setClassList] = useState<ClassSection[]>(initialClasses);
+  
+  const defaultTeacherId = initialTeachers.find((t) => t.name.includes('Danladi'))?.id || initialTeachers[0]?.id || '';
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(defaultTeacherId);
   
   const [pin, setPin] = useState<string>('');
@@ -36,18 +40,53 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
+  // Sync latest teachers, enrolled staff, and PINs from cloud on mount
+  useEffect(() => {
+    const refreshLocalData = () => {
+      const localTeachers = getTeachers();
+      const localClasses = getClasses();
+      if (localTeachers.length > 0) setTeacherList(localTeachers);
+      if (localClasses.length > 0) setClassList(localClasses);
+    };
+    refreshLocalData();
+
+    syncDataFromCloud().then((cloudData) => {
+      if (cloudData.teachers && cloudData.teachers.length > 0) {
+        setTeacherList(cloudData.teachers);
+        if (!selectedTeacherId && cloudData.teachers.length > 0) {
+          setSelectedTeacherId(cloudData.teachers[0].id);
+        }
+      }
+      if (cloudData.classes && cloudData.classes.length > 0) {
+        setClassList(cloudData.classes);
+      }
+    });
+
+    syncCredentialsFromCloud();
+
+    window.addEventListener('attend-iq-storage-update', refreshLocalData);
+    return () => {
+      window.removeEventListener('attend-iq-storage-update', refreshLocalData);
+    };
+  }, []);
+
   const handleTeacherChange = (newTeacherId: string) => {
     setSelectedTeacherId(newTeacherId);
     setError(null);
     setPin(''); // Completely clear PIN field for security
   };
 
-  const handleTeacherLogin = (e: React.FormEvent) => {
+  const handleTeacherLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    const res = loginAsTeacher(selectedTeacherId, pin);
+    let res = loginAsTeacher(selectedTeacherId, pin);
+    if (!res.success) {
+      // If failed locally, re-sync credentials and teachers live from cloud in case PIN or teacher was updated on admin laptop
+      await Promise.all([syncCredentialsFromCloud(), syncDataFromCloud()]);
+      res = loginAsTeacher(selectedTeacherId, pin);
+    }
     setLoading(false);
 
     if (res.success && res.session) {
@@ -169,8 +208,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   onChange={(e) => handleTeacherChange(e.target.value)}
                   className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-bold text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
                 >
-                  {teachers.map((t) => {
-                    const assignedCls = classes.find(
+                  {teacherList.map((t) => {
+                    const assignedCls = classList.find(
                       (c) => t.assignedClassIds?.includes(c.id) || c.teacherId === t.id
                     );
                     return (

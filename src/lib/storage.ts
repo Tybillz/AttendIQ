@@ -161,6 +161,13 @@ export function getClasses(): ClassSection[] {
 
 export function saveClasses(classes: ClassSection[]): void {
   setStored(KEYS.CLASSES, classes);
+  if (typeof window !== 'undefined') {
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classes }),
+    }).catch(() => {});
+  }
 }
 
 export function addClass(newClass: Omit<ClassSection, 'id' | 'pupilCount'>): ClassSection {
@@ -197,6 +204,55 @@ export function getTeachers(): Teacher[] {
 
 export function saveTeachers(teachers: Teacher[]): void {
   setStored(KEYS.TEACHERS, teachers);
+  if (typeof window !== 'undefined') {
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teachers }),
+    }).catch(() => {});
+  }
+}
+
+export async function syncDataFromCloud(): Promise<{ teachers: Teacher[]; classes: ClassSection[] }> {
+  if (typeof window === 'undefined') {
+    return { teachers: getTeachers(), classes: getClasses() };
+  }
+
+  try {
+    const res = await fetch('/api/sync');
+    if (res.ok) {
+      const data = await res.json();
+      let updatedAny = false;
+
+      if (Array.isArray(data.teachers) && data.teachers.length > 0) {
+        const localTeachers = getTeachers();
+        const teacherMap = new Map<string, Teacher>();
+        localTeachers.forEach((t) => teacherMap.set(t.id, t));
+        data.teachers.forEach((t: Teacher) => teacherMap.set(t.id, t));
+        const mergedTeachers = Array.from(teacherMap.values());
+        setStored(KEYS.TEACHERS, mergedTeachers);
+        updatedAny = true;
+      }
+
+      if (Array.isArray(data.classes) && data.classes.length > 0) {
+        const localClasses = getClasses();
+        const classMap = new Map<string, ClassSection>();
+        localClasses.forEach((c) => classMap.set(c.id, c));
+        data.classes.forEach((c: ClassSection) => classMap.set(c.id, c));
+        const mergedClasses = Array.from(classMap.values());
+        setStored(KEYS.CLASSES, mergedClasses);
+        updatedAny = true;
+      }
+
+      if (updatedAny) {
+        window.dispatchEvent(new Event('attend-iq-storage-update'));
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to sync school data from cloud:', err);
+  }
+
+  return { teachers: getTeachers(), classes: getClasses() };
 }
 
 export function addTeacher(newTeacher: Omit<Teacher, 'id'>): Teacher {
@@ -207,6 +263,24 @@ export function addTeacher(newTeacher: Omit<Teacher, 'id'>): Teacher {
   };
   teachers.push(created);
   saveTeachers(teachers);
+
+  // Automatically assign an initial distinct 4-digit PIN for this new teacher and sync to cloud
+  if (typeof window !== 'undefined') {
+    try {
+      const rawCreds = localStorage.getItem('attend_iq_portal_credentials_v1');
+      const creds = rawCreds ? JSON.parse(rawCreds) : { teacherPins: {} };
+      if (!creds.teacherPins) creds.teacherPins = {};
+      const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+      creds.teacherPins[created.id] = newPin;
+      localStorage.setItem('attend_iq_portal_credentials_v1', JSON.stringify(creds));
+      window.dispatchEvent(new Event('attend-iq-credentials-update'));
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherPins: creds.teacherPins }),
+      }).catch(() => {});
+    } catch {}
+  }
 
   // If assigned to any classes upon creation, sync the classes too
   if (created.assignedClassIds && created.assignedClassIds.length > 0) {

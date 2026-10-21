@@ -9,7 +9,7 @@ import { SubjectGradebook } from '@/components/SubjectGradebook';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { GateCheckIn } from '@/components/GateCheckIn';
 import { AuthScreen } from '@/components/AuthScreen';
-import { getAuthSession, logout as performLogout, AuthSession } from '@/lib/auth';
+import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud } from '@/lib/auth';
 import { getTeacherRecordForDate } from '@/lib/teacherAttendance';
 import { StudentProfileModal } from '@/components/StudentProfileModal';
 import { AlertSettingsModal } from '@/components/AlertSettingsModal';
@@ -25,6 +25,7 @@ import {
   getTeacherAnalytics,
   recordAttendanceEntry,
   getAuditLogs,
+  syncDataFromCloud,
 } from '@/lib/storage';
 import { AuditLogModal } from '@/components/AuditLogModal';
 import {
@@ -133,6 +134,10 @@ export default function Home() {
     } catch {}
 
     syncData();
+    syncDataFromCloud().then(() => {
+      syncData();
+    });
+    syncCredentialsFromCloud();
 
     const handleStorageUpdate = () => {
       syncData();
