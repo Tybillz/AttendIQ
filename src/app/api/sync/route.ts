@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zjayceqhoapcapsvevrq.supabase.co';
+const SUPABASE_URL = 'https://zjayceqhoapcapsvevrq.supabase.co';
 const FALLBACK_KEY = Buffer.from('c2Jfc2VjcmV0XzN2aHd4TXo3VVlYdXlwSXE5bkkyUkFfbEpiYjFaN04=', 'base64').toString('ascii');
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || FALLBACK_KEY;
 
