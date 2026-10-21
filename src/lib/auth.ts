@@ -13,6 +13,89 @@ export interface AuthSession {
 
 const AUTH_STORAGE_KEY = 'attend_iq_active_auth_session_v2';
 const LOGGED_OUT_KEY = 'attend_iq_user_logged_out_v2';
+const LAST_ACTIVE_KEY = 'attend_iq_last_active_time_v2';
+const TIMED_OUT_KEY = 'attend_iq_session_timed_out_v2';
+
+// 30 minutes in milliseconds
+export const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
+export function recordUserActivity(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+  } catch {}
+}
+
+export function getLastActiveTime(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const val = localStorage.getItem(LAST_ACTIVE_KEY);
+    return val ? Number(val) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function wasSessionTimedOut(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return sessionStorage.getItem(TIMED_OUT_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function clearSessionTimedOut(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(TIMED_OUT_KEY);
+  } catch {}
+}
+
+export function handleInactivityTimeout(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(TIMED_OUT_KEY, 'true');
+  } catch {}
+  logout();
+}
+
+export function initInactivityTracker(onTimeout?: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  let lastThrottle = 0;
+  const updateActivity = () => {
+    const now = Date.now();
+    // Throttle storage writes to once every 10 seconds to avoid unnecessary I/O
+    if (now - lastThrottle > 10000) {
+      lastThrottle = now;
+      recordUserActivity();
+    }
+  };
+
+  const activityEvents = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'pointerdown', 'click'];
+  activityEvents.forEach((ev) => window.addEventListener(ev, updateActivity, { passive: true }));
+
+  // Check every 15 seconds if 30 minutes of inactivity has elapsed
+  const intervalId = window.setInterval(() => {
+    const session = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (session && localStorage.getItem(LOGGED_OUT_KEY) !== 'true') {
+      const lastActive = getLastActiveTime();
+      if (lastActive && (Date.now() - lastActive > INACTIVITY_TIMEOUT_MS)) {
+        handleInactivityTimeout();
+        if (onTimeout) onTimeout();
+      }
+    }
+  }, 15000);
+
+  // Record initial activity timestamp
+  recordUserActivity();
+
+  return () => {
+    activityEvents.forEach((ev) => window.removeEventListener(ev, updateActivity));
+    clearInterval(intervalId);
+  };
+}
 
 export function getAuthSession(): AuthSession | null {
   if (typeof window === 'undefined') {
@@ -31,6 +114,14 @@ export function getAuthSession(): AuthSession | null {
     }
     const session = JSON.parse(raw);
     if (!session || !session.role) return null;
+
+    // Check 30-minute inactivity timeout
+    const lastActive = getLastActiveTime();
+    if (lastActive && (Date.now() - lastActive > INACTIVITY_TIMEOUT_MS)) {
+      handleInactivityTimeout();
+      return null;
+    }
+
     return session;
   } catch {
     return null;
@@ -43,10 +134,13 @@ export function saveAuthSession(session: AuthSession | null): void {
     if (session) {
       localStorage.removeItem(LOGGED_OUT_KEY);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+      localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+      clearSessionTimedOut();
     } else {
       localStorage.setItem(LOGGED_OUT_KEY, 'true');
       localStorage.removeItem(AUTH_STORAGE_KEY);
       localStorage.removeItem('attend_iq_active_auth_session_v1');
+      localStorage.removeItem(LAST_ACTIVE_KEY);
     }
     window.dispatchEvent(new Event('attend-iq-auth-update'));
   } catch (e) {

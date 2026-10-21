@@ -11,9 +11,10 @@ import {
   Sparkles,
   KeyRound,
   CheckCircle2,
+  Clock,
 } from 'lucide-react';
 import { Teacher, ClassSection } from '@/types/attendance';
-import { loginAsTeacher, loginAsAdmin, loginAsGate, AuthSession, getPortalCredentials, syncCredentialsFromCloud } from '@/lib/auth';
+import { loginAsTeacher, loginAsAdmin, loginAsGate, AuthSession, getPortalCredentials, syncCredentialsFromCloud, wasSessionTimedOut, clearSessionTimedOut } from '@/lib/auth';
 import { getTeachers, getClasses, syncDataFromCloud } from '@/lib/storage';
 
 interface AuthScreenProps {
@@ -39,9 +40,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [gatePasscode, setGatePasscode] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [timedOutNotice, setTimedOutNotice] = useState<boolean>(false);
 
   // Sync latest teachers, enrolled staff, and PINs from cloud on mount
   useEffect(() => {
+    if (wasSessionTimedOut()) {
+      setTimedOutNotice(true);
+    }
     const refreshLocalData = () => {
       const localTeachers = getTeachers();
       const localClasses = getClasses();
@@ -197,6 +202,28 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
         {/* Content Box */}
         <div className="p-6">
+          {timedOutNotice && (
+            <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-start gap-3 text-xs text-amber-900 shadow-xs animate-in fade-in duration-200">
+              <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-bold text-amber-950">Inactivity Auto-Logout</p>
+                <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
+                  You were logged out after 30 minutes of inactivity to safeguard school attendance & pupil records.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setTimedOutNotice(false);
+                  clearSessionTimedOut();
+                }}
+                className="text-amber-500 hover:text-amber-900 font-bold px-1 text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {tab === 'teacher' ? (
             <form onSubmit={handleTeacherLogin} className="space-y-4">
               <div>

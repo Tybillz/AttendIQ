@@ -9,7 +9,7 @@ import { SubjectGradebook } from '@/components/SubjectGradebook';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { GateCheckIn } from '@/components/GateCheckIn';
 import { AuthScreen } from '@/components/AuthScreen';
-import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud } from '@/lib/auth';
+import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud, initInactivityTracker } from '@/lib/auth';
 import { getTeacherRecordForDate } from '@/lib/teacherAttendance';
 import { StudentProfileModal } from '@/components/StudentProfileModal';
 import { AlertSettingsModal } from '@/components/AlertSettingsModal';
@@ -153,10 +153,16 @@ export default function Home() {
       }
     };
 
+    // Automatic 30-minute inactivity auto-logout tracker
+    const cleanupInactivity = initInactivityTracker(() => {
+      setAuthSession(null);
+    });
+
     window.addEventListener('attend-iq-storage-update', handleStorageUpdate);
     window.addEventListener('attend-iq-auth-update', handleStorageUpdate);
     window.addEventListener('storage', handleStorageUpdate);
     return () => {
+      cleanupInactivity();
       window.removeEventListener('attend-iq-storage-update', handleStorageUpdate);
       window.removeEventListener('attend-iq-auth-update', handleStorageUpdate);
       window.removeEventListener('storage', handleStorageUpdate);
