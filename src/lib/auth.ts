@@ -62,6 +62,66 @@ export function saveAuthSession(session: AuthSession | null): void {
   }
 }
 
+export interface PortalCredentials {
+  adminPasscode: string;
+  gatePasscode: string;
+  teacherPins: Record<string, string>;
+}
+
+const DEFAULT_CREDENTIALS: PortalCredentials = {
+  adminPasscode: '1234',
+  gatePasscode: '1234',
+  teacherPins: {
+    't-101': '1234',
+    't-102': '1234',
+    't-103': '1234',
+    't-104': '1234',
+    't-105': '1234',
+    't-106': '1234',
+  },
+};
+
+const CREDENTIALS_STORAGE_KEY = 'attend_iq_portal_credentials_v1';
+
+export function getPortalCredentials(): PortalCredentials {
+  if (typeof window === 'undefined') return DEFAULT_CREDENTIALS;
+  try {
+    const raw = localStorage.getItem(CREDENTIALS_STORAGE_KEY);
+    return raw ? { ...DEFAULT_CREDENTIALS, ...JSON.parse(raw) } : DEFAULT_CREDENTIALS;
+  } catch {
+    return DEFAULT_CREDENTIALS;
+  }
+}
+
+export function savePortalCredentials(creds: PortalCredentials): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(creds));
+    window.dispatchEvent(new Event('attend-iq-credentials-update'));
+  } catch (e) {
+    console.error('Failed to save credentials', e);
+  }
+}
+
+export function updateTeacherPin(teacherId: string, newPin: string): void {
+  const creds = getPortalCredentials();
+  if (!creds.teacherPins) creds.teacherPins = {};
+  creds.teacherPins[teacherId] = newPin.trim();
+  savePortalCredentials(creds);
+}
+
+export function updateAdminPasscode(newPasscode: string): void {
+  const creds = getPortalCredentials();
+  creds.adminPasscode = newPasscode.trim();
+  savePortalCredentials(creds);
+}
+
+export function updateGatePasscode(newPasscode: string): void {
+  const creds = getPortalCredentials();
+  creds.gatePasscode = newPasscode.trim();
+  savePortalCredentials(creds);
+}
+
 export function loginAsTeacher(teacherId: string, enteredPin: string): { success: boolean; message: string; session?: AuthSession } {
   const teachers = getTeachers();
   const teacher = teachers.find((t) => t.id === teacherId);
@@ -70,10 +130,10 @@ export function loginAsTeacher(teacherId: string, enteredPin: string): { success
     return { success: false, message: 'Teacher profile not found.' };
   }
 
-  // Check PIN (default '1234' or teacher specific)
-  const expectedPin = DEFAULT_TEACHER_PIN;
+  const creds = getPortalCredentials();
+  const expectedPin = creds.teacherPins?.[teacherId] || '1234';
   if (enteredPin.trim() !== expectedPin) {
-    return { success: false, message: 'Incorrect 4-digit PIN. (Default PIN: 1234)' };
+    return { success: false, message: 'Incorrect 4-digit PIN. Please contact the Principal if you forgot your PIN.' };
   }
 
   const session: AuthSession = {
@@ -88,8 +148,9 @@ export function loginAsTeacher(teacherId: string, enteredPin: string): { success
 }
 
 export function loginAsAdmin(passcode: string): { success: boolean; message: string; session?: AuthSession } {
-  if (passcode.trim() !== ADMIN_PASSCODE && passcode.trim() !== 'admin') {
-    return { success: false, message: 'Incorrect Management Passcode. (Default: 1234)' };
+  const creds = getPortalCredentials();
+  if (passcode.trim() !== creds.adminPasscode && passcode.trim() !== 'admin') {
+    return { success: false, message: 'Incorrect Management Passcode.' };
   }
 
   const session: AuthSession = {
@@ -102,8 +163,9 @@ export function loginAsAdmin(passcode: string): { success: boolean; message: str
 }
 
 export function loginAsGate(passcode: string): { success: boolean; message: string; session?: AuthSession } {
-  if (passcode.trim() !== GATE_PASSCODE && passcode.trim() !== 'gate') {
-    return { success: false, message: 'Incorrect Gate Security Passcode. (Default: 1234)' };
+  const creds = getPortalCredentials();
+  if (passcode.trim() !== creds.gatePasscode && passcode.trim() !== 'gate') {
+    return { success: false, message: 'Incorrect Gate Security Passcode.' };
   }
 
   const session: AuthSession = {
@@ -118,3 +180,4 @@ export function loginAsGate(passcode: string): { success: boolean; message: stri
 export function logout(): void {
   saveAuthSession(null);
 }
+

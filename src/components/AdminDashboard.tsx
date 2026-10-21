@@ -39,6 +39,7 @@ import {
   TeacherAnalytics,
   SubjectGradeRecord,
   TeacherClockRecord,
+  SchoolPerimeterConfig,
 } from '@/types/attendance';
 import { exportAttendanceReportCSV, downloadCSVFile, getSubjectGrades } from '@/lib/storage';
 import {
@@ -51,6 +52,12 @@ import {
   unpairTeacherDevice,
 } from '@/lib/teacherAttendance';
 import { TeacherDeviceLock } from '@/types/attendance';
+import {
+  getPortalCredentials,
+  updateTeacherPin,
+  updateAdminPasscode,
+  updateGatePasscode,
+} from '@/lib/auth';
 
 interface AdminDashboardProps {
   students: Student[];
@@ -80,7 +87,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenSettingsModal,
   onSelectStudentProfile,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'chronic_absentees' | 'teacher_analytics' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'chronic_absentees' | 'teacher_analytics' | 'reports' | 'access_control'>('overview');
   const [selectedBroadsheetClass, setSelectedBroadsheetClass] = useState<string>('all');
   const [selectedTerm, setSelectedTerm] = useState<string>('First Term (2026/2027 Session)');
   const [broadsheetMode, setBroadsheetMode] = useState<'comprehensive' | 'attendance_only'>('comprehensive');
@@ -90,23 +97,185 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [deviceLocks, setDeviceLocks] = useState<TeacherDeviceLock[]>([]);
   const [copiedCode, setCopiedCode] = useState(false);
 
+  // Security & Access Control State
+  const [creds, setCreds] = useState(getPortalCredentials());
+  const [adminPassInput, setAdminPassInput] = useState(creds.adminPasscode);
+  const [gatePassInput, setGatePassInput] = useState(creds.gatePasscode);
+  const [teacherPinsState, setTeacherPinsState] = useState<Record<string, string>>({ ...creds.teacherPins });
+  const [customDailyCodeInput, setCustomDailyCodeInput] = useState('');
+  const [accessFeedback, setAccessFeedback] = useState<string | null>(null);
+  const [geofenceGpsLoading, setGeofenceGpsLoading] = useState(false);
+
+  // Editable geofence form state
+  const [schoolLatInput, setSchoolLatInput] = useState(perimeterConfig.schoolLat.toString());
+  const [schoolLngInput, setSchoolLngInput] = useState(perimeterConfig.schoolLng.toString());
+  const [radiusInput, setRadiusInput] = useState(perimeterConfig.radiusMeters.toString());
+  const [resumptionInput, setResumptionInput] = useState(perimeterConfig.resumptionTime);
+  const [closingInput, setClosingInput] = useState(perimeterConfig.closingTime);
+
   React.useEffect(() => {
     const loadClockRecords = () => {
       setTeacherClockRecords(getTeacherClockRecords());
-      setPerimeterConfig(getPerimeterConfig());
+      const pConf = getPerimeterConfig();
+      setPerimeterConfig(pConf);
+      setSchoolLatInput(pConf.schoolLat.toString());
+      setSchoolLngInput(pConf.schoolLng.toString());
+      setRadiusInput(pConf.radiusMeters.toString());
+      setResumptionInput(pConf.resumptionTime);
+      setClosingInput(pConf.closingTime);
       setDeviceLocks(getDeviceLocks());
+      const currentCreds = getPortalCredentials();
+      setCreds(currentCreds);
+      setAdminPassInput(currentCreds.adminPasscode);
+      setGatePassInput(currentCreds.gatePasscode);
+      setTeacherPinsState({ ...currentCreds.teacherPins });
     };
     loadClockRecords();
 
     window.addEventListener('attend-iq-teacher-clock-update', loadClockRecords);
     window.addEventListener('attend-iq-perimeter-update', loadClockRecords);
     window.addEventListener('attend-iq-device-locks-update', loadClockRecords);
+    window.addEventListener('attend-iq-credentials-update', loadClockRecords);
     return () => {
       window.removeEventListener('attend-iq-teacher-clock-update', loadClockRecords);
       window.removeEventListener('attend-iq-perimeter-update', loadClockRecords);
       window.removeEventListener('attend-iq-device-locks-update', loadClockRecords);
+      window.removeEventListener('attend-iq-credentials-update', loadClockRecords);
     };
   }, [selectedDate]);
+
+  const tomorrowDateStr = (() => {
+    try {
+      const d = new Date(selectedDate);
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().split('T')[0];
+    } catch {
+      return selectedDate;
+    }
+  })();
+  const todayDailyCode = getDailyEntranceCode(selectedDate, perimeterConfig);
+  const tomorrowDailyCode = getDailyEntranceCode(tomorrowDateStr, perimeterConfig);
+  const isCustomCodeToday = Boolean(perimeterConfig.dailyEntranceCodeOverride?.[selectedDate]);
+
+  const handleCalibratePerimeterGps = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setGeofenceGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeofenceGpsLoading(false);
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setSchoolLatInput(lat.toString());
+        setSchoolLngInput(lng.toString());
+        const updated = {
+          ...perimeterConfig,
+          schoolLat: lat,
+          schoolLng: lng,
+        };
+        savePerimeterConfig(updated);
+        setPerimeterConfig(updated);
+        setAccessFeedback(`School coordinates successfully calibrated to current GPS position (${lat}, ${lng})!`);
+        setTimeout(() => setAccessFeedback(null), 5000);
+      },
+      (err) => {
+        setGeofenceGpsLoading(false);
+        alert(`Could not acquire GPS: ${err.message}. Please check device location permissions.`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleSavePerimeterSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    const lat = parseFloat(schoolLatInput);
+    const lng = parseFloat(schoolLngInput);
+    const radius = parseInt(radiusInput, 10);
+    if (isNaN(lat) || isNaN(lng) || isNaN(radius) || radius < 10) {
+      alert('Please enter valid numeric latitude, longitude, and radius (minimum 10m).');
+      return;
+    }
+    const updated: SchoolPerimeterConfig = {
+      ...perimeterConfig,
+      schoolLat: lat,
+      schoolLng: lng,
+      radiusMeters: radius,
+      resumptionTime: resumptionInput,
+      closingTime: closingInput,
+    };
+    savePerimeterConfig(updated);
+    setPerimeterConfig(updated);
+    setAccessFeedback('School perimeter geofence and bell schedule updated successfully!');
+    setTimeout(() => setAccessFeedback(null), 4000);
+  };
+
+  const handleSaveAdminPasscode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminPassInput || adminPassInput.trim().length < 4) {
+      alert('Admin passcode must be at least 4 characters.');
+      return;
+    }
+    updateAdminPasscode(adminPassInput);
+    setAccessFeedback('Administrator master passcode updated successfully!');
+    setTimeout(() => setAccessFeedback(null), 4000);
+  };
+
+  const handleSaveGatePasscode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gatePassInput || gatePassInput.trim().length < 4) {
+      alert('Gatehouse scanner passcode must be at least 4 characters.');
+      return;
+    }
+    updateGatePasscode(gatePassInput);
+    setAccessFeedback('Gatehouse security passcode updated successfully!');
+    setTimeout(() => setAccessFeedback(null), 4000);
+  };
+
+  const handleUpdateSingleTeacherPin = (teacherId: string, pin: string) => {
+    if (!pin || pin.trim().length < 4) {
+      alert('Staff PIN must be at least 4 digits.');
+      return;
+    }
+    updateTeacherPin(teacherId, pin);
+    setTeacherPinsState((prev) => ({ ...prev, [teacherId]: pin.trim() }));
+    setAccessFeedback(`Login PIN updated for teacher!`);
+    setTimeout(() => setAccessFeedback(null), 3000);
+  };
+
+  const handleSetDailyCodeOverride = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (customDailyCodeInput.trim().length !== 4) {
+      alert('Daily code must be exactly 4 digits.');
+      return;
+    }
+    setDailyEntranceCodeOverride(selectedDate, customDailyCodeInput.trim());
+    setCustomDailyCodeInput('');
+    setAccessFeedback(`Custom 4-digit code set for ${selectedDate}!`);
+    setTimeout(() => setAccessFeedback(null), 4000);
+  };
+
+  const handleResetDailyCodeOverride = () => {
+    const config = getPerimeterConfig();
+    if (config.dailyEntranceCodeOverride && config.dailyEntranceCodeOverride[selectedDate]) {
+      delete config.dailyEntranceCodeOverride[selectedDate];
+      savePerimeterConfig(config);
+      setPerimeterConfig({ ...config });
+      setAccessFeedback(`Reset ${selectedDate} back to automatic rotating daily code!`);
+      setTimeout(() => setAccessFeedback(null), 4000);
+    }
+  };
+
+  const handleUnpairTeacher = (teacherId: string, teacherName: string) => {
+    if (confirm(`Are you sure you want to unpair the phone for ${teacherName}? They will be able to bind a new device on their next clock-in.`)) {
+      unpairTeacherDevice(teacherId);
+      setDeviceLocks(getDeviceLocks());
+      setAccessFeedback(`Device lock for ${teacherName} has been cleared.`);
+      setTimeout(() => setAccessFeedback(null), 4000);
+    }
+  };
+
 
   // Whole school today calculations
   const totalStudents = students.length;
@@ -405,6 +574,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }`}
         >
           <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Nigerian Term Report Card Sheet
+        </button>
+        <button
+          onClick={() => setActiveTab('access_control')}
+          className={`py-3.5 px-4 font-bold text-xs border-b-2 transition flex items-center gap-1.5 ${
+            activeTab === 'access_control'
+              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <KeyRound className="h-4 w-4 text-amber-600" /> Staff PINs, Passwords & Geofence
         </button>
         <button
           onClick={() => onOpenDatabaseModal('teachers')}
@@ -1265,6 +1444,470 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </table>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: ACCESS CONTROL, GEOFENCE PERIMETER & STAFF CREDENTIALS */}
+      {activeTab === 'access_control' && (
+        <div className="space-y-6">
+          {/* Notification Feedback Banner */}
+          {accessFeedback && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl flex items-center justify-between shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                <span className="text-xs font-bold">{accessFeedback}</span>
+              </div>
+              <button
+                onClick={() => setAccessFeedback(null)}
+                className="text-emerald-700 hover:text-emerald-900 text-sm font-bold px-2 py-0.5"
+              >
+                &times;
+              </button>
+            </div>
+          )}
+
+          {/* SECTION 1: DAILY ROTATING 4-DIGIT ENTRANCE CODE */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5 text-indigo-600" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    Daily Rotating 4-Digit Clock-In Code
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  The gate code automatically changes every calendar day at midnight (12:00 AM) so staff must arrive on the specific date.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-3 py-1 rounded-xl">
+                Daily Automatic Rotation Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+              {/* Today's Code Card */}
+              <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-indigo-200 uppercase tracking-wider">
+                    Today's Code ({selectedDate})
+                  </span>
+                  {isCustomCodeToday ? (
+                    <span className="text-[10px] bg-amber-400 text-slate-900 font-black px-2 py-0.5 rounded-full">
+                      Custom Override
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-emerald-400 text-slate-900 font-black px-2 py-0.5 rounded-full">
+                      Auto Rotated
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-3 my-2">
+                  <span className="font-mono text-4xl font-black tracking-widest text-white">
+                    {todayDailyCode}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(todayDailyCode);
+                      setCopiedCode(true);
+                      setTimeout(() => setCopiedCode(false), 2000);
+                    }}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition text-xs flex items-center gap-1 text-slate-200"
+                    title="Copy code"
+                  >
+                    {copiedCode ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                    <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Staff see this code on their dashboard to complete gate & classroom clock-in.
+                </p>
+              </div>
+
+              {/* Tomorrow's Code Preview Card */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Tomorrow's Code Preview
+                  </span>
+                  <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
+                    {tomorrowDateStr}
+                  </span>
+                </div>
+                <div className="font-mono text-3xl font-black tracking-widest text-slate-800 my-2">
+                  {tomorrowDailyCode}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Will automatically activate tomorrow morning at 00:00. No manual action needed.
+                </p>
+              </div>
+
+              {/* Principal Manual Override Card */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Manual Code Override (Optional)
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-1 mb-3">
+                    Specify a custom 4-digit code for {selectedDate} if needed.
+                  </p>
+                </div>
+                <form onSubmit={handleSetDailyCodeOverride} className="flex gap-2">
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={customDailyCodeInput}
+                    onChange={(e) => setCustomDailyCodeInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="e.g. 8821"
+                    className="w-24 px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-sm font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition"
+                  >
+                    Set
+                  </button>
+                  {isCustomCodeToday && (
+                    <button
+                      type="button"
+                      onClick={handleResetDailyCodeOverride}
+                      className="px-2 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition"
+                      title="Reset to automatic rotating daily code"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </form>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: GEOFENCE PERIMETER & GPS CALIBRATION (ADMIN EXCLUSIVE) */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-rose-600" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    School Geofence & GPS Perimeter Calibration
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Defines the geographic boundary for staff clock-in. Only administrators have authorization to calibrate or alter these coordinates.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200/60 px-3 py-1 rounded-xl">
+                Restricted to Admin Only
+              </span>
+            </div>
+
+            {/* Security Warning Notice */}
+            <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl mb-6 flex items-start gap-3">
+              <ShieldCheck className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-900 leading-relaxed">
+                <strong className="font-bold">Anti-Spoofing Perimeter Enforced:</strong> Teachers do not have access to calibration controls on their dashboards. When teachers open their portal, they can only verify that their GPS position falls within this perimeter ({perimeterConfig.radiusMeters}m radius) before clocking in.
+              </div>
+            </div>
+
+            <form onSubmit={handleSavePerimeterSettings} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    School Latitude (&deg;N)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={schoolLatInput}
+                    onChange={(e) => setSchoolLatInput(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    School Longitude (&deg;E)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={schoolLngInput}
+                    onChange={(e) => setSchoolLngInput(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Radius (Meters)
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="5000"
+                    value={radiusInput}
+                    onChange={(e) => setRadiusInput(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Resumption Bell (Cutoff)
+                  </label>
+                  <input
+                    type="text"
+                    value={resumptionInput}
+                    onChange={(e) => setResumptionInput(e.target.value)}
+                    placeholder="08:00 AM"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Dismissal Bell (Closing)
+                  </label>
+                  <input
+                    type="text"
+                    value={closingInput}
+                    onChange={(e) => setClosingInput(e.target.value)}
+                    placeholder="02:30 PM"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCalibratePerimeterGps}
+                  disabled={geofenceGpsLoading}
+                  className="px-4 py-2.5 bg-rose-50 border border-rose-300 hover:bg-rose-100 text-rose-800 rounded-xl text-xs font-bold transition flex items-center gap-2"
+                >
+                  <MapPin className="h-4 w-4 text-rose-600" />
+                  <span>
+                    {geofenceGpsLoading
+                      ? 'Acquiring GPS Signal...'
+                      : '📍 Calibrate School Center to My Current Location (GPS)'}
+                  </span>
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-2"
+                >
+                  <Check className="h-4 w-4 text-emerald-400" />
+                  <span>Save Perimeter & Bell Settings</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* SECTION 3: PORTAL PASSWORDS & STAFF LOGIN PINS (CLOCKPOINT ACCESS CONTROL) */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5 text-indigo-600" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    Staff Login PINs & Portal Access Passwords
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Teachers only have access to staff tools (roll call and clock-in). Administrators have full modification rights over all passcodes.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-xl">
+                ClockPoint-Style Access Control
+              </span>
+            </div>
+
+            {/* Admin & Gate Security Passcodes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Administrator Master Passcode */}
+              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-indigo-600" />
+                    <span className="text-xs font-bold text-slate-800">Administrator Master Passcode</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-semibold">Default: 1234</span>
+                </div>
+                <form onSubmit={handleSaveAdminPasscode} className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={adminPassInput}
+                    onChange={(e) => setAdminPassInput(e.target.value)}
+                    placeholder="Enter new admin passcode"
+                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition"
+                  >
+                    Save Passcode
+                  </button>
+                </form>
+              </div>
+
+              {/* Gatehouse Security Passcode */}
+              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-800">Gatehouse Scanner Passcode</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-semibold">Default: 1234</span>
+                </div>
+                <form onSubmit={handleSaveGatePasscode} className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={gatePassInput}
+                    onChange={(e) => setGatePassInput(e.target.value)}
+                    placeholder="Enter new gate passcode"
+                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition"
+                  >
+                    Save Passcode
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Individual Teacher Login PINs */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Teacher Login PINs ({teachers.length} Active Staff)
+                </h4>
+                <span className="text-[11px] text-slate-500">
+                  Staff sign in using their assigned 4-digit PIN
+                </span>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100/80 text-slate-600 border-b border-slate-200 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-2.5 px-4">Staff Member</th>
+                      <th className="py-2.5 px-4">Assigned Section</th>
+                      <th className="py-2.5 px-4">Current 4-Digit PIN</th>
+                      <th className="py-2.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {teachers.map((teacher) => {
+                      const teacherPin = teacherPinsState[teacher.id] || '1234';
+                      const assignedClass = classes.find((c) => c.teacherId === teacher.id);
+                      return (
+                        <tr key={teacher.id} className="hover:bg-slate-50/60 transition">
+                          <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[11px]">
+                              {teacher.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                            </span>
+                            <span>{teacher.name}</span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-600 font-medium">
+                            {assignedClass ? assignedClass.name : 'Subject Teacher'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <input
+                              type="text"
+                              maxLength={6}
+                              value={teacherPin}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '');
+                                setTeacherPinsState((prev) => ({ ...prev, [teacher.id]: val }));
+                              }}
+                              className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                            />
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => handleUpdateSingleTeacherPin(teacher.id, teacherPin)}
+                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition"
+                            >
+                              Save PIN
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 4: HARDWARE ANTI-CHEAT DEVICE LOCKS */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-5 w-5 text-indigo-600" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    Anti-Cheat Device Hardware Binding
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Staff devices are locked to prevent proxy clock-ins ("buddy punching"). Unpair a device if a staff member gets a new phone.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3 py-1 rounded-xl">
+                {deviceLocks.length} Devices Paired
+              </span>
+            </div>
+
+            {deviceLocks.length === 0 ? (
+              <div className="text-center py-8 text-xs text-slate-500">
+                No teacher devices are currently paired. When a teacher clocks in for the first time, their smartphone will automatically bind to their account.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100/80 text-slate-600 border-b border-slate-200 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-2.5 px-4">Staff Member</th>
+                      <th className="py-2.5 px-4">Bound Smartphone</th>
+                      <th className="py-2.5 px-4">Hardware Signature</th>
+                      <th className="py-2.5 px-4">Paired Timestamp</th>
+                      <th className="py-2.5 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {deviceLocks.map((lock) => (
+                      <tr key={lock.teacherId} className="hover:bg-slate-50/60 transition">
+                        <td className="py-3 px-4 font-bold text-slate-900">{lock.teacherName}</td>
+                        <td className="py-3 px-4 font-medium text-slate-700 flex items-center gap-1.5">
+                          <Smartphone className="h-3.5 w-3.5 text-slate-400" />
+                          <span>{lock.deviceName}</span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                          {lock.hardwareSignature?.gpu || 'Standard Signature'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">{lock.pairedAt}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => handleUnpairTeacher(lock.teacherId, lock.teacherName)}
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition"
+                          >
+                            Unpair Phone
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
