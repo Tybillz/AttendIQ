@@ -72,22 +72,32 @@ const DEFAULT_CREDENTIALS: PortalCredentials = {
   adminPasscode: '1234',
   gatePasscode: '1234',
   teacherPins: {
-    't-101': '1234',
-    't-102': '1234',
-    't-103': '1234',
-    't-104': '1234',
-    't-105': '1234',
-    't-106': '1234',
+    't-101': '4012', // Mrs. Victoria Adebayo (JSS 1 - Diamond)
+    't-102': '2891', // Mr. Chinedu Okonkwo (JSS 1 - Gold)
+    't-103': '7314', // Mal. Ibrahim Danladi (JSS 2 - Sapphire)
+    't-104': '5190', // Mrs. Folake Balogun (JSS 2 - Emerald)
+    't-105': '8623', // Mr. Emeka Eze (JSS 3 - Ruby)
+    't-106': '3459', // Mrs. Zainab Aliyu (JSS 3 - Topaz)
   },
 };
 
 const CREDENTIALS_STORAGE_KEY = 'attend_iq_portal_credentials_v1';
 
+export function generateRandomPin(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
 export function getPortalCredentials(): PortalCredentials {
   if (typeof window === 'undefined') return DEFAULT_CREDENTIALS;
   try {
     const raw = localStorage.getItem(CREDENTIALS_STORAGE_KEY);
-    return raw ? { ...DEFAULT_CREDENTIALS, ...JSON.parse(raw) } : DEFAULT_CREDENTIALS;
+    if (!raw) return DEFAULT_CREDENTIALS;
+    const parsed = JSON.parse(raw);
+    return {
+      adminPasscode: parsed.adminPasscode || DEFAULT_CREDENTIALS.adminPasscode,
+      gatePasscode: parsed.gatePasscode || DEFAULT_CREDENTIALS.gatePasscode,
+      teacherPins: { ...DEFAULT_CREDENTIALS.teacherPins, ...(parsed.teacherPins || {}) },
+    };
   } catch {
     return DEFAULT_CREDENTIALS;
   }
@@ -108,6 +118,16 @@ export function updateTeacherPin(teacherId: string, newPin: string): void {
   if (!creds.teacherPins) creds.teacherPins = {};
   creds.teacherPins[teacherId] = newPin.trim();
   savePortalCredentials(creds);
+}
+
+export function randomizeAllTeacherPins(teacherIds: string[]): Record<string, string> {
+  const creds = getPortalCredentials();
+  if (!creds.teacherPins) creds.teacherPins = {};
+  teacherIds.forEach((id) => {
+    creds.teacherPins[id] = generateRandomPin();
+  });
+  savePortalCredentials(creds);
+  return creds.teacherPins;
 }
 
 export function updateAdminPasscode(newPasscode: string): void {
@@ -131,9 +151,9 @@ export function loginAsTeacher(teacherId: string, enteredPin: string): { success
   }
 
   const creds = getPortalCredentials();
-  const expectedPin = creds.teacherPins?.[teacherId] || '1234';
+  const expectedPin = creds.teacherPins?.[teacherId] || DEFAULT_CREDENTIALS.teacherPins[teacherId] || '7314';
   if (enteredPin.trim() !== expectedPin) {
-    return { success: false, message: 'Incorrect 4-digit PIN. Please contact the Principal if you forgot your PIN.' };
+    return { success: false, message: 'Incorrect 4-digit PIN for this teacher. Please enter the specific PIN issued by your School Administrator.' };
   }
 
   const session: AuthSession = {

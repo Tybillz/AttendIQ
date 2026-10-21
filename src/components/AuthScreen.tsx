@@ -13,7 +13,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Teacher, ClassSection } from '@/types/attendance';
-import { loginAsTeacher, loginAsAdmin, loginAsGate, AuthSession } from '@/lib/auth';
+import { loginAsTeacher, loginAsAdmin, loginAsGate, AuthSession, getPortalCredentials } from '@/lib/auth';
 
 interface AuthScreenProps {
   teachers: Teacher[];
@@ -27,14 +27,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onLoginSuccess,
 }) => {
   const [tab, setTab] = useState<'teacher' | 'admin' | 'gate'>('teacher');
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(
-    teachers.find((t) => t.name.includes('Danladi'))?.id || teachers[0]?.id || ''
-  );
-  const [pin, setPin] = useState<string>('1234');
+  const defaultTeacherId = teachers.find((t) => t.name.includes('Danladi'))?.id || teachers[0]?.id || '';
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(defaultTeacherId);
+  
+  const initialCreds = getPortalCredentials();
+  const [pin, setPin] = useState<string>(initialCreds.teacherPins[defaultTeacherId] || '7314');
   const [adminPasscode, setAdminPasscode] = useState<string>('1234');
   const [gatePasscode, setGatePasscode] = useState<string>('1234');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+
+  const handleTeacherChange = (newTeacherId: string) => {
+    setSelectedTeacherId(newTeacherId);
+    setError(null);
+    const creds = getPortalCredentials();
+    setPin(creds.teacherPins[newTeacherId] || '7314');
+  };
 
   const handleTeacherLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,7 +168,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </label>
                 <select
                   value={selectedTeacherId}
-                  onChange={(e) => setSelectedTeacherId(e.target.value)}
+                  onChange={(e) => handleTeacherChange(e.target.value)}
                   className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-bold text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
                 >
                   {teachers.map((t) => {
@@ -181,8 +189,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5 flex items-center justify-between">
-                  <span>Your 4-Digit Teacher PIN:</span>
-                  <span className="text-[10px] text-indigo-600 font-normal">(Default PIN: 1234)</span>
+                  <span>Your Individual 4-Digit Teacher PIN:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const creds = getPortalCredentials();
+                      setPin(creds.teacherPins[selectedTeacherId] || '7314');
+                    }}
+                    className="text-[10px] text-indigo-600 font-bold hover:underline flex items-center gap-1"
+                    title="Auto-fill this teacher's assigned PIN"
+                  >
+                    <span>Auto-Fill PIN ({getPortalCredentials().teacherPins[selectedTeacherId] || '7314'})</span>
+                  </button>
                 </label>
                 <div className="relative">
                   <input
@@ -190,7 +208,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     maxLength={4}
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
-                    placeholder="1234"
+                    placeholder="Enter 4-digit PIN"
                     className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-lg tracking-widest font-black text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                     required
                   />

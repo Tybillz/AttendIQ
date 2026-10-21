@@ -29,6 +29,7 @@ import {
   Check,
   RefreshCw,
   LogOut,
+  Shuffle,
 } from 'lucide-react';
 import {
   Student,
@@ -57,6 +58,8 @@ import {
   updateTeacherPin,
   updateAdminPasscode,
   updateGatePasscode,
+  randomizeAllTeacherPins,
+  generateRandomPin,
 } from '@/lib/auth';
 
 interface AdminDashboardProps {
@@ -242,6 +245,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTeacherPinsState((prev) => ({ ...prev, [teacherId]: pin.trim() }));
     setAccessFeedback(`Login PIN updated for teacher!`);
     setTimeout(() => setAccessFeedback(null), 3000);
+  };
+
+  const handleRandomizeSinglePin = (teacherId: string) => {
+    const newPin = generateRandomPin();
+    updateTeacherPin(teacherId, newPin);
+    setTeacherPinsState((prev) => ({ ...prev, [teacherId]: newPin }));
+    setAccessFeedback(`New separate 4-digit PIN generated: ${newPin}`);
+    setTimeout(() => setAccessFeedback(null), 3500);
+  };
+
+  const handleRandomizeAllPins = () => {
+    if (confirm('Generate brand-new, unique 4-digit PINs for ALL teachers? Every teacher will have their own distinct PIN.')) {
+      const updated = randomizeAllTeacherPins(teachers.map((t) => t.id));
+      setTeacherPinsState({ ...updated });
+      setAccessFeedback('Generated separate, unique 4-digit PINs for all teachers!');
+      setTimeout(() => setAccessFeedback(null), 4000);
+    }
+  };
+
+  const handleCopyPinRoster = () => {
+    const lines = teachers.map((t) => {
+      const cls = classes.find((c) => c.teacherId === t.id);
+      const pin = teacherPinsState[t.id] || creds.teacherPins[t.id] || '7314';
+      return `• ${t.name} (${cls ? cls.name : 'Subject Teacher'}): PIN ${pin}`;
+    });
+    const text = `AttendIQ School Portal — Confidential Staff PIN Directory\n\n${lines.join('\n')}\n\nPlease distribute each PIN privately to its respective teacher.`;
+    navigator.clipboard.writeText(text);
+    setAccessFeedback('Confidential Staff PIN Directory copied to clipboard!');
+    setTimeout(() => setAccessFeedback(null), 4000);
   };
 
   const handleSetDailyCodeOverride = (e: React.FormEvent) => {
@@ -1784,13 +1816,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Individual Teacher Login PINs */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Teacher Login PINs ({teachers.length} Active Staff)
-                </h4>
-                <span className="text-[11px] text-slate-500">
-                  Staff sign in using their assigned 4-digit PIN
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>Individual Teacher Login PINs ({teachers.length} Active Staff)</span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold">
+                      Unique Per Teacher
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Each teacher is assigned their own private 4-digit PIN so staff only access their personal dashboard and students.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRandomizeAllPins}
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                    title="Generate unique random 4-digit PINs for all teachers at once"
+                  >
+                    <Shuffle className="h-3.5 w-3.5" />
+                    <span>Generate Unique PINs for All</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyPinRoster}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                    title="Copy confidential staff PIN directory to clipboard"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copy PIN Directory</span>
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto border border-slate-200 rounded-2xl">
@@ -1799,13 +1856,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <tr>
                       <th className="py-2.5 px-4">Staff Member</th>
                       <th className="py-2.5 px-4">Assigned Section</th>
-                      <th className="py-2.5 px-4">Current 4-Digit PIN</th>
+                      <th className="py-2.5 px-4">Individual 4-Digit PIN</th>
                       <th className="py-2.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {teachers.map((teacher) => {
-                      const teacherPin = teacherPinsState[teacher.id] || '1234';
+                      const teacherPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
                       const assignedClass = classes.find((c) => c.teacherId === teacher.id);
                       return (
                         <tr key={teacher.id} className="hover:bg-slate-50/60 transition">
@@ -1819,21 +1876,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {assignedClass ? assignedClass.name : 'Subject Teacher'}
                           </td>
                           <td className="py-3 px-4">
-                            <input
-                              type="text"
-                              maxLength={6}
-                              value={teacherPin}
-                              onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, '');
-                                setTeacherPinsState((prev) => ({ ...prev, [teacher.id]: val }));
-                              }}
-                              className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                            />
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                maxLength={6}
+                                value={teacherPin}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '');
+                                  setTeacherPinsState((prev) => ({ ...prev, [teacher.id]: val }));
+                                }}
+                                className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRandomizeSinglePin(teacher.id)}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                title="Randomize new PIN for this teacher"
+                              >
+                                <Shuffle className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-right">
                             <button
                               onClick={() => handleUpdateSingleTeacherPin(teacher.id, teacherPin)}
-                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition"
+                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition shadow-xs"
                             >
                               Save PIN
                             </button>
