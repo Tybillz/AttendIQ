@@ -17,7 +17,6 @@ import {
   Unlock,
   Copy,
   Check,
-  Zap,
   RefreshCw,
   Ban,
   Share2,
@@ -73,7 +72,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [generatedKey, setGeneratedKey] = useState<string>('');
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [copiedSlip, setCopiedSlip] = useState<boolean>(false);
-  const [directAppliedNotice, setDirectAppliedNotice] = useState<string | null>(null);
 
   // Revocations Authority State
   const [currentLicenseStatus, setCurrentLicenseStatus] = useState<LicenseStatusResult>(getLicenseStatus());
@@ -224,7 +222,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setGeneratedKey(key);
     setCopiedKey(false);
     setCopiedSlip(false);
-    setDirectAppliedNotice(null);
   };
 
   const handleCopyGeneratedKey = () => {
@@ -257,19 +254,6 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
     navigator.clipboard.writeText(slip);
     setCopiedSlip(true);
     setTimeout(() => setCopiedSlip(false), 2500);
-  };
-
-  const handleDirectApplyToCurrent = () => {
-    if (!generatedKey) return;
-    const targetSchool = genSchoolName.trim() || branding.schoolName;
-    const res = activateLicenseKey(generatedKey, targetSchool);
-    if (res.success) {
-      setDirectAppliedNotice(`✓ Successfully applied to ${targetSchool}!`);
-      setCurrentLicenseStatus(getLicenseStatus());
-      setTimeout(() => setDirectAppliedNotice(null), 3500);
-    } else {
-      setDirectAppliedNotice(`Activation failed: ${res.message}`);
-    }
   };
 
   const handleExecuteKillSwitch = () => {
@@ -788,40 +772,24 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
                             {generatedKey}
                           </div>
 
-                          {directAppliedNotice && (
-                            <div className="p-2 rounded-lg bg-emerald-950/80 border border-emerald-500 text-emerald-300 text-xs text-center font-bold">
-                              {directAppliedNotice}
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs font-bold">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs font-bold">
                             <button
                               type="button"
                               onClick={handleCopyGeneratedKey}
-                              className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center gap-1.5 transition"
+                              className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center gap-1.5 transition"
                             >
                               {copiedKey ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                              <span>{copiedKey ? 'Copied Key!' : 'Copy Key'}</span>
+                              <span>{copiedKey ? 'Copied Key!' : 'Copy License Key'}</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={handleCopyWhatsAppReceipt}
-                              className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1.5 transition"
+                              className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1.5 transition"
                               title="Copy structured invoice receipt for WhatsApp/Email"
                             >
                               {copiedSlip ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
-                              <span>{copiedSlip ? 'Receipt Copied!' : 'WhatsApp Slip'}</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={handleDirectApplyToCurrent}
-                              className="py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 transition"
-                              title="Directly activate this key on this current browser instance"
-                            >
-                              <Zap className="h-3.5 w-3.5 text-amber-300" />
-                              <span>1-Click Apply</span>
+                              <span>{copiedSlip ? 'Receipt Copied!' : 'WhatsApp Invoice Slip'}</span>
                             </button>
                           </div>
                         </div>
