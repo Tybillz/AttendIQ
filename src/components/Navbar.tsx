@@ -229,8 +229,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Logo & School Name */}
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 text-lg">
-              {branding.crestEmoji ? (
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 text-lg overflow-hidden shrink-0">
+              {branding.logoUrl ? (
+                <img src={branding.logoUrl} alt={branding.schoolName} className="h-full w-full object-contain p-0.5" />
+              ) : branding.crestEmoji ? (
                 <span className="text-xl select-none">{branding.crestEmoji}</span>
               ) : (
                 <GraduationCap className="h-6 w-6" />
@@ -366,27 +368,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                 )}
 
-                {onSwitchToGate && (
-                  <button
-                    onClick={onSwitchToGate}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs border border-amber-200 transition"
-                    title="Authorized Administrator Access to Gate Security Post"
-                  >
-                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
-                    <span className="hidden sm:inline">Gate Post</span>
-                  </button>
-                )}
-
-                {onOpenWhitelabelModal && (
-                  <button
-                    onClick={() => onOpenWhitelabelModal('branding')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-900 font-bold text-xs border border-violet-200 transition"
-                    title="Customize School Name, Logo & Subscription Licensing"
-                  >
-                    <Building className="h-3.5 w-3.5 text-violet-600" />
-                    <span className="hidden sm:inline">Branding & License</span>
-                  </button>
-                )}
 
                 {onLogout && (
                   <button
@@ -503,17 +484,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             )}
 
-            {/* Install Mobile / PWA App Button */}
-            {!isInstalled && (
-              <button
-                onClick={handleInstallClick}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-xs transition"
-                title="Install AttendIQ on Phone/Tablet"
-              >
-                <Smartphone className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Install App</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

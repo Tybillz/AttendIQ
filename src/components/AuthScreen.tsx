@@ -299,13 +299,15 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
             ? 'bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-amber-900/60'
             : 'bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-indigo-900/60'
         }`}>
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg text-2xl ${
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg text-2xl overflow-hidden ${
             tab === 'vendor'
               ? 'bg-gradient-to-tr from-amber-500 to-orange-400 text-white shadow-amber-500/30'
               : 'bg-gradient-to-tr from-indigo-500 to-sky-400 shadow-indigo-500/30'
           }`}>
             {tab === 'vendor' ? (
               <Key className="h-7 w-7 text-white" />
+            ) : branding.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.schoolName} className="h-full w-full object-contain p-1 rounded-xl" />
             ) : branding.crestEmoji ? (
               <span>{branding.crestEmoji}</span>
             ) : (

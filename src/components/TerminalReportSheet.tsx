@@ -532,8 +532,10 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
         {/* School Header & Crest */}
         <div className="border-b-2 border-slate-900 pb-4 mb-4 text-center">
           <div className="flex items-center justify-center gap-3 mb-2">
-            <div className="h-14 w-14 rounded-2xl bg-indigo-900 text-white flex items-center justify-center shadow-md text-2xl">
-              {branding.crestEmoji ? (
+            <div className="h-14 w-14 rounded-2xl bg-indigo-900 text-white flex items-center justify-center shadow-md text-2xl overflow-hidden shrink-0">
+              {branding.logoUrl ? (
+                <img src={branding.logoUrl} alt={branding.schoolName} className="h-full w-full object-contain p-1" />
+              ) : branding.crestEmoji ? (
                 <span>{branding.crestEmoji}</span>
               ) : (
                 <GraduationCap className="h-9 w-9 text-amber-400" />

@@ -419,8 +419,12 @@ export default function Home() {
             {/* School Motto & Academic Context Header */}
             <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 to-blue-600 text-white font-bold flex items-center justify-center text-lg shadow-sm">
-                  {schoolBranding.crestEmoji || '📚'}
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 to-blue-600 text-white font-bold flex items-center justify-center text-lg shadow-sm overflow-hidden shrink-0">
+                  {schoolBranding.logoUrl ? (
+                    <img src={schoolBranding.logoUrl} alt={schoolBranding.schoolName} className="h-full w-full object-contain p-0.5" />
+                  ) : (
+                    <span>{schoolBranding.crestEmoji || '📚'}</span>
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">

@@ -22,6 +22,9 @@ import {
   Users,
   Eye,
   Check,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   SchoolBranding,
@@ -53,6 +56,8 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
   // Branding state
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   
   // Licensing state
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusResult>(getLicenseStatus());
@@ -83,6 +88,72 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
     setSaveSuccess(true);
     onBrandingUpdated?.();
     setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  const handleCrestUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload a valid image file (PNG, JPG, SVG, WebP)');
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Image size exceeds 8MB. Please choose a smaller image.');
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Optimize to max 384x384 for ultra-crisp display on high-DPI screens and compact storage
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 384;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/png');
+          setBranding((prev) => ({ ...prev, logoUrl: dataUrl }));
+        } else {
+          const rawUrl = event.target?.result as string;
+          setBranding((prev) => ({ ...prev, logoUrl: rawUrl }));
+        }
+        setIsUploading(false);
+      };
+      img.onerror = () => {
+        alert('Could not process this image file. Please try another image.');
+        setIsUploading(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveCrest = () => {
+    setBranding((prev) => ({ ...prev, logoUrl: undefined }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleActivateLicense = (e: React.FormEvent) => {
@@ -182,8 +253,12 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                   Live Whitelabel Preview (How it appears to staff, parents & on terminal report cards)
                 </span>
                 <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-indigo-600/40 border border-indigo-400/40 flex items-center justify-center text-2xl shadow-sm shrink-0">
-                    {branding.crestEmoji || '🎓'}
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-600/40 border border-indigo-400/40 flex items-center justify-center text-2xl shadow-sm shrink-0 overflow-hidden bg-slate-900/60 p-1">
+                    {branding.logoUrl ? (
+                      <img src={branding.logoUrl} alt={branding.schoolName} className="w-full h-full object-contain" />
+                    ) : (
+                      <span>{branding.crestEmoji || '🎓'}</span>
+                    )}
                   </div>
                   <div>
                     <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
@@ -195,6 +270,106 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       Principal: <strong className="text-slate-200">{branding.principalName}</strong>
                     </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* School Crest & Institutional Badge Upload Section */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-indigo-600" />
+                      Official School Crest / Institutional Badge
+                    </h3>
+                    <p className="text-slate-500 text-[11px]">
+                      Upload your official school badge or crest. Used on Student ID cards, end-of-term report sheets, portal navigation, and WhatsApp summary alerts.
+                    </p>
+                  </div>
+                  {branding.logoUrl && (
+                    <span className="self-start sm:self-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <Check className="h-3 w-3" /> Custom Crest Active
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {/* Crest Display Box */}
+                  <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center shadow-inner overflow-hidden relative shrink-0 p-1.5 group">
+                    {branding.logoUrl ? (
+                      <img
+                        src={branding.logoUrl}
+                        alt="School Crest"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="text-4xl select-none flex items-center justify-center">
+                        {branding.crestEmoji || '🎓'}
+                      </div>
+                    )}
+                    {isUploading && (
+                      <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center">
+                        <RefreshCw className="h-6 w-6 text-indigo-600 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Controls */}
+                  <div className="flex-1 space-y-2.5 text-center sm:text-left w-full">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      className="hidden"
+                      onChange={handleCrestUpload}
+                    />
+
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        <span>{branding.logoUrl ? 'Change School Crest' : 'Upload School Crest / Badge'}</span>
+                      </button>
+
+                      {branding.logoUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveCrest}
+                          className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Remove Custom Crest</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-slate-500">
+                      PNG (transparent background), SVG, or high-res JPG recommended. Auto-optimized for crisp print & digital scaling.
+                    </p>
+
+                    {/* Quick Preset Symbols */}
+                    <div className="pt-1 flex items-center gap-1.5 flex-wrap justify-center sm:justify-start text-[11px] text-slate-600">
+                      <span className="font-semibold text-slate-500 text-[10px]">Or choose fallback symbol:</span>
+                      {['🎓', '🏛️', '🌟', '🦅', '📖', '👑', '🌿', '🦁'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => setBranding({ ...branding, crestEmoji: emoji })}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm border transition ${
+                            branding.crestEmoji === emoji
+                              ? 'bg-indigo-100 border-indigo-400 shadow-2xs'
+                              : 'bg-white border-slate-200 hover:bg-slate-100'
+                          }`}
+                          title={`Select ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -264,7 +439,7 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-800 block mb-1">School Crest Emoji / Symbol</label>
+                  <label className="font-bold text-slate-800 block mb-1">School Crest Emoji / Custom Symbol</label>
                   <input
                     type="text"
                     value={branding.crestEmoji || '🎓'}
@@ -272,6 +447,7 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                     placeholder="🎓 or 🏛️ or 🌟"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-600 text-lg"
                   />
+                  <span className="text-[10px] text-slate-400">Used as fallback icon if no image crest is uploaded</span>
                 </div>
 
                 <div>

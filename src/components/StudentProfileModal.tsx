@@ -1201,8 +1201,10 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   {/* Card Header */}
                   <div className="border-b border-white/20 pb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-lg bg-white/10 flex items-center justify-center text-amber-300">
-                        {branding.crestEmoji ? (
+                      <div className="h-7 w-7 rounded-lg bg-white/10 flex items-center justify-center text-amber-300 overflow-hidden shrink-0">
+                        {branding.logoUrl ? (
+                          <img src={branding.logoUrl} alt={branding.schoolName} className="h-full w-full object-contain p-0.5" />
+                        ) : branding.crestEmoji ? (
                           <span className="text-sm select-none">{branding.crestEmoji}</span>
                         ) : (
                           <GraduationCap className="h-4 w-4" />
