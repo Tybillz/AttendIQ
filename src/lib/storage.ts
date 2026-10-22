@@ -11,6 +11,7 @@ import {
   TestExamRecord,
   SubjectGradeRecord,
   BehavioralNote,
+  TerminalEvaluation,
   AuditLogEntry,
   AuditActionType,
   ParentExcuse,
@@ -154,6 +155,18 @@ export function deleteBehavioralNote(studentId: string, noteId: string): void {
   if (!student || !student.behavioralNotes) return;
 
   student.behavioralNotes = student.behavioralNotes.filter((bn) => bn.id !== noteId);
+  saveStudents(students);
+}
+
+export function updateTerminalEvaluation(studentId: string, evaluation: TerminalEvaluation): void {
+  const students = getStudents();
+  const student = students.find((s) => s.id === studentId);
+  if (!student) return;
+
+  student.terminalEvaluation = {
+    ...evaluation,
+    updatedAt: new Date().toISOString(),
+  };
   saveStudents(students);
 }
 

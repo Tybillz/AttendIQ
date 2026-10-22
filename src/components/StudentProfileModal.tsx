@@ -27,6 +27,7 @@ import {
 import { Student, TestExamRecord, BehavioralNote } from '@/types/attendance';
 import { TerminalReportSheet } from './TerminalReportSheet';
 import {
+  getStudents,
   updateStudent,
   addAcademicRecord,
   updateAcademicRecord,
@@ -71,15 +72,23 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   const [editExamDate, setEditExamDate] = useState('');
   const [editExamTerm, setEditExamTerm] = useState('First Term');
 
+  // Local reactive student state
+  const [localStudent, setLocalStudent] = useState<Student | null>(student);
+
   // New note state
   const [showAddNote, setShowAddNote] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
-  const [newNoteType, setNewNoteType] = useState<'positive' | 'concern' | 'neutral'>('neutral');
+  const [newNoteAuthor, setNewNoteAuthor] = useState('Mrs. Victoria Adebayo');
+  const [newNoteDate, setNewNoteDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newNoteType, setNewNoteType] = useState<'positive' | 'concern' | 'neutral'>('positive');
 
   // Edit note state
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState('');
-  const [editNoteType, setEditNoteType] = useState<'positive' | 'concern' | 'neutral'>('neutral');
+  const [editNoteAuthor, setEditNoteAuthor] = useState('');
+  const [editNoteDate, setEditNoteDate] = useState('');
+  const [editNoteType, setEditNoteType] = useState<'positive' | 'concern' | 'neutral'>('positive');
+  const [noteNotice, setNoteNotice] = useState<string | null>(null);
 
   // Edit pupil state
   const [editName, setEditName] = useState('');
@@ -94,6 +103,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   React.useEffect(() => {
     if (student) {
+      setLocalStudent(student);
       setEditName(student.name);
       setEditRoll(student.rollNumber);
       setEditParentName(student.parentName);
@@ -101,13 +111,15 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       setEditParentEmail(student.parentEmail);
       setPhotoUrlInput(student.photoUrl);
       setSmsSentNotice(null);
+      setNoteNotice(null);
     }
   }, [student]);
 
   if (!isOpen || !student) return null;
 
-  const totalDays = student.totalPresent + student.totalAbsent;
-  const attendanceRate = totalDays > 0 ? Math.round((student.totalPresent / totalDays) * 100) : 100;
+  const activeStudent: Student = localStudent || student;
+  const totalDays = activeStudent.totalPresent + activeStudent.totalAbsent;
+  const attendanceRate = totalDays > 0 ? Math.round((activeStudent.totalPresent / totalDays) * 100) : 100;
 
   const handleSaveExam = (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,56 +199,78 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     setEditingNoteId(note.id);
     setEditNoteText(note.note);
     setEditNoteType(note.type);
+    setEditNoteAuthor(note.author || 'Mrs. Victoria Adebayo');
+    setEditNoteDate(note.date || new Date().toISOString().split('T')[0]);
     setShowAddNote(false);
   };
 
   const handleUpdateNote = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingNoteId || !editNoteText.trim()) return;
+    if (!editingNoteId || !editNoteText.trim() || !activeStudent) return;
 
     const updatedNote: BehavioralNote = {
       id: editingNoteId,
-      date: new Date().toISOString().split('T')[0],
-      author: 'Classroom Teacher',
+      date: editNoteDate.trim() || new Date().toISOString().split('T')[0],
+      author: editNoteAuthor.trim() || 'Mrs. Victoria Adebayo',
       type: editNoteType,
       note: editNoteText.trim(),
     };
 
-    updateBehavioralNote(student.id, updatedNote);
+    updateBehavioralNote(activeStudent.id, updatedNote);
+    const updated = {
+      ...activeStudent,
+      behavioralNotes: (activeStudent.behavioralNotes || []).map((bn) =>
+        bn.id === updatedNote.id ? updatedNote : bn
+      ),
+    };
+    setLocalStudent(updated);
     setEditingNoteId(null);
+    setNoteNotice('Observation note updated and saved successfully!');
+    setTimeout(() => setNoteNotice(null), 3000);
     onStudentUpdated();
   };
 
   const handleDeleteNote = (noteId: string) => {
+    if (!activeStudent) return;
     if (confirm('Delete this observation note from the student dossier?')) {
-      deleteBehavioralNote(student.id, noteId);
+      deleteBehavioralNote(activeStudent.id, noteId);
+      const updated = {
+        ...activeStudent,
+        behavioralNotes: (activeStudent.behavioralNotes || []).filter((bn) => bn.id !== noteId),
+      };
+      setLocalStudent(updated);
       if (editingNoteId === noteId) {
         setEditingNoteId(null);
       }
+      setNoteNotice('Observation note removed from dossier.');
+      setTimeout(() => setNoteNotice(null), 3000);
       onStudentUpdated();
     }
   };
 
   const handleSaveNote = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNoteText.trim()) return;
+    if (!newNoteText.trim() || !activeStudent) return;
 
     const newNote: BehavioralNote = {
       id: `bn-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
-      author: 'Classroom Teacher',
+      date: newNoteDate.trim() || new Date().toISOString().split('T')[0],
+      author: newNoteAuthor.trim() || 'Mrs. Victoria Adebayo',
       type: newNoteType,
       note: newNoteText.trim(),
     };
 
     const updated = {
-      ...student,
-      behavioralNotes: [newNote, ...(student.behavioralNotes || [])],
+      ...activeStudent,
+      behavioralNotes: [newNote, ...(activeStudent.behavioralNotes || [])],
     };
 
     updateStudent(updated);
+    setLocalStudent(updated);
     setNewNoteText('');
     setShowAddNote(false);
+    setNoteNotice('New observation note posted and saved!');
+    setTimeout(() => setNoteNotice(null), 3000);
     onStudentUpdated();
   };
 
@@ -738,9 +772,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 </div>
               )}
             </div>
-          )}
-
-          {/* TAB 2: BEHAVIORAL NOTES & FLAGS */}
+          )}          {/* TAB 2: BEHAVIORAL NOTES & FLAGS */}
           {activeTab === 'notes' && (
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -749,29 +781,71 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   <p className="text-xs text-slate-500">Document attendance patterns, behavioral notes, and praises</p>
                 </div>
                 <button
-                  onClick={() => setShowAddNote(!showAddNote)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-xs"
+                  onClick={() => {
+                    setShowAddNote(!showAddNote);
+                    setEditingNoteId(null);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-xs cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add Note
                 </button>
               </div>
 
+              {/* Note Saved / Deleted Notification */}
+              {noteNotice && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center gap-2 text-xs font-semibold animate-in fade-in">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>{noteNotice}</span>
+                </div>
+              )}
+
+              {/* Add Note Form */}
               {showAddNote && (
                 <form
                   onSubmit={handleSaveNote}
-                  className="mb-5 p-4 rounded-2xl bg-amber-50/60 border border-amber-200 animate-in fade-in"
+                  className="mb-5 p-4 rounded-2xl bg-amber-50/80 border border-amber-300 shadow-sm animate-in fade-in"
                 >
-                  <h4 className="text-xs font-bold text-amber-900 mb-2">New Observation Note</h4>
-                  <div className="mb-2">
-                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">Note Category</label>
-                    <div className="flex gap-2">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-amber-200">
+                    <h4 className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <Plus className="h-3.5 w-3.5 text-amber-700" /> New Observation Note
+                    </h4>
+                    <span className="text-[10px] text-slate-500 font-medium">Record into student dossier</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Teacher / Author Name</label>
+                      <input
+                        type="text"
+                        value={newNoteAuthor}
+                        onChange={(e) => setNewNoteAuthor(e.target.value)}
+                        required
+                        placeholder="e.g. Mrs. Victoria Adebayo"
+                        className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Date</label>
+                      <input
+                        type="date"
+                        value={newNoteDate}
+                        onChange={(e) => setNewNoteDate(e.target.value)}
+                        required
+                        className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Note Category</label>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => setNewNoteType('positive')}
-                        className={`text-xs px-3 py-1 rounded-lg border font-medium ${
+                        className={`text-xs px-3 py-1 rounded-lg border font-semibold transition cursor-pointer ${
                           newNoteType === 'positive'
-                            ? 'bg-emerald-600 text-white border-emerald-600'
-                            : 'bg-white text-slate-700 border-slate-300'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                         }`}
                       >
                         Positive Praise
@@ -779,10 +853,10 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setNewNoteType('concern')}
-                        className={`text-xs px-3 py-1 rounded-lg border font-medium ${
+                        className={`text-xs px-3 py-1 rounded-lg border font-semibold transition cursor-pointer ${
                           newNoteType === 'concern'
-                            ? 'bg-rose-600 text-white border-rose-600'
-                            : 'bg-white text-slate-700 border-slate-300'
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                         }`}
                       >
                         Concern / Tardy Flag
@@ -790,37 +864,40 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setNewNoteType('neutral')}
-                        className={`text-xs px-3 py-1 rounded-lg border font-medium ${
+                        className={`text-xs px-3 py-1 rounded-lg border font-semibold transition cursor-pointer ${
                           newNoteType === 'neutral'
-                            ? 'bg-slate-700 text-white border-slate-700'
-                            : 'bg-white text-slate-700 border-slate-300'
+                            ? 'bg-slate-800 text-white border-slate-800 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                         }`}
                       >
                         General Note
                       </button>
                     </div>
                   </div>
+
                   <div className="mb-3">
+                    <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Observation Details</label>
                     <textarea
                       rows={2}
                       placeholder="Write classroom observation or parent contact log..."
                       value={newNoteText}
                       onChange={(e) => setNewNoteText(e.target.value)}
                       required
-                      className="w-full text-xs p-2.5 rounded-lg bg-white border border-slate-300 focus:outline-indigo-500"
+                      className="w-full text-xs p-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-indigo-500"
                     />
                   </div>
-                  <div className="flex justify-end gap-2">
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-amber-200">
                     <button
                       type="button"
                       onClick={() => setShowAddNote(false)}
-                      className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg"
+                      className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                      className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm cursor-pointer"
                     >
                       Post Note
                     </button>
@@ -828,9 +905,10 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 </form>
               )}
 
-              {student.behavioralNotes && student.behavioralNotes.length > 0 ? (
+              {/* Note List */}
+              {activeStudent.behavioralNotes && activeStudent.behavioralNotes.length > 0 ? (
                 <div className="space-y-3">
-                  {student.behavioralNotes.map((note) => {
+                  {activeStudent.behavioralNotes.map((note) => {
                     const isEditing = editingNoteId === note.id;
 
                     if (isEditing) {
@@ -838,69 +916,103 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                         <form
                           key={note.id}
                           onSubmit={handleUpdateNote}
-                          className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 animate-in fade-in"
+                          className="p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-300 shadow-sm animate-in fade-in space-y-3"
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                              <Pencil className="h-3.5 w-3.5" /> Edit Observation Note
+                          <div className="flex items-center justify-between pb-2 border-b border-amber-200">
+                            <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                              <Pencil className="h-3.5 w-3.5 text-amber-700" /> Edit Observation Note
                             </span>
-                            <span className="text-[10px] text-slate-400">{note.date}</span>
+                            <span className="text-[10px] text-slate-500 font-medium">Editing note ID: {note.id}</span>
                           </div>
-                          <div className="flex gap-2 mb-2">
-                            <button
-                              type="button"
-                              onClick={() => setEditNoteType('positive')}
-                              className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium ${
-                                editNoteType === 'positive'
-                                  ? 'bg-emerald-600 text-white border-emerald-600'
-                                  : 'bg-slate-900 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              Positive Praise
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditNoteType('concern')}
-                              className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium ${
-                                editNoteType === 'concern'
-                                  ? 'bg-rose-600 text-white border-rose-600'
-                                  : 'bg-slate-900 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              Concern / Flag
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditNoteType('neutral')}
-                              className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium ${
-                                editNoteType === 'neutral'
-                                  ? 'bg-slate-700 text-white border-slate-700'
-                                  : 'bg-white text-slate-700 border-slate-300'
-                              }`}
-                            >
-                              General Note
-                            </button>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Teacher / Author Name</label>
+                              <input
+                                type="text"
+                                value={editNoteAuthor}
+                                onChange={(e) => setEditNoteAuthor(e.target.value)}
+                                required
+                                placeholder="e.g. Mrs. Victoria Adebayo"
+                                className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Date</label>
+                              <input
+                                type="date"
+                                value={editNoteDate}
+                                onChange={(e) => setEditNoteDate(e.target.value)}
+                                required
+                                className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-indigo-500"
+                              />
+                            </div>
                           </div>
-                          <textarea
-                            rows={2}
-                            value={editNoteText}
-                            onChange={(e) => setEditNoteText(e.target.value)}
-                            required
-                            className="w-full text-xs p-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-indigo-500 mb-2"
-                          />
-                          <div className="flex justify-end gap-2">
+
+                          <div>
+                            <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Note Category</label>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEditNoteType('positive')}
+                                className={`text-xs px-3 py-1 rounded-lg border font-semibold transition cursor-pointer ${
+                                  editNoteType === 'positive'
+                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                Positive Praise
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditNoteType('concern')}
+                                className={`text-xs px-3 py-1 rounded-lg border font-semibold transition cursor-pointer ${
+                                  editNoteType === 'concern'
+                                    ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                Concern / Flag
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditNoteType('neutral')}
+                                className={`text-xs px-3 py-1 rounded-lg border font-semibold transition cursor-pointer ${
+                                  editNoteType === 'neutral'
+                                    ? 'bg-slate-800 text-white border-slate-800 shadow-xs'
+                                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                General Note
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold uppercase text-slate-600 block mb-1">Observation Details</label>
+                            <textarea
+                              rows={3}
+                              value={editNoteText}
+                              onChange={(e) => setEditNoteText(e.target.value)}
+                              required
+                              placeholder="Write classroom observation..."
+                              className="w-full text-xs p-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-indigo-500"
+                            />
+                          </div>
+
+                          <div className="flex justify-end gap-2 pt-2 border-t border-amber-200">
                             <button
                               type="button"
                               onClick={() => setEditingNoteId(null)}
-                              className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg"
+                              className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg cursor-pointer font-medium"
                             >
                               Cancel
                             </button>
                             <button
                               type="submit"
-                              className="px-4 py-1.5 text-xs font-semibold bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 shadow-sm"
+                              className="px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-1.5 cursor-pointer"
                             >
-                              Update Note
+                              <Save className="h-3.5 w-3.5" /> Save Changes
                             </button>
                           </div>
                         </form>
@@ -910,35 +1022,54 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     return (
                       <div
                         key={note.id}
-                        className={`p-3.5 rounded-2xl border ${
+                        className={`p-3.5 rounded-2xl border transition-all ${
                           note.type === 'concern'
-                            ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
+                            ? 'bg-rose-50/80 border-rose-200 text-slate-900'
                             : note.type === 'positive'
-                            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
-                            : 'bg-slate-800/40 border-slate-700/60 text-slate-200'
+                            ? 'bg-emerald-50/80 border-emerald-200 text-slate-900'
+                            : 'bg-slate-50 border-slate-200 text-slate-900'
                         }`}
                       >
-                        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
-                          <span className="font-semibold text-slate-300">{note.author}</span>
+                        <div className="flex items-center justify-between text-[11px] mb-2 pb-1.5 border-b border-black/5">
                           <div className="flex items-center gap-2">
+                            <span className={`font-bold text-xs ${
+                              note.type === 'concern'
+                                ? 'text-rose-950'
+                                : note.type === 'positive'
+                                ? 'text-emerald-950'
+                                : 'text-slate-950'
+                            }`}>
+                              {note.author || 'Mrs. Victoria Adebayo'}
+                            </span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${
+                              note.type === 'concern'
+                                ? 'bg-rose-100 text-rose-800'
+                                : note.type === 'positive'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-200 text-slate-800'
+                            }`}>
+                              {note.type === 'concern' ? 'Concern' : note.type === 'positive' ? 'Praise' : 'General'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-500 font-medium">
                             <span>{note.date}</span>
                             <button
                               onClick={() => handleStartEditNote(note)}
-                              className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition cursor-pointer shadow-2xs border border-transparent hover:border-slate-200"
                               title="Edit this note"
                             >
-                              <Pencil className="h-3 w-3" />
+                              <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteNote(note.id)}
-                              className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-white transition cursor-pointer shadow-2xs border border-transparent hover:border-slate-200"
                               title="Delete this note"
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </div>
-                        <p className="text-xs leading-relaxed">{note.note}</p>
+                        <p className="text-xs text-slate-800 leading-relaxed font-medium">{note.note}</p>
                       </div>
                     );
                   })}
@@ -1148,9 +1279,14 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           {/* TAB 5: PRINTABLE TERMINAL REPORT SHEET */}
           {activeTab === 'terminal_report' && (
             <TerminalReportSheet
-              student={student}
+              student={activeStudent}
               className={classNameTitle}
               totalSessionsHeld={60}
+              onStudentUpdated={() => {
+                onStudentUpdated();
+                const fresh = getStudents().find((s) => s.id === activeStudent.id);
+                if (fresh) setLocalStudent(fresh);
+              }}
             />
           )}
         </div>

@@ -106,7 +106,13 @@ export default function Home() {
       if (loadedClasses && loadedClasses.length > 0) {
         setClasses(loadedClasses);
       }
-      setStudents(getStudents());
+      const loadedStudents = getStudents();
+      setStudents(loadedStudents);
+      setSelectedStudentForProfile((prev) => {
+        if (!prev) return null;
+        const fresh = loadedStudents.find((s) => s.id === prev.id);
+        return fresh || prev;
+      });
       setTeachers(getTeachers());
       setSessions(getAttendanceSessions());
       setAlerts(getParentAlerts());

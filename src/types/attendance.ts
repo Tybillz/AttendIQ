@@ -21,6 +21,34 @@ export interface BehavioralNote {
   note: string;
 }
 
+export interface AffectiveTraits {
+  punctuality: number; // 1 - 5
+  neatness: number; // 1 - 5
+  honesty: number; // 1 - 5
+  relationshipWithPeers: number; // 1 - 5
+  leadership: number; // 1 - 5
+  emotionalStability: number; // 1 - 5
+}
+
+export interface PsychomotorTraits {
+  handwriting: number; // 1 - 5
+  verbalFluency: number; // 1 - 5
+  sports: number; // 1 - 5
+  craft: number; // 1 - 5
+  ict: number; // 1 - 5
+  handlingOfTools: number; // 1 - 5
+}
+
+export interface TerminalEvaluation {
+  affective: AffectiveTraits;
+  psychomotor: PsychomotorTraits;
+  teacherRemark: string;
+  teacherSignature?: string;
+  principalRecommendation: string;
+  nextTermResumptionDate?: string;
+  updatedAt?: string;
+}
+
 export interface Student {
   id: string;
   rollNumber: string;
@@ -34,6 +62,7 @@ export interface Student {
   parentEmail: string;
   academicRecords: TestExamRecord[];
   behavioralNotes: BehavioralNote[];
+  terminalEvaluation?: TerminalEvaluation;
   totalPresent: number;
   totalAbsent: number;
   consecutiveAbsences: number;

@@ -203,22 +203,28 @@ export async function downloadStudentReportCardPDF(
   doc.text(`CLASS RANKING: 2nd / 28 Pupils`, 140, finalY + 11.5);
 
   // 6. Remarks and Endorsements
-  doc.roundedRect(12, finalY + 19, pageWidth - 24, 30, 2, 2, 'D');
+  doc.roundedRect(12, finalY + 19, pageWidth - 24, 32, 2, 2, 'D');
+
+  const teacherRemark =
+    student.terminalEvaluation?.teacherRemark ||
+    `${student.name.split(' ')[0]} is a highly disciplined, attentive pupil who demonstrates consistent academic curiosity and punctuality.`;
+
+  const principalRec =
+    student.terminalEvaluation?.principalRecommendation ||
+    'Commendable terminal conduct and academic result. Keep up the high standard.';
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('FORM TEACHER REMARK:', 16, finalY + 25);
+  doc.text('FORM TEACHER REMARK:', 16, finalY + 24.5);
   doc.setFont('helvetica', 'italic');
-  doc.text(
-    `${student.name.split(' ')[0]} is a highly disciplined, attentive pupil who demonstrates consistent academic curiosity and punctuality.`,
-    16,
-    finalY + 30
-  );
+  const teacherLines = doc.splitTextToSize(teacherRemark, pageWidth - 32);
+  doc.text(teacherLines.slice(0, 2), 16, finalY + 29);
 
   doc.setFont('helvetica', 'bold');
   doc.text('PRINCIPAL ENDORSEMENT:', 16, finalY + 38);
   doc.setFont('helvetica', 'italic');
-  doc.text('Commendable terminal conduct and academic result. Keep up the high standard.', 16, finalY + 43);
+  const principalLines = doc.splitTextToSize(principalRec, pageWidth - 32);
+  doc.text(principalLines.slice(0, 2), 16, finalY + 42.5);
 
   // 7. Signature Blocks
   const sigY = finalY + 56;
