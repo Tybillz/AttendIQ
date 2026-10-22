@@ -112,7 +112,7 @@ export default function Home() {
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isWhitelabelModalOpen, setIsWhitelabelModalOpen] = useState(false);
-  const [whitelabelModalTab, setWhitelabelModalTab] = useState<'branding' | 'licensing' | 'vendor'>('branding');
+  const [whitelabelModalTab, setWhitelabelModalTab] = useState<'branding' | 'licensing'>('branding');
   const [databaseModalTab, setDatabaseModalTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers'>('pupils');
   const [schoolBranding, setSchoolBranding] = useState<SchoolBranding>(DEFAULT_SCHOOL_BRANDING);
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusResult>(getLicenseStatus());
@@ -327,8 +327,39 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* LICENSE EXPIRED ALERT BANNER */}
-        {licenseStatus.isExpired && (
+        {/* LICENSE REVOKED / KILL-SWITCH BANNER */}
+        {licenseStatus.status === 'revoked' && (
+          <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-slate-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xl border-2 border-rose-500 animate-in fade-in">
+            <div className="flex items-center gap-3.5">
+              <span className="p-2.5 rounded-2xl bg-rose-600/30 text-rose-400 text-2xl border border-rose-500/50">⛔</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-black text-sm uppercase tracking-wide text-rose-400">
+                    INSTITUTIONAL LICENSE REVOKED / ACCESS SUSPENDED
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold">
+                    Licensor Lockout
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-1">
+                  Reason: <strong className="text-white">{licenseStatus.revocationReason || 'Commercial Rental Agreement Suspended / Default'}</strong>. All attendance write operations and reports are locked by the software licensor.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setWhitelabelModalTab('licensing');
+                setIsWhitelabelModalOpen(true);
+              }}
+              className="px-5 py-2.5 rounded-2xl bg-rose-600 text-white font-black text-xs hover:bg-rose-500 transition shrink-0 cursor-pointer shadow-md active:scale-95"
+            >
+              Resolve / Enter Key &rarr;
+            </button>
+          </div>
+        )}
+
+        {/* LICENSE EXPIRED ALERT BANNER (If not revoked) */}
+        {licenseStatus.isExpired && licenseStatus.status !== 'revoked' && (
           <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-rose-600 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl border border-rose-500 animate-in fade-in">
             <div className="flex items-center gap-3.5">
               <span className="p-2.5 rounded-2xl bg-white/20 text-white text-xl">🚨</span>

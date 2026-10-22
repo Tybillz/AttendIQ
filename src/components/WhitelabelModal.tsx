@@ -39,7 +39,7 @@ interface WhitelabelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBrandingUpdated?: () => void;
-  defaultTab?: 'branding' | 'licensing' | 'vendor';
+  defaultTab?: 'branding' | 'licensing';
 }
 
 export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
@@ -48,7 +48,7 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
   onBrandingUpdated,
   defaultTab = 'branding',
 }) => {
-  const [activeTab, setActiveTab] = useState<'branding' | 'licensing' | 'vendor'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'branding' | 'licensing'>(defaultTab);
   
   // Branding state
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
@@ -59,19 +59,6 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
   const [licenseInput, setLicenseInput] = useState('');
   const [activationFeedback, setActivationFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [isActivating, setIsActivating] = useState(false);
-  
-  // Vendor Master Portal State
-  const [vendorUnlocked, setVendorUnlocked] = useState(false);
-  const [vendorPin, setVendorPin] = useState('');
-  const [vendorPinError, setVendorPinError] = useState(false);
-  
-  // Vendor Key Generator State
-  const [genSchoolName, setGenSchoolName] = useState(branding.schoolName);
-  const [genPlanType, setGenPlanType] = useState<LicensePlanType>('term');
-  const [genDurationMonths, setGenDurationMonths] = useState<number>(4);
-  const [genPupilQuota, setGenPupilQuota] = useState<number>(500);
-  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -80,7 +67,6 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
       }
       const current = getSchoolBranding();
       setBranding(current);
-      setGenSchoolName(current.schoolName);
       setLicenseStatus(getLicenseStatus());
       setActivationFeedback(null);
       setSaveSuccess(false);
@@ -115,36 +101,6 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
       setLicenseInput('');
       onBrandingUpdated?.();
     }
-  };
-
-  const handleUnlockVendor = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Default master passkey for vendor license generation: 9009 or AttendIQ
-    if (vendorPin.trim() === '9009' || vendorPin.trim().toLowerCase() === 'attendiq') {
-      setVendorUnlocked(true);
-      setVendorPinError(false);
-    } else {
-      setVendorPinError(true);
-    }
-  };
-
-  const handleGenerateKey = () => {
-    const { licenseKey } = generateSignedLicenseKey(
-      genSchoolName,
-      genPlanType,
-      genDurationMonths,
-      genPupilQuota,
-      Math.round(genPupilQuota / 10)
-    );
-    setGeneratedKey(licenseKey);
-    setCopiedKey(false);
-  };
-
-  const handleCopyGeneratedKey = () => {
-    if (!generatedKey) return;
-    navigator.clipboard.writeText(generatedKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2500);
   };
 
   return (
@@ -202,19 +158,9 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
             }`}
           >
             <Key className="h-4 w-4" />
-            <span>License & Subscription ({licenseStatus.status === 'active' ? 'Active' : 'Renewal Needed'})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('vendor')}
-            className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition cursor-pointer shrink-0 ml-auto ${
-              activeTab === 'vendor'
-                ? 'border-amber-600 text-amber-700 font-black'
-                : 'border-transparent text-amber-600/80 hover:text-amber-700'
-            }`}
-          >
-            <ShieldCheck className="h-4 w-4 text-amber-600" />
-            <span>Vendor Key Generator (Master Portal)</span>
+            <span>
+              License & Subscription ({licenseStatus.status === 'active' ? 'Active' : licenseStatus.status === 'revoked' ? 'Revoked' : 'Renewal Needed'})
+            </span>
           </button>
         </div>
 
@@ -385,6 +331,24 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
           {/* TAB 2: LICENSE & SUBSCRIPTION STATUS */}
           {activeTab === 'licensing' && (
             <div className="space-y-6">
+              {/* REVOCATION AUTHORITY ALERT */}
+              {licenseStatus.status === 'revoked' && (
+                <div className="p-4 rounded-2xl bg-rose-600 text-white flex items-start gap-3.5 shadow-lg border border-rose-500 animate-in fade-in">
+                  <AlertTriangle className="h-5 w-5 text-rose-200 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-black text-xs uppercase tracking-wide">
+                      Software Licensor Revocation Notice
+                    </h4>
+                    <p className="text-xs text-rose-100 mt-0.5">
+                      {licenseStatus.revocationReason || 'This license was revoked by the software licensor due to subscription lapse or agreement termination.'}
+                    </p>
+                    <p className="text-[11px] text-rose-200 mt-1 font-semibold">
+                      Write operations are restricted. Please contact your AttendIQ vendor representative to settle authorization and obtain an active renewal key.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Active License Details Card */}
               <div className="p-5 rounded-3xl bg-slate-50 border border-slate-200 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -497,180 +461,7 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: VENDOR MASTER LICENSE GENERATOR */}
-          {activeTab === 'vendor' && (
-            <div className="space-y-6">
-              {!vendorUnlocked ? (
-                /* Master PIN Gate */
-                <form
-                  onSubmit={handleUnlockVendor}
-                  className="max-w-md mx-auto text-center p-6 bg-slate-50 border border-slate-200 rounded-3xl space-y-4"
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 mx-auto flex items-center justify-center">
-                    <Lock className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      Product Owner / Vendor Master Key Required
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      This console allows generating cryptographically signed license keys to rent AttendIQ out to client schools. Enter your Vendor Master Passkey to proceed.
-                    </p>
-                  </div>
 
-                  <div>
-                    <input
-                      type="password"
-                      autoFocus
-                      value={vendorPin}
-                      onChange={(e) => setVendorPin(e.target.value)}
-                      placeholder="Enter Master Passkey (Default: 9009)"
-                      className="w-full text-center tracking-widest text-sm font-mono font-bold px-3 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-amber-600"
-                    />
-                    {vendorPinError && (
-                      <span className="text-[11px] text-rose-600 font-bold block mt-1">
-                        Incorrect master passkey.
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition shadow-sm cursor-pointer"
-                  >
-                    Unlock Vendor Key Generator
-                  </button>
-                </form>
-              ) : (
-                /* Unlocked Generator Form */
-                <div className="space-y-5">
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                        <ShieldCheck className="h-4 w-4 text-amber-600" />
-                        Vendor License Issuance Engine Active
-                      </h4>
-                      <p className="text-[11px] text-amber-800">
-                        Keys are cryptographically bound to the client school name and cannot be shared or pirated.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setVendorUnlocked(false)}
-                      className="text-[11px] font-bold text-amber-800 hover:underline"
-                    >
-                      Lock Console
-                    </button>
-                  </div>
-
-                  {/* Generator Inputs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-slate-50 p-5 rounded-3xl border border-slate-200">
-                    <div className="sm:col-span-2">
-                      <label className="font-bold text-slate-800 block mb-1">
-                        Client School Full Name (Licensee) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={genSchoolName}
-                        onChange={(e) => setGenSchoolName(e.target.value)}
-                        placeholder="e.g. Lead British International School"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold focus:outline-none focus:border-amber-600"
-                      />
-                      <span className="text-[10px] text-slate-400">
-                        License key is cryptographically bound to this exact school name
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="font-bold text-slate-800 block mb-1">
-                        Rental Tier / Duration *
-                      </label>
-                      <select
-                        value={genPlanType}
-                        onChange={(e) => {
-                          const plan = e.target.value as LicensePlanType;
-                          setGenPlanType(plan);
-                          if (plan === 'trial') setGenDurationMonths(1);
-                          else if (plan === 'term') setGenDurationMonths(4);
-                          else if (plan === 'annual') setGenDurationMonths(12);
-                          else if (plan === 'enterprise') setGenDurationMonths(24);
-                        }}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold focus:outline-none focus:border-amber-600"
-                      >
-                        <option value="term">Academic Term Rental (4 Months / 1 Term) — Recommended</option>
-                        <option value="annual">Full School Year License (12 Months / 3 Terms)</option>
-                        <option value="trial">Prospective School Trial Pass (1 Month)</option>
-                        <option value="enterprise">Multi-Year Enterprise License (24 Months)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="font-bold text-slate-800 block mb-1">
-                        Student Population Cap *
-                      </label>
-                      <select
-                        value={genPupilQuota}
-                        onChange={(e) => setGenPupilQuota(Number(e.target.value))}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold focus:outline-none focus:border-amber-600"
-                      >
-                        <option value={250}>Starter Tier (Up to 250 Pupils)</option>
-                        <option value={500}>Growth Tier (Up to 500 Pupils)</option>
-                        <option value={1000}>Standard School (Up to 1,000 Pupils)</option>
-                        <option value={99999}>Mega Campus (Unlimited Pupils)</option>
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-2 pt-2">
-                      <button
-                        type="button"
-                        onClick={handleGenerateKey}
-                        className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold text-xs uppercase tracking-wider shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        <span>Generate Authentic Signed License Key</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Generated Output Box */}
-                  {generatedKey && (
-                    <div className="p-5 rounded-3xl bg-slate-900 text-white border border-amber-500/40 space-y-3 animate-in fade-in">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">
-                          Generated Signed License Key
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          Valid for {genSchoolName}
-                        </span>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-black/60 border border-slate-800 flex items-center justify-between gap-3 font-mono text-xs font-bold text-emerald-400 select-all">
-                        <span>{generatedKey}</span>
-                        <button
-                          type="button"
-                          onClick={handleCopyGeneratedKey}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-sans flex items-center gap-1.5 transition shrink-0 cursor-pointer"
-                        >
-                          {copiedKey ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                          <span>{copiedKey ? 'Copied!' : 'Copy Key'}</span>
-                        </button>
-                      </div>
-
-                      <div className="text-[11px] text-slate-300 space-y-1">
-                        <p>
-                          • <strong>Proprietor Invoice Receipt</strong>: Copy this key and send it to the school administration upon receipt of bank transfer or subscription fee.
-                        </p>
-                        <p>
-                          • The school simply pastes this key into the <strong>"License & Subscription"</strong> tab to activate their instance immediately.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>

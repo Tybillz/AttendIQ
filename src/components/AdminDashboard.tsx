@@ -80,7 +80,7 @@ interface AdminDashboardProps {
   onOpenSettingsModal: () => void;
   onSelectStudentProfile: (student: Student) => void;
   onDataUpdated?: () => void;
-  onOpenWhitelabelModal?: (tab?: 'branding' | 'licensing' | 'vendor') => void;
+  onOpenWhitelabelModal?: (tab?: 'branding' | 'licensing') => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({

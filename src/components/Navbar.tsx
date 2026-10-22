@@ -54,7 +54,7 @@ interface NavbarProps {
   onSwitchToTeacher?: (teacherId?: string) => void;
   onSwitchToGate?: () => void;
   onSwitchToAdmin?: (passcode: string) => { success: boolean; message: string };
-  onOpenWhitelabelModal?: (tab?: 'branding' | 'licensing' | 'vendor') => void;
+  onOpenWhitelabelModal?: (tab?: 'branding' | 'licensing') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({

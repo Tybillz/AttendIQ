@@ -36,13 +36,25 @@ export interface SchoolLicense {
   signature: string; // Cryptographic anti-tamper hash
   activatedAt?: string;
   vendorNotes?: string;
+  isRevoked?: boolean;
+  revokedAt?: string;
+  revocationReason?: string;
+}
+
+export interface RevokedKeyEntry {
+  key: string;
+  reason: string;
+  revokedAt: string;
+  schoolName?: string;
 }
 
 export interface LicenseStatusResult {
   isValid: boolean;
   isExpired: boolean;
   isExpiringSoon: boolean; // Within 14 days
-  status: 'active' | 'expiring_soon' | 'expired' | 'unlicensed' | 'name_mismatch';
+  isRevoked?: boolean;
+  revocationReason?: string;
+  status: 'active' | 'expiring_soon' | 'expired' | 'unlicensed' | 'name_mismatch' | 'revoked';
   statusLabel: string;
   badgeColor: string;
   planName: string;
@@ -57,6 +69,7 @@ export interface LicenseStatusResult {
 const STORAGE_KEYS = {
   BRANDING: 'attend_iq_school_branding_v1',
   LICENSE: 'attend_iq_active_license_v1',
+  REVOCATION_BLACKLIST: 'attend_iq_revocation_blacklist_v1',
 };
 
 // Cryptographic secret salt for license signing (Known only to software vendor)
@@ -151,6 +164,19 @@ export function generateSignedLicenseKey(
   };
   
   return { licenseKey, license };
+}
+
+/**
+ * Convenience helper returning just the generated cryptographic key string
+ */
+export function generateLicenseKey(
+  schoolName: string,
+  planType: LicensePlanType,
+  durationMonths: number,
+  maxPupils: number = 500,
+  maxStaff: number = 50
+): string {
+  return generateSignedLicenseKey(schoolName, planType, durationMonths, maxPupils, maxStaff).licenseKey;
 }
 
 /**
@@ -250,6 +276,15 @@ export function activateLicenseKey(
 ): { success: boolean; message: string; license?: SchoolLicense } {
   try {
     const trimmedKey = rawKey.trim().toUpperCase();
+    const blacklist = getRevocationBlacklist();
+    const revokedRecord = blacklist.find((r) => r.key === trimmedKey);
+    if (revokedRecord) {
+      return {
+        success: false,
+        message: `Revocations Authority Notice: This license key was REVOKED by the software licensor (${revokedRecord.reason} on ${new Date(revokedRecord.revokedAt).toLocaleDateString()}). Activation denied.`,
+      };
+    }
+
     const parts = trimmedKey.split('-');
     
     if (parts.length < 5 || parts[0] !== 'ATIQ') {
@@ -359,6 +394,33 @@ export function getLicenseStatus(schoolName?: string): LicenseStatusResult {
     };
   }
   
+  // Check Revocations Authority Kill-Switch
+  const blacklist = getRevocationBlacklist();
+  const isKeyBlacklisted = blacklist.some((r) => r.key === license.licenseKey.trim().toUpperCase());
+  if (license.isRevoked || isKeyBlacklisted) {
+    const reason =
+      license.revocationReason ||
+      blacklist.find((r) => r.key === license.licenseKey.trim().toUpperCase())?.reason ||
+      'Commercial Rental Terminated / Suspended by Licensor';
+    return {
+      isValid: false,
+      isExpired: true,
+      isExpiringSoon: false,
+      isRevoked: true,
+      revocationReason: reason,
+      status: 'revoked',
+      statusLabel: 'LICENSE REVOKED BY LICENSOR',
+      badgeColor: 'bg-rose-600 text-white border-rose-700 shadow-sm animate-pulse',
+      planName: `${license.planType.toUpperCase()} (SUSPENDED / REVOKED)`,
+      daysRemaining: 0,
+      validUntilFormatted: license.validUntil,
+      schoolName: license.schoolName,
+      maxPupils: license.maxPupils,
+      maxStaff: license.maxStaff,
+      isWriteRestricted: true,
+    };
+  }
+
   // Calculate remaining days
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
@@ -406,3 +468,102 @@ export function getLicenseStatus(schoolName?: string): LicenseStatusResult {
     isWriteRestricted: isExpired,
   };
 }
+
+/**
+ * Revocations Authority: Get list of revoked/blacklisted license keys
+ */
+export function getRevocationBlacklist(): RevokedKeyEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.REVOCATION_BLACKLIST);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Revocations Authority: Blacklist a specific license key
+ */
+export function revokeLicenseByKey(
+  licenseKey: string,
+  reason: string = 'Payment Default / Agreement Terminated',
+  schoolName?: string
+): { success: boolean; message: string } {
+  if (typeof window === 'undefined') return { success: false, message: 'Server context' };
+  try {
+    const cleanKey = licenseKey.trim().toUpperCase();
+    const list = getRevocationBlacklist();
+    if (!list.some((r) => r.key === cleanKey)) {
+      list.unshift({
+        key: cleanKey,
+        reason,
+        revokedAt: new Date().toISOString(),
+        schoolName,
+      });
+      localStorage.setItem(STORAGE_KEYS.REVOCATION_BLACKLIST, JSON.stringify(list));
+    }
+
+    // If currently active license matches, revoke it immediately
+    const active = getSchoolLicense();
+    if (active && active.licenseKey.trim().toUpperCase() === cleanKey) {
+      active.isRevoked = true;
+      active.revokedAt = new Date().toISOString();
+      active.revocationReason = reason;
+      localStorage.setItem(STORAGE_KEYS.LICENSE, JSON.stringify(active));
+      window.dispatchEvent(new CustomEvent('attendiq:license-updated', { detail: active }));
+    }
+
+    return {
+      success: true,
+      message: `License key ${cleanKey} revoked successfully. System access locked.`,
+    };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Revocation failed' };
+  }
+}
+
+/**
+ * Revocations Authority: Kill-switch currently active license on this system
+ */
+export function revokeCurrentLicense(
+  reason: string = 'Commercial Subscription Terminated by Software Licensor'
+): { success: boolean; message: string } {
+  if (typeof window === 'undefined') return { success: false, message: 'Server context' };
+  const license = getSchoolLicense();
+  if (!license) return { success: false, message: 'No active license found to revoke.' };
+  return revokeLicenseByKey(license.licenseKey, reason, license.schoolName);
+}
+
+/**
+ * Revocations Authority: Un-revoke and re-authorize a license key
+ */
+export function restoreRevokedLicense(
+  licenseKey?: string
+): { success: boolean; message: string } {
+  if (typeof window === 'undefined') return { success: false, message: 'Server context' };
+  try {
+    const active = getSchoolLicense();
+    const targetKey = (licenseKey || active?.licenseKey || '').trim().toUpperCase();
+    if (!targetKey) return { success: false, message: 'No license key specified.' };
+
+    const list = getRevocationBlacklist().filter((r) => r.key !== targetKey);
+    localStorage.setItem(STORAGE_KEYS.REVOCATION_BLACKLIST, JSON.stringify(list));
+
+    if (active && active.licenseKey.trim().toUpperCase() === targetKey) {
+      delete active.isRevoked;
+      delete active.revokedAt;
+      delete active.revocationReason;
+      localStorage.setItem(STORAGE_KEYS.LICENSE, JSON.stringify(active));
+      window.dispatchEvent(new CustomEvent('attendiq:license-updated', { detail: active }));
+    }
+
+    return {
+      success: true,
+      message: `License key ${targetKey} restored and removed from revocation blacklist.`,
+    };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Restoration failed' };
+  }
+}
+
