@@ -555,15 +555,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <div className="flex flex-wrap items-center gap-2.5">
             <button
-              onClick={() => setIsManualModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-600 hover:to-indigo-800 text-white font-black text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition cursor-pointer"
-              title="Open Complete Administrator Console Navigation Manual & Sitemap"
-            >
-              <BookOpen className="h-4 w-4 text-sky-200" />
-              <span>Admin Manual & Guide</span>
-            </button>
-
-            <button
               onClick={handleSendPrincipalWhatsAppSummary}
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md active:scale-95 transition"
               title="Share executive summary directly via WhatsApp"
@@ -773,21 +764,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <KeyRound className="h-4 w-4 text-amber-600" /> Staff PINs, Passwords & Geofence
         </button>
-        <div className="flex items-center gap-1 sm:ml-auto">
-          <button
-            onClick={() => onOpenDatabaseModal('teachers')}
-            className="py-3.5 px-3 font-bold text-xs border-b-2 border-transparent text-indigo-600 hover:text-indigo-900 hover:border-indigo-300 transition flex items-center gap-1.5"
-          >
-            <GraduationCap className="h-4 w-4" /> Teachers Roster ({teachers.length})
-          </button>
-          <button
-            onClick={() => setIsManualModalOpen(true)}
-            className="py-3.5 px-3 font-black text-xs border-b-2 border-transparent text-sky-700 hover:text-sky-950 hover:border-sky-400 transition flex items-center gap-1.5"
-            title="Open Interactive Navigation Manual"
-          >
-            <BookOpen className="h-4 w-4 text-sky-600" /> Manual Guide &rarr;
-          </button>
-        </div>
+        <button
+          onClick={() => onOpenDatabaseModal('teachers')}
+          className="py-3.5 px-4 font-bold text-xs border-b-2 border-transparent text-indigo-600 hover:text-indigo-900 hover:border-indigo-300 transition flex items-center gap-1.5 sm:ml-auto"
+        >
+          <GraduationCap className="h-4 w-4" /> Teachers Roster ({teachers.length}) &rarr;
+        </button>
       </div>
 
       {/* TAB 1: OVERVIEW & CLASS TRENDS */}
