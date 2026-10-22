@@ -94,7 +94,16 @@ export const GateCheckIn: React.FC<GateCheckInProps> = ({
     'Woke Up Late / Unspecified',
   ];
 
+  const todayStr = typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '2026-10-22';
+  const isViewingToday = selectedDate === todayStr;
+
   const handleLogArrival = (student: Student) => {
+    // ANTI-TAMPER: Only allow gate logging on today's active school day
+    if (!isViewingToday) {
+      alert(`🛑 Security Violation: Gate arrivals cannot be recorded for historical date ${selectedDate}. Real-time check-in is strictly limited to today (${todayStr}).`);
+      return;
+    }
+
     // Check if already logged today
     if (arrivals.some((a) => a.studentId === student.id)) {
       alert(`${student.name} is already logged in today's gate register.`);
@@ -199,6 +208,15 @@ export const GateCheckIn: React.FC<GateCheckInProps> = ({
           </div>
         </div>
       </div>
+
+      {!isViewingToday && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0" />
+            <span>Viewing archived gate arrivals for <strong className="font-mono">{selectedDate}</strong>. New gate check-in registrations are disabled on historical records.</span>
+          </div>
+        </div>
+      )}
 
       {notificationStatus && (
         <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in shadow-xs">

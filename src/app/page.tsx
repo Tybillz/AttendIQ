@@ -51,7 +51,12 @@ import {
 export default function Home() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [currentRole, setCurrentRole] = useState<'teacher' | 'gate' | 'admin'>('teacher');
-  const [selectedDate, setSelectedDate] = useState<string>('2026-10-15');
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return new Date().toISOString().split('T')[0];
+    }
+    return '2026-10-22';
+  });
 
   // Initialize with initial data immediately so there is never a blank screen
   const [classes, setClasses] = useState<ClassSection[]>(INITIAL_CLASSES);
@@ -71,9 +76,10 @@ export default function Home() {
 
   const checkTeacherClockStatus = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const rec = getTeacherRecordForDate(currentTeacherId, selectedDate);
+    const realToday = new Date().toISOString().split('T')[0];
+    const rec = getTeacherRecordForDate(currentTeacherId, realToday);
     setIsTeacherClockedIn(Boolean(rec && rec.clockInTime));
-  }, [currentTeacherId, selectedDate]);
+  }, [currentTeacherId]);
 
   useEffect(() => {
     checkTeacherClockStatus();
@@ -340,9 +346,13 @@ export default function Home() {
                 </div>
                 <button
                   onClick={() => {
+                    const realToday = new Date().toISOString().split('T')[0];
+                    if (selectedDate !== realToday) {
+                      setSelectedDate(realToday);
+                    }
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 shrink-0"
+                  className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
                 >
                   <Lock className="h-3.5 w-3.5" />
                   <span>Clock In Above</span>
@@ -442,6 +452,7 @@ export default function Home() {
                     activeClass={accessibleClasses.find((c) => c.id === selectedClassId) || accessibleClasses[0]}
                     selectedDate={selectedDate}
                     onRecordUpdated={syncData}
+                    onReturnToToday={() => setSelectedDate(new Date().toISOString().split('T')[0])}
                   />
                 )}
                 <TeacherRollCall

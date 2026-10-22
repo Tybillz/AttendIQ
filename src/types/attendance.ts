@@ -203,7 +203,8 @@ export type AuditActionType =
   | 'SESSION_UNLOCKED'
   | 'PUPIL_CREATED'
   | 'PUPIL_DELETED'
-  | 'TEACHER_REASSIGNED';
+  | 'TEACHER_REASSIGNED'
+  | 'SECURITY_ALERT';
 
 export interface AuditLogEntry {
   id: string;

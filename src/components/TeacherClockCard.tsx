@@ -12,6 +12,8 @@ import {
   Sparkles,
   Smartphone,
   Info,
+  Lock,
+  Calendar,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -32,6 +34,7 @@ interface TeacherClockCardProps {
   activeClass?: ClassSection;
   selectedDate: string;
   onRecordUpdated?: () => void;
+  onReturnToToday?: () => void;
 }
 
 export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
@@ -39,6 +42,7 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
   activeClass,
   selectedDate,
   onRecordUpdated,
+  onReturnToToday,
 }) => {
   const [record, setRecord] = useState<TeacherClockRecord | undefined>(undefined);
   const [digits, setDigits] = useState<string[]>(['', '', '', '']);
@@ -82,6 +86,9 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
       setGpsError('Geolocation is not supported by your browser.');
       return;
     }
+
+    const todayStr = typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '2026-10-22';
+    if (selectedDate !== todayStr) return;
 
     setGpsLoading(true);
     setGpsError(null);
@@ -203,8 +210,11 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
     }
   };
 
-  // Today's entrance code generated for this date
-  const expectedCode = getDailyEntranceCode(selectedDate, perimeterConfig);
+  const todayStr = typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '2026-10-22';
+  const isViewingToday = selectedDate === todayStr;
+
+  // Entrance code is strictly valid for today's active session
+  const expectedCode = isViewingToday ? getDailyEntranceCode(todayStr, perimeterConfig) : '----';
 
   const isClockedIn = Boolean(record?.clockInTime);
   const isClockedOut = Boolean(record?.clockOutTime);
@@ -215,9 +225,15 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
         {/* Left: Teacher Info & Status */}
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 bg-indigo-950/80 px-2.5 py-1 rounded-full border border-indigo-800/80 flex items-center gap-1.5">
-              <Smartphone className="h-3 w-3 text-indigo-400" /> Personal Device Clock-In
-            </span>
+            {isViewingToday ? (
+              <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 bg-indigo-950/80 px-2.5 py-1 rounded-full border border-indigo-800/80 flex items-center gap-1.5">
+                <Smartphone className="h-3 w-3 text-indigo-400" /> Personal Device Clock-In
+              </span>
+            ) : (
+              <span className="text-[10px] uppercase font-black tracking-widest text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-full border border-amber-700/80 flex items-center gap-1.5">
+                <Lock className="h-3 w-3 text-amber-400" /> Historical Record Archive
+              </span>
+            )}
             {deviceLock ? (
               <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
                 hardwareProfile && deviceLock.deviceFingerprint === hardwareProfile.fingerprint
@@ -257,7 +273,12 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
               )}
             </h2>
             <p className="text-xs text-indigo-200/80 mt-0.5">
-              {activeClass?.name ? `${activeClass.name} • ` : ''}Date: <strong>{selectedDate}</strong>
+              {activeClass?.name ? `${activeClass.name} • ` : ''}Date: <strong className={isViewingToday ? 'text-white' : 'text-amber-300 font-mono'}>{selectedDate}</strong>
+              {!isViewingToday && (
+                <span className="ml-2 text-[10px] font-bold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-md border border-amber-800/80 inline-flex items-center gap-1">
+                  <Lock className="h-2.5 w-2.5" /> Closed & Frozen Record
+                </span>
+              )}
             </p>
           </div>
 
@@ -314,7 +335,65 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
 
         {/* Right: Clock In / Clock Out Controls */}
         <div className="bg-slate-950/60 p-4 sm:p-5 rounded-2xl border border-indigo-900/40 min-w-[280px] sm:min-w-[320px]">
-          {!isClockedIn ? (
+          {!isViewingToday ? (
+            /* Historical Archive State (Read-Only to Prevent Retroactive Manipulation) */
+            <div className="space-y-3 text-center">
+              <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl space-y-2">
+                <div className="flex items-center justify-center gap-1.5 text-xs text-amber-300 font-bold uppercase tracking-wider">
+                  <Lock className="h-4 w-4 text-amber-400" />
+                  <span>Punch Clock Disabled</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-snug">
+                  You are viewing the archived attendance ledger for <strong className="text-white font-mono">{selectedDate}</strong>. Punching in or out on past dates is strictly prohibited to preserve audit integrity.
+                </p>
+
+                {/* Historical Punch Status */}
+                <div className="pt-2 border-t border-amber-900/60 text-[11px] text-left space-y-1">
+                  {record?.clockInTime ? (
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between text-slate-300">
+                        <span>Arrival Time:</span>
+                        <strong className="text-emerald-400 font-mono">{record.clockInTime}</strong>
+                      </div>
+                      {record.clockOutTime && (
+                        <div className="flex justify-between text-slate-300">
+                          <span>Departure Time:</span>
+                          <strong className="text-sky-400 font-mono">{record.clockOutTime}</strong>
+                        </div>
+                      )}
+                      {record.hoursWorked && (
+                        <div className="flex justify-between text-slate-300">
+                          <span>Total Hours:</span>
+                          <strong className="text-white font-mono">{record.hoursWorked} hrs</strong>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-slate-300">
+                        <span>Punctuality:</span>
+                        <span className={`font-semibold ${record.status === 'on_time' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {record.status === 'on_time' ? '✓ On-Time Arrival' : '⚠️ Late Arrival'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-1 text-rose-300 font-semibold italic">
+                      ⚠️ Absent / No Clock-In Logged on {selectedDate}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {onReturnToToday && (
+                <button
+                  type="button"
+                  onClick={onReturnToToday}
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span>Jump to Today ({todayStr}) to Clock In</span>
+                </button>
+              )}
+            </div>
+          ) : !isClockedIn ? (
             <div className="space-y-3">
               {/* Daily rotating code indicator */}
               <div className="bg-indigo-950/70 border border-indigo-800/60 rounded-xl p-2.5 flex items-center justify-between">
@@ -349,7 +428,7 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
                 <label className="text-xs font-bold text-slate-300">
                   Enter 4-Digit Daily Code:
                 </label>
-                <span className="text-[10px] text-slate-400">Valid for {selectedDate}</span>
+                <span className="text-[10px] text-slate-400">Valid for {todayStr}</span>
               </div>
 
               {/* 4-Digit Box Inputs */}

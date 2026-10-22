@@ -1,4 +1,5 @@
 import { TeacherClockRecord, SchoolPerimeterConfig, TeacherDeviceLock } from '@/types/attendance';
+import { addAuditLog } from './storage';
 
 export const DEFAULT_PERIMETER_CONFIG: SchoolPerimeterConfig = {
   schoolName: 'Apex Crest Academy',
@@ -369,6 +370,14 @@ export function getTeacherRecordForDate(teacherId: string, dateStr: string): Tea
 }
 
 /**
+ * Returns today's active calendar date (YYYY-MM-DD)
+ */
+export function getRealTodayDateStr(): string {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+}
+
+/**
  * Record a teacher clock-in with ANTI-CHEAT & HARDWARE DEVICE LOCKING
  */
 export function clockInTeacher(
@@ -388,7 +397,32 @@ export function clockInTeacher(
   }
 ): { success: boolean; message: string; record?: TeacherClockRecord } {
   const config = getPerimeterConfig();
-  const expectedCode = getDailyEntranceCode(dateStr, config);
+  const realToday = getRealTodayDateStr();
+
+  // 0. ANTI-TAMPER: STRICT REAL-TIME DATE ENFORCEMENT
+  // Teachers cannot manipulate the calendar date to clock in retroactively for past dates or future dates
+  if (dateStr !== realToday) {
+    try {
+      addAuditLog({
+        actorId: teacherId,
+        actorName: teacherName,
+        actorRole: 'teacher',
+        action: 'SECURITY_ALERT',
+        targetType: 'teacher',
+        targetId: teacherId,
+        targetName: teacherName,
+        details: `🛑 REJECTED RETROACTIVE CLOCK-IN: Teacher "${teacherName}" attempted to clock in for date "${dateStr}" while the active real-time date is "${realToday}".`,
+        severity: 'critical',
+      });
+    } catch {}
+
+    return {
+      success: false,
+      message: `🛑 Security Policy Violation: Retroactive or future clock-ins are strictly prohibited. Attendance punches can only be recorded in real-time on today's active date (${realToday}).`,
+    };
+  }
+
+  const expectedCode = getDailyEntranceCode(realToday, config);
 
   // 1. Verify 4-digit Entrance Code
   if (enteredCode.trim() !== expectedCode.trim()) {
@@ -517,8 +551,32 @@ export function clockOutTeacher(
   teacherId: string,
   dateStr: string
 ): { success: boolean; message: string; record?: TeacherClockRecord } {
+  const realToday = getRealTodayDateStr();
+
+  // ANTI-TAMPER: STRICT REAL-TIME DATE ENFORCEMENT
+  if (dateStr !== realToday) {
+    try {
+      addAuditLog({
+        actorId: teacherId,
+        actorName: teacherId,
+        actorRole: 'teacher',
+        action: 'SECURITY_ALERT',
+        targetType: 'teacher',
+        targetId: teacherId,
+        targetName: teacherId,
+        details: `🛑 REJECTED RETROACTIVE CLOCK-OUT: Teacher attempted to clock out for date "${dateStr}" instead of active real-time date "${realToday}".`,
+        severity: 'critical',
+      });
+    } catch {}
+
+    return {
+      success: false,
+      message: `🛑 Security Policy Violation: Retroactive clock-outs are strictly prohibited.`,
+    };
+  }
+
   const records = getTeacherClockRecords();
-  const existing = records.find((r) => r.teacherId === teacherId && r.date === dateStr);
+  const existing = records.find((r) => r.teacherId === teacherId && r.date === realToday);
 
   if (!existing || !existing.clockInTimestamp) {
     return {
