@@ -583,9 +583,6 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
                       Software Licensor Authority Required
                     </h3>
-                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                      Enter your master passkey (Default: <code className="font-mono font-bold text-amber-700">9009</code>) to issue verifiable school licenses or execute revocation kill-switches.
-                    </p>
                   </div>
 
                   <div className="max-w-xs mx-auto space-y-2">
@@ -612,10 +609,6 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
                     <Unlock className="h-4 w-4" />
                     Unlock Licensor Master Console
                   </button>
-
-                  <p className="text-[11px] text-slate-400">
-                    Proprietor console is separated from school administration for commercial security.
-                  </p>
                 </form>
               ) : (
                 /* Unlocked Licensor Master Console */
@@ -980,19 +973,23 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
           )}
 
           {/* Parent Absence Notice Portal Link */}
-          <div className="mt-4 pt-3 border-t border-slate-100 text-center">
-            <Link
-              href="/excuse"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 px-3.5 py-1.5 rounded-xl border border-indigo-200/80 transition"
-            >
-              <span>Are you a Parent reporting an absence? Submit note here &rarr;</span>
-            </Link>
-          </div>
+          {tab !== 'vendor' && (
+            <>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-center">
+                <Link
+                  href="/excuse"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 px-3.5 py-1.5 rounded-xl border border-indigo-200/80 transition"
+                >
+                  <span>Are you a Parent reporting an absence? Submit note here &rarr;</span>
+                </Link>
+              </div>
 
-          <div className="mt-3 pt-2 border-t border-slate-100/60 flex items-center justify-center gap-1.5 text-slate-400 text-[11px]">
-            <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
-            <span>{branding.schoolName} • Secure Cloud Portal Gateway</span>
-          </div>
+              <div className="mt-3 pt-2 border-t border-slate-100/60 flex items-center justify-center gap-1.5 text-slate-400 text-[11px]">
+                <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
+                <span>{branding.schoolName} • Secure Cloud Portal Gateway</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
