@@ -1,5 +1,6 @@
 import { Student, ClassSection, SubjectGradeRecord, AttendanceSession } from '@/types/attendance';
 import { getUnifiedAcademicReport } from './academicCalculations';
+import { getSchoolBranding } from './licensing';
 
 async function getJsPDFWithAutoTable(): Promise<any> {
   if (typeof window === 'undefined') return null;
@@ -43,6 +44,7 @@ export async function downloadStudentReportCardPDF(
   const pageWidth = doc.internal.pageSize.getWidth();
   const primaryColor: [number, number, number] = [15, 23, 42]; // Slate 900
   const accentColor: [number, number, number] = [79, 70, 229]; // Indigo 600
+  const branding = getSchoolBranding();
 
   // 1. School Header Banner
   doc.setFillColor(...primaryColor);
@@ -51,12 +53,12 @@ export async function downloadStudentReportCardPDF(
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('APEX CREST ACADEMY', pageWidth / 2, 11, { align: 'center' });
+  doc.text(branding.schoolName.toUpperCase(), pageWidth / 2, 11, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.text('Knowledge, Character, and Technological Excellence', pageWidth / 2, 16, { align: 'center' });
-  doc.text('Plot 1024, Diplomatic Zone, Garki, Abuja, FCT, Nigeria • Tel: +234 809 112 3344', pageWidth / 2, 21, { align: 'center' });
+  doc.text(branding.motto, pageWidth / 2, 16, { align: 'center' });
+  doc.text(`${branding.address} • Tel: ${branding.contactPhone}`, pageWidth / 2, 21, { align: 'center' });
 
   // Title Strip
   doc.setFillColor(241, 245, 249);
@@ -200,14 +202,15 @@ export async function downloadStudentReportCardPDF(
   doc.setFontSize(7);
   doc.setTextColor(148, 163, 184);
   doc.text(
-    `Generated digitally via AttendIQ System • Apex Crest Academy • Ref: ACA-EVAL-${Date.now().toString().slice(-6)}`,
+    `Generated digitally via AttendIQ System • ${branding.schoolName} • Ref: ${branding.shortName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase()}-EVAL-${Date.now().toString().slice(-6)}`,
     pageWidth / 2,
     285,
     { align: 'center' }
   );
 
   const cleanName = student.name.replace(/[^a-zA-Z0-9]/g, '_');
-  doc.save(`ApexCrest_ReportCard_${cleanName}_2026.pdf`);
+  const cleanSchool = branding.shortName.replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`${cleanSchool}_ReportCard_${cleanName}_2026.pdf`);
 }
 
 export async function downloadClassAttendanceDossierPDF(
@@ -227,6 +230,7 @@ export async function downloadClassAttendanceDossierPDF(
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const primaryColor: [number, number, number] = [15, 23, 42];
+  const branding = getSchoolBranding();
 
   doc.setFillColor(...primaryColor);
   doc.rect(0, 0, pageWidth, 24, 'F');
@@ -234,7 +238,7 @@ export async function downloadClassAttendanceDossierPDF(
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text('APEX CREST ACADEMY - OFFICIAL CLASS REGISTER', pageWidth / 2, 10, { align: 'center' });
+  doc.text(`${branding.schoolName.toUpperCase()} - OFFICIAL CLASS REGISTER`, pageWidth / 2, 10, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -276,5 +280,6 @@ export async function downloadClassAttendanceDossierPDF(
   });
 
   const cleanClassName = classSection.name.replace(/[^a-zA-Z0-9]/g, '_');
-  doc.save(`ApexCrest_Register_${cleanClassName}_${dateStr || 'Today'}.pdf`);
+  const cleanSchool = branding.shortName.replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`${cleanSchool}_Register_${cleanClassName}_${dateStr || 'Today'}.pdf`);
 }

@@ -17,6 +17,7 @@ import {
 import { Teacher, ClassSection } from '@/types/attendance';
 import { loginAsTeacher, loginAsAdmin, loginAsGate, AuthSession, getPortalCredentials, syncCredentialsFromCloud, wasSessionTimedOut, clearSessionTimedOut } from '@/lib/auth';
 import { getTeachers, getClasses, syncDataFromCloud } from '@/lib/storage';
+import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 interface AuthScreenProps {
   teachers: Teacher[];
@@ -32,6 +33,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [tab, setTab] = useState<'teacher' | 'admin' | 'gate'>('teacher');
   const [teacherList, setTeacherList] = useState<Teacher[]>(initialTeachers);
   const [classList, setClassList] = useState<ClassSection[]>(initialClasses);
+  const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
+
+  useEffect(() => {
+    const handleBranding = () => setBranding(getSchoolBranding());
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    return () => window.removeEventListener('attendiq:branding-updated', handleBranding);
+  }, []);
   
   const defaultTeacherId = initialTeachers.find((t) => t.name.includes('Danladi'))?.id || initialTeachers[0]?.id || '';
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(defaultTeacherId);
@@ -141,12 +149,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-300/80 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-200">
         {/* School Header */}
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white text-center border-b border-indigo-900/60">
-          <div className="w-14 h-14 bg-gradient-to-tr from-indigo-500 to-sky-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-500/30">
-            <GraduationCap className="h-8 w-8 text-white" />
+          <div className="w-14 h-14 bg-gradient-to-tr from-indigo-500 to-sky-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-500/30 text-2xl">
+            {branding.crestEmoji ? (
+              <span>{branding.crestEmoji}</span>
+            ) : (
+              <GraduationCap className="h-8 w-8 text-white" />
+            )}
           </div>
-          <h1 className="text-xl font-black tracking-tight text-white">AttendIQ School Portal</h1>
+          <h1 className="text-xl font-black tracking-tight text-white">{branding.schoolName}</h1>
           <p className="text-xs text-indigo-200/80 mt-1">
-            Apex Crest Academy • Abuja, Nigeria
+            {branding.branchLocation} • AttendIQ Portal
           </p>
         </div>
 
@@ -393,7 +405,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
           <div className="mt-3 pt-2 border-t border-slate-100/60 flex items-center justify-center gap-1.5 text-slate-400 text-[11px]">
             <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
-            <span>Apex Crest Academy • Secure Cloud Portal Gateway</span>
+            <span>{branding.schoolName} • Secure Cloud Portal Gateway</span>
           </div>
         </div>
       </div>

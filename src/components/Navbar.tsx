@@ -22,9 +22,17 @@ import {
   WifiOff,
   CheckCircle2,
   X,
+  Building,
+  Key,
 } from 'lucide-react';
 import { AlertSettings, Teacher, ClassSection } from '@/types/attendance';
 import { flushOfflineQueue } from '@/lib/storage';
+import {
+  getSchoolBranding,
+  getLicenseStatus,
+  SchoolBranding,
+  LicenseStatusResult,
+} from '@/lib/licensing';
 
 interface NavbarProps {
   currentRole: 'teacher' | 'gate' | 'admin';
@@ -46,6 +54,7 @@ interface NavbarProps {
   onSwitchToTeacher?: (teacherId?: string) => void;
   onSwitchToGate?: () => void;
   onSwitchToAdmin?: (passcode: string) => { success: boolean; message: string };
+  onOpenWhitelabelModal?: (tab?: 'branding' | 'licensing' | 'vendor') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -68,6 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSwitchToTeacher,
   onSwitchToGate,
   onSwitchToAdmin,
+  onOpenWhitelabelModal,
 }) => {
   const [todayStr, setTodayStr] = React.useState<string>('');
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
@@ -75,6 +85,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isDarkMode, setIsDarkMode] = React.useState(true);
   const [isOnline, setIsOnline] = React.useState<boolean>(true);
   const [syncNotice, setSyncNotice] = React.useState<string | null>(null);
+
+  // School Whitelabel & License State
+  const [branding, setBranding] = React.useState<SchoolBranding>(getSchoolBranding());
+  const [licenseStatus, setLicenseStatus] = React.useState<LicenseStatusResult>(getLicenseStatus());
 
   // Admin PIN / Passcode Verification Modal state
   const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
@@ -103,6 +117,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   React.useEffect(() => {
+    const handleBranding = () => {
+      setBranding(getSchoolBranding());
+      setLicenseStatus(getLicenseStatus());
+    };
+    const handleLicense = () => {
+      setLicenseStatus(getLicenseStatus());
+    };
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    window.addEventListener('attendiq:license-updated', handleLicense);
+
     try {
       setIsOnline(navigator.onLine);
       const handleOnline = () => {
@@ -161,6 +185,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('attendiq:branding-updated', handleBranding);
+      window.removeEventListener('attendiq:license-updated', handleLicense);
     };
   }, []);
 
@@ -203,8 +229,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Logo & School Name */}
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-              <GraduationCap className="h-6 w-6" />
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 text-lg">
+              {branding.crestEmoji ? (
+                <span className="text-xl select-none">{branding.crestEmoji}</span>
+              ) : (
+                <GraduationCap className="h-6 w-6" />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -212,8 +242,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   AttendIQ
                 </span>
                 <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60 hidden sm:inline-block">
-                  School Portal
+                  {branding.shortName || 'School Portal'}
                 </span>
+                {onOpenWhitelabelModal && (
+                  <button
+                    onClick={() => onOpenWhitelabelModal('licensing')}
+                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border flex items-center gap-1 transition ${licenseStatus.badgeColor} hover:opacity-85 cursor-pointer shadow-2xs`}
+                    title={`AttendIQ Subscription: ${licenseStatus.statusLabel} (${licenseStatus.validUntilFormatted}). Click to view or renew.`}
+                  >
+                    <Key className="h-2.5 w-2.5" />
+                    <span>{licenseStatus.planName.toUpperCase()} • {licenseStatus.daysRemaining > 0 ? `${licenseStatus.daysRemaining}d` : 'EXPIRED'}</span>
+                  </button>
+                )}
                 {!isOnline && (
                   <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 flex items-center gap-1 animate-pulse">
                     <WifiOff className="h-3 w-3" /> Offline Mode (Local Cache)
@@ -226,7 +266,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
               <p className="text-xs text-slate-500 hidden md:block">
-                Apex Crest Academy, Abuja (FCT) • First Term (2026/2027 Session)
+                {branding.schoolName}, {branding.branchLocation} • {branding.currentTerm}
               </p>
             </div>
           </div>
@@ -334,6 +374,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
                     <span className="hidden sm:inline">Gate Post</span>
+                  </button>
+                )}
+
+                {onOpenWhitelabelModal && (
+                  <button
+                    onClick={() => onOpenWhitelabelModal('branding')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-900 font-bold text-xs border border-violet-200 transition"
+                    title="Customize School Name, Logo & Subscription Licensing"
+                  >
+                    <Building className="h-3.5 w-3.5 text-violet-600" />
+                    <span className="hidden sm:inline">Branding & License</span>
                   </button>
                 )}
 

@@ -36,6 +36,14 @@ import {
   INITIAL_ALERT_SETTINGS,
   INITIAL_TEACHER_ANALYTICS,
 } from '@/lib/initialData';
+import { WhitelabelModal } from '@/components/WhitelabelModal';
+import {
+  getSchoolBranding,
+  getLicenseStatus,
+  SchoolBranding,
+  LicenseStatusResult,
+  DEFAULT_SCHOOL_BRANDING,
+} from '@/lib/licensing';
 import {
   Student,
   ClassSection,
@@ -103,7 +111,11 @@ export default function Home() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isWhitelabelModalOpen, setIsWhitelabelModalOpen] = useState(false);
+  const [whitelabelModalTab, setWhitelabelModalTab] = useState<'branding' | 'licensing' | 'vendor'>('branding');
   const [databaseModalTab, setDatabaseModalTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers'>('pupils');
+  const [schoolBranding, setSchoolBranding] = useState<SchoolBranding>(DEFAULT_SCHOOL_BRANDING);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatusResult>(getLicenseStatus());
 
   // Sync from storage (hydrates any saved local edits)
   const syncData = useCallback(() => {
@@ -151,6 +163,18 @@ export default function Home() {
     });
     syncCredentialsFromCloud();
 
+    const handleBranding = () => {
+      setSchoolBranding(getSchoolBranding());
+      setLicenseStatus(getLicenseStatus());
+    };
+    const handleLicense = () => {
+      setLicenseStatus(getLicenseStatus());
+    };
+    setSchoolBranding(getSchoolBranding());
+    setLicenseStatus(getLicenseStatus());
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    window.addEventListener('attendiq:license-updated', handleLicense);
+
     const handleStorageUpdate = () => {
       syncData();
       const activeSession = getAuthSession();
@@ -178,6 +202,8 @@ export default function Home() {
       window.removeEventListener('attend-iq-storage-update', handleStorageUpdate);
       window.removeEventListener('attend-iq-auth-update', handleStorageUpdate);
       window.removeEventListener('storage', handleStorageUpdate);
+      window.removeEventListener('attendiq:branding-updated', handleBranding);
+      window.removeEventListener('attendiq:license-updated', handleLicense);
     };
   }, [syncData]);
 
@@ -293,17 +319,73 @@ export default function Home() {
         onSwitchToTeacher={handleAdminSwitchToTeacher}
         onSwitchToGate={handleAdminSwitchToGate}
         onSwitchToAdmin={handleSwitchToAdmin}
+        onOpenWhitelabelModal={(tab) => {
+          if (tab) setWhitelabelModalTab(tab);
+          setIsWhitelabelModalOpen(true);
+        }}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* LICENSE EXPIRED ALERT BANNER */}
+        {licenseStatus.isExpired && (
+          <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-rose-600 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl border border-rose-500 animate-in fade-in">
+            <div className="flex items-center gap-3.5">
+              <span className="p-2.5 rounded-2xl bg-white/20 text-white text-xl">🚨</span>
+              <div>
+                <h4 className="font-black text-sm uppercase tracking-wide">
+                  AttendIQ Subscription Expired — {schoolBranding.schoolName}
+                </h4>
+                <p className="text-xs text-rose-100 mt-0.5">
+                  Your institution&apos;s commercial license expired on {licenseStatus.validUntilFormatted}. System is operating under read-only mode for audit safety.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setWhitelabelModalTab('licensing');
+                setIsWhitelabelModalOpen(true);
+              }}
+              className="px-5 py-2.5 rounded-2xl bg-white text-rose-950 font-black text-xs hover:bg-rose-50 transition shrink-0 cursor-pointer shadow-md active:scale-95"
+            >
+              Enter Renewal License Key &rarr;
+            </button>
+          </div>
+        )}
+
+        {/* LICENSE EXPIRING SOON BANNER */}
+        {!licenseStatus.isExpired && licenseStatus.isExpiringSoon && (
+          <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-amber-500 text-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg border border-amber-400 animate-in fade-in">
+            <div className="flex items-center gap-3.5">
+              <span className="p-2.5 rounded-2xl bg-slate-950/15 text-slate-950 text-xl">⚠️</span>
+              <div>
+                <h4 className="font-black text-sm uppercase tracking-wide">
+                  Subscription Renewal Reminder — {licenseStatus.daysRemaining} Days Remaining
+                </h4>
+                <p className="text-xs text-slate-900 mt-0.5">
+                  The {licenseStatus.planName.toUpperCase()} license for {schoolBranding.schoolName} expires on {licenseStatus.validUntilFormatted}. Please renew in advance to avoid disruption.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setWhitelabelModalTab('licensing');
+                setIsWhitelabelModalOpen(true);
+              }}
+              className="px-5 py-2.5 rounded-2xl bg-slate-950 text-white font-bold text-xs hover:bg-slate-900 transition shrink-0 cursor-pointer shadow-md active:scale-95"
+            >
+              Manage & Renew &rarr;
+            </button>
+          </div>
+        )}
+
         {currentRole === 'teacher' ? (
           <div>
             {/* School Motto & Academic Context Header */}
             <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 to-blue-600 text-white font-bold flex items-center justify-center text-lg shadow-sm">
-                  📚
+                  {schoolBranding.crestEmoji || '📚'}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -315,7 +397,7 @@ export default function Home() {
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">
-                    Apex Crest Academy • First Term (2026/2027) • Class Teacher: <strong className="text-slate-800">{activeTeacher?.name}</strong>
+                    {schoolBranding.schoolName} • {schoolBranding.currentTerm} • Class Teacher: <strong className="text-slate-800">{activeTeacher?.name}</strong>
                   </p>
                 </div>
               </div>
@@ -572,6 +654,10 @@ export default function Home() {
             onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
             onSelectStudentProfile={(student) => setSelectedStudentForProfile(student)}
             onDataUpdated={syncData}
+            onOpenWhitelabelModal={(tab) => {
+              if (tab) setWhitelabelModalTab(tab);
+              setIsWhitelabelModalOpen(true);
+            }}
           />
         )}
       </main>
@@ -580,7 +666,7 @@ export default function Home() {
       <footer className="bg-white border-t border-slate-200/80 py-6 text-center text-xs text-slate-500 no-print">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>AttendIQ &bull; Cloud School Attendance & Management System</span>
-          <span>Apex Crest Academy &bull; Abuja (FCT), Nigeria</span>
+          <span>{schoolBranding.schoolName} &bull; {schoolBranding.branchLocation}</span>
         </div>
       </footer>
 
@@ -634,6 +720,18 @@ export default function Home() {
         onClose={() => setIsAuditModalOpen(false)}
         auditLogs={auditLogs}
         onDataUpdated={syncData}
+      />
+
+      {/* Institutional Whitelabeling & Commercial Subscription Licensing Console */}
+      <WhitelabelModal
+        isOpen={isWhitelabelModalOpen}
+        onClose={() => setIsWhitelabelModalOpen(false)}
+        defaultTab={whitelabelModalTab}
+        onBrandingUpdated={() => {
+          setSchoolBranding(getSchoolBranding());
+          setLicenseStatus(getLicenseStatus());
+          syncData();
+        }}
       />
     </div>
   );

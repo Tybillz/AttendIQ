@@ -18,6 +18,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Student, ClassSection } from '@/types/attendance';
+import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 export interface GateArrivalEntry {
   id: string;
@@ -59,6 +60,13 @@ export const GateCheckIn: React.FC<GateCheckInProps> = ({
   });
 
   const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
+  const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
+
+  useEffect(() => {
+    const handleBranding = () => setBranding(getSchoolBranding());
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    return () => window.removeEventListener('attendiq:branding-updated', handleBranding);
+  }, []);
 
   // Live digital clock
   useEffect(() => {
@@ -141,13 +149,13 @@ export const GateCheckIn: React.FC<GateCheckInProps> = ({
   const getWhatsAppLink = (entry: GateArrivalEntry) => {
     const cleanPhone = entry.parentPhone.replace(/[^0-9]/g, '');
     const message = encodeURIComponent(
-      `*Apex Crest Academy, Abuja (FCT)*\n` +
+      `*${branding.schoolName}, ${branding.branchLocation}*\n` +
       `*Gate Arrival & Safety Notification*\n\n` +
       `Dear ${entry.parentName},\n` +
       `This is to confirm that your child/ward *${entry.studentName}* (${entry.className}) safely arrived at the school gate today at *${entry.arrivalTime}*.\n` +
       `• Recorded Reason: ${entry.reason}\n\n` +
       `Thank you for entrusting us with their safety.\n` +
-      `_Apex Crest Academy School Security Post_`
+      `_${branding.schoolName} School Security Post_`
     );
     return `https://wa.me/${cleanPhone}?text=${message}`;
   };
@@ -182,7 +190,7 @@ export const GateCheckIn: React.FC<GateCheckInProps> = ({
                 <ShieldAlert className="h-3.5 w-3.5" /> Security Post & Gate Register
               </span>
               <span className="text-xs text-amber-200/80">
-                Apex Crest Academy Gate 1
+                {branding.schoolName} Gate 1
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">

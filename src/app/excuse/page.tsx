@@ -20,6 +20,7 @@ import {
 import { Student, ParentExcuse } from '@/types/attendance';
 import { getStudents, addParentExcuse, syncDataFromCloud } from '@/lib/storage';
 import { generateWhatsAppUrl } from '@/lib/notifications';
+import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 export default function ParentExcusePage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -34,6 +35,13 @@ export default function ParentExcusePage() {
   const [medicalNoteAttached, setMedicalNoteAttached] = useState(false);
   const [submittedExcuse, setSubmittedExcuse] = useState<ParentExcuse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
+
+  useEffect(() => {
+    const handleBranding = () => setBranding(getSchoolBranding());
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    return () => window.removeEventListener('attendiq:branding-updated', handleBranding);
+  }, []);
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -105,7 +113,7 @@ export default function ParentExcusePage() {
             <span>Return to School Portal</span>
           </Link>
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-            Apex Crest Academy • Parent Portal
+            {branding.schoolName} • Parent Portal
           </span>
         </div>
 
@@ -153,8 +161,8 @@ export default function ParentExcusePage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <a
                 href={generateWhatsAppUrl(
-                  '+2348091123344',
-                  `*Apex Crest Academy Parent Absence Note*\nPupil: ${submittedExcuse.studentName}\nRef: ${submittedExcuse.id}\nReason: ${submittedExcuse.reasonCategory}\nDate: ${submittedExcuse.startDate}\nExplanation: ${submittedExcuse.explanation}`
+                  branding.contactPhone.replace(/\D/g, '') || '+2348091123344',
+                  `*${branding.schoolName} Parent Absence Note*\nPupil: ${submittedExcuse.studentName}\nRef: ${submittedExcuse.id}\nReason: ${submittedExcuse.reasonCategory}\nDate: ${submittedExcuse.startDate}\nExplanation: ${submittedExcuse.explanation}`
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -191,7 +199,7 @@ export default function ParentExcusePage() {
                     Parent Absence & Doctor&apos;s Note Portal
                   </h1>
                   <p className="text-xs text-indigo-200/80 mt-0.5">
-                    Apex Crest Academy • Official Student Welfare & Attendance Registry
+                    {branding.schoolName} • Official Student Welfare & Attendance Registry
                   </p>
                 </div>
               </div>

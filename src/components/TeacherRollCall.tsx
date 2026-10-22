@@ -35,6 +35,7 @@ import {
   AttendanceSession,
   AlertSettings,
 } from '@/types/attendance';
+import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 import { INITIAL_ALERT_SETTINGS } from '@/lib/initialData';
 import { calculateStudentAttendanceMetrics } from '@/lib/academicCalculations';
 import {
@@ -80,6 +81,13 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
   const [activeNotePupilId, setActiveNotePupilId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [selectedFlag, setSelectedFlag] = useState<PupilFlag>('late arrival');
+  const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
+
+  React.useEffect(() => {
+    const handleBranding = () => setBranding(getSchoolBranding());
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    return () => window.removeEventListener('attendiq:branding-updated', handleBranding);
+  }, []);
 
   const alertSettings: AlertSettings = React.useMemo(() => {
     try {
@@ -717,7 +725,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                             <a
                               href={generateWhatsAppUrl(
                                 student.parentPhone,
-                                `Hello ${student.parentName}, this is a notice from Apex Crest Academy regarding ${student.name} in ${currentClass?.name || 'class'}.`
+                                `Hello ${student.parentName}, this is a notice from ${branding.schoolName} regarding ${student.name} in ${currentClass?.name || 'class'}.`
                               )}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -865,7 +873,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                     {isAbsent && (
                       <a
                         href={`https://wa.me/${student.parentPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Class Teacher'} from Apex Crest Academy, Abuja.\n\nYour child, ${student.name} (${student.rollNumber}), was marked ABSENT at morning roll call today (${selectedDate}, 8:15 AM).\n\nPlease kindly confirm if ${student.name} is safe at home.\n\nThank you,\nSchool Administration`
+                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Class Teacher'} from ${branding.schoolName}, ${branding.branchLocation}.\n\nYour child, ${student.name} (${student.rollNumber}), was marked ABSENT at morning roll call today (${selectedDate}, 8:15 AM).\n\nPlease kindly confirm if ${student.name} is safe at home.\n\nThank you,\nSchool Administration`
                         )}`}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -881,7 +889,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                     {isLate && (
                       <a
                         href={`https://wa.me/${student.parentPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Class Teacher'} from Apex Crest Academy, Abuja.\n\nNotice: Your child, ${student.name} (${student.rollNumber}), arrived LATE to class today (${selectedDate}, ${entry?.markedAt || 'after morning assembly'}).\n\nPlease ensure ${student.name} departs home earlier to avoid missing vital morning instruction.\n\nThank you,\nSchool Administration`
+                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Class Teacher'} from ${branding.schoolName}, ${branding.branchLocation}.\n\nNotice: Your child, ${student.name} (${student.rollNumber}), arrived LATE to class today (${selectedDate}, ${entry?.markedAt || 'after morning assembly'}).\n\nPlease ensure ${student.name} departs home earlier to avoid missing vital morning instruction.\n\nThank you,\nSchool Administration`
                         )}`}
                         target="_blank"
                         rel="noopener noreferrer"

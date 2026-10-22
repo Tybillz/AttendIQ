@@ -39,6 +39,7 @@ import {
 import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
 import { generateWhatsAppUrl } from '@/lib/notifications';
 import { calculateStudentAttendanceMetrics, calculateGradeAndRemark } from '@/lib/academicCalculations';
+import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 interface StudentProfileModalProps {
   student: Student | null;
@@ -56,6 +57,13 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   onStudentUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<'academics' | 'attendance' | 'notes' | 'edit' | 'id_card' | 'terminal_report'>('academics');
+  const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
+
+  React.useEffect(() => {
+    const handleBranding = () => setBranding(getSchoolBranding());
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    return () => window.removeEventListener('attendiq:branding-updated', handleBranding);
+  }, []);
 
   // New academic record state
   const [showAddExam, setShowAddExam] = useState(false);
@@ -294,7 +302,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       parentEmail: student.parentEmail,
       type: 'absence_notice',
       channel: 'SMS',
-      message: `Dear ${student.parentName}, this is a notice from Apex Crest Academy regarding ${student.name}. Current attendance rate is ${attendanceRate}%.`,
+      message: `Dear ${student.parentName}, this is a notice from ${branding.schoolName} regarding ${student.name}. Current attendance rate is ${attendanceRate}%.`,
       triggerReason: 'Teacher direct message from profile',
     });
 
@@ -407,7 +415,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   <a
                     href={generateWhatsAppUrl(
                       student.parentPhone,
-                      `Hello ${student.parentName}, this is a notice from Apex Crest Academy regarding your child ${student.name} (${classNameTitle}). Current attendance compliance is ${attendanceRate}%.`
+                      `Hello ${student.parentName}, this is a notice from ${branding.schoolName} regarding your child ${student.name} (${classNameTitle}). Current attendance compliance is ${attendanceRate}%.`
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -507,7 +515,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               type="button"
               onClick={() => downloadStudentReportCardPDF(activeStudent, { id: activeStudent.classId, name: classNameTitle } as any)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition shadow-xs cursor-pointer"
-              title="Download official PDF report card with Apex Crest letterhead"
+              title={`Download official PDF report card with ${branding.shortName} letterhead`}
             >
               <FileText className="h-3.5 w-3.5" />
               <span>Download PDF</span>
@@ -1194,13 +1202,17 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   <div className="border-b border-white/20 pb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-7 w-7 rounded-lg bg-white/10 flex items-center justify-center text-amber-300">
-                        <GraduationCap className="h-4 w-4" />
+                        {branding.crestEmoji ? (
+                          <span className="text-sm select-none">{branding.crestEmoji}</span>
+                        ) : (
+                          <GraduationCap className="h-4 w-4" />
+                        )}
                       </div>
                       <div>
                         <h4 className="text-[11px] font-black tracking-wider uppercase text-white leading-tight">
-                          Apex Crest Academy
+                          {branding.schoolName}
                         </h4>
-                        <p className="text-[8px] text-indigo-200 tracking-wider uppercase">Abuja (FCT), Nigeria &bull; Student ID</p>
+                        <p className="text-[8px] text-indigo-200 tracking-wider uppercase">{branding.branchLocation} &bull; Student ID</p>
                       </div>
                     </div>
                     <span className="text-[9px] font-bold bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded border border-indigo-400/30">
@@ -1235,7 +1247,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   {/* Card Footer */}
                   <div className="border-t border-white/20 pt-1 flex items-center justify-between text-[8px] text-slate-300">
                     <span>Bearer Signature</span>
-                    <span className="font-serif italic text-indigo-200">Principal Signature: V. Adebayo</span>
+                    <span className="font-serif italic text-indigo-200">Principal Signature: {branding.principalName}</span>
                   </div>
                 </div>
 
@@ -1258,12 +1270,12 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[9px] font-bold uppercase">Campus Address:</span>
-                      <span>Plot 104, Diplomatic Zone, Garki 2, Abuja (FCT)</span>
+                      <span>{branding.address}</span>
                     </div>
                   </div>
 
                   <div className="border-t border-slate-700 pt-1.5 text-[8px] text-slate-400 text-center leading-tight">
-                    This identity card remains the property of Apex Crest Academy. If found, please return to the school administration office or call {student.parentPhone}.
+                    This identity card remains the property of {branding.schoolName}. If found, please return to the school administration office or call {student.parentPhone}.
                   </div>
                 </div>
               </div>

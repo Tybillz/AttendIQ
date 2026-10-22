@@ -30,6 +30,7 @@ import {
   RefreshCw,
   LogOut,
   Shuffle,
+  Building,
 } from 'lucide-react';
 import {
   Student,
@@ -64,6 +65,7 @@ import {
   randomizeAllTeacherPins,
   generateRandomPin,
 } from '@/lib/auth';
+import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 interface AdminDashboardProps {
   students: Student[];
@@ -78,6 +80,7 @@ interface AdminDashboardProps {
   onOpenSettingsModal: () => void;
   onSelectStudentProfile: (student: Student) => void;
   onDataUpdated?: () => void;
+  onOpenWhitelabelModal?: (tab?: 'branding' | 'licensing' | 'vendor') => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -92,7 +95,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenDatabaseModal,
   onOpenSettingsModal,
   onSelectStudentProfile,
+  onOpenWhitelabelModal,
 }) => {
+  const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [activeTab, setActiveTab] = useState<'overview' | 'chronic_absentees' | 'teacher_analytics' | 'reports' | 'access_control'>('overview');
   const [selectedBroadsheetClass, setSelectedBroadsheetClass] = useState<string>('all');
   const [selectedTerm, setSelectedTerm] = useState<string>('First Term (2026/2027 Session)');
@@ -142,6 +147,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     syncPerimeterConfigFromCloud().then(() => {
       loadClockRecords();
     });
+
+    const handleBrandingUpdated = () => {
+      setBranding(getSchoolBranding());
+    };
+    window.addEventListener('attendiq:branding-updated', handleBrandingUpdated);
+    return () => {
+      window.removeEventListener('attendiq:branding-updated', handleBrandingUpdated);
+    };
 
     window.addEventListener('attend-iq-teacher-clock-update', loadClockRecords);
     window.addEventListener('attend-iq-perimeter-update', loadClockRecords);
@@ -319,7 +332,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       `⚠️ *Confidentiality Notice:* Please keep your PIN secure and do not share it.\n\n` +
       `Warm regards,\n` +
       `*Office of the School Administrator*\n` +
-      `Apex Crest Academy, Abuja`;
+      `${branding.schoolName}, ${branding.branchLocation}`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(message);
@@ -351,7 +364,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       const currentPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
       return (
-        `*Apex Crest Academy — Staff Credentials*\n` +
+        `*${branding.schoolName} — Staff Credentials*\n` +
         `👤 Teacher: ${teacher.name}\n` +
         `📱 Phone: ${teacher.phone || 'N/A'}\n` +
         `🏫 Class: ${homeroomDisplay}\n` +
@@ -482,7 +495,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       : '• None (Good standing across all sections)';
 
     const text =
-      `*Apex Crest Academy, Abuja (FCT)*\n` +
+      `*${branding.schoolName}, ${branding.branchLocation}*\n` +
       `*Principal & Management Weekly Attendance Summary*\n` +
       `📅 Date: ${selectedDate}\n\n` +
       `📊 *Overall School Performance:*\n` +
@@ -543,6 +556,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <Phone className="h-4 w-4" />
               <span>WhatsApp Summary</span>
             </button>
+
+            {onOpenWhitelabelModal && (
+              <button
+                onClick={() => onOpenWhitelabelModal('branding')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md active:scale-95 transition"
+                title="School Branding, Whitelabeling & Subscription Licensing"
+              >
+                <Building className="h-4 w-4" />
+                <span>Branding & License</span>
+              </button>
+            )}
 
             <button
               onClick={() => onOpenDatabaseModal('teachers')}
@@ -1263,7 +1287,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold mb-2">
                   <FileSpreadsheet className="h-3.5 w-3.5" />
-                  <span>Apex Crest Academy • Nigerian Term Master Result & Attendance Broadsheet</span>
+                  <span>{branding.schoolName} • Nigerian Term Master Result & Attendance Broadsheet</span>
                 </div>
                 <h3 className="text-xl font-black tracking-tight text-white">
                   End-of-Term Master Result & Attendance Broadsheet

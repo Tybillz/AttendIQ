@@ -23,6 +23,7 @@ import {
 import { Student, ClassSection, SubjectGradeRecord, TerminalEvaluation } from '@/types/attendance';
 import { getSubjectGrades, updateTerminalEvaluation } from '@/lib/storage';
 import { getUnifiedAcademicReport } from '@/lib/academicCalculations';
+import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 interface TerminalReportSheetProps {
   student: Student;
@@ -67,6 +68,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
   onStudentUpdated,
 }) => {
   // Evaluation & Remarks State
+  const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [isEditingEvaluation, setIsEditingEvaluation] = useState(false);
   const [evaluation, setEvaluation] = useState<TerminalEvaluation>(() => {
     return student.terminalEvaluation || getDefaultEvaluation(student.name);
@@ -78,6 +80,12 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
       setEvaluation(student.terminalEvaluation || getDefaultEvaluation(student.name));
     }
   }, [student]);
+
+  useEffect(() => {
+    const handleBranding = () => setBranding(getSchoolBranding());
+    window.addEventListener('attendiq:branding-updated', handleBranding);
+    return () => window.removeEventListener('attendiq:branding-updated', handleBranding);
+  }, []);
 
   // Unified calculation engine guarantees zero discrepancies with Student Profile and PDF Report Card
   const reportData = React.useMemo(() => {
@@ -524,18 +532,22 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
         {/* School Header & Crest */}
         <div className="border-b-2 border-slate-900 pb-4 mb-4 text-center">
           <div className="flex items-center justify-center gap-3 mb-2">
-            <div className="h-14 w-14 rounded-2xl bg-indigo-900 text-white flex items-center justify-center shadow-md">
-              <GraduationCap className="h-9 w-9 text-amber-400" />
+            <div className="h-14 w-14 rounded-2xl bg-indigo-900 text-white flex items-center justify-center shadow-md text-2xl">
+              {branding.crestEmoji ? (
+                <span>{branding.crestEmoji}</span>
+              ) : (
+                <GraduationCap className="h-9 w-9 text-amber-400" />
+              )}
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-slate-950">
-                Apex Crest Academy
+                {branding.schoolName}
               </h1>
               <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
-                Government Approved • Abuja (FCT), Nigeria
+                Government Approved • {branding.branchLocation}
               </p>
               <p className="text-[10px] text-slate-500">
-                Plot 412, Cadastral Zone B06, Mabushi District, Abuja • Tel: +234 803 234 5678
+                {branding.address} • Tel: {branding.contactPhone}
               </p>
             </div>
           </div>
@@ -560,7 +572,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
           </div>
           <div>
             <span className="text-slate-500 block text-[9px] uppercase font-bold">Term / Session</span>
-            <span className="font-bold text-slate-950">First Term (2026/2027)</span>
+            <span className="font-bold text-slate-950">{branding.currentTerm}</span>
           </div>
         </div>
 
@@ -776,9 +788,9 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[10px] font-bold text-slate-600 pt-2 border-t border-slate-200">
             <span>
-              Next Term Resumption Date: <strong>{evaluation.nextTermResumptionDate || 'Monday, 11th January 2027'}</strong>
+              Next Term Resumption Date: <strong>{evaluation.nextTermResumptionDate || branding.resumptionDate || 'Monday, 11th January 2027'}</strong>
             </span>
-            <span>Issued by Apex Crest Academy Academic Registry • Abuja (FCT)</span>
+            <span>Issued by {branding.schoolName} Academic Registry • {branding.branchLocation}</span>
           </div>
         </div>
       </div>
