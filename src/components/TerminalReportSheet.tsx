@@ -166,8 +166,9 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
   const grandTotal = computedSubjects.reduce((sum, s) => sum + s.total, 0);
   const maxPossible = computedSubjects.length * 100;
   const termAverage = maxPossible > 0 ? (grandTotal / computedSubjects.length).toFixed(1) : '0';
-
-  const attendanceRate = totalSessionsHeld > 0 ? ((student.totalPresent / totalSessionsHeld) * 100).toFixed(1) : '100.0';
+  const actualTrackedDays = (student.totalPresent || 0) + (student.totalAbsent || 0);
+  const effectiveSessionsHeld = actualTrackedDays > 0 ? actualTrackedDays : (totalSessionsHeld || 60);
+  const attendanceRate = effectiveSessionsHeld > 0 ? Math.round((student.totalPresent / effectiveSessionsHeld) * 100) : 100;
 
   const handlePrintTrigger = () => {
     if (onPrint) {
@@ -645,7 +646,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-emerald-50/70 border border-emerald-300 mb-4 text-[11px]">
           <div>
             <span className="text-emerald-900 block text-[9px] uppercase font-bold">School Days Held</span>
-            <span className="font-bold text-slate-900">{totalSessionsHeld} Days</span>
+            <span className="font-bold text-slate-900">{effectiveSessionsHeld} Days</span>
           </div>
           <div>
             <span className="text-emerald-900 block text-[9px] uppercase font-bold">Days Present</span>

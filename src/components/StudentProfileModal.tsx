@@ -1281,7 +1281,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             <TerminalReportSheet
               student={activeStudent}
               className={classNameTitle}
-              totalSessionsHeld={60}
+              totalSessionsHeld={totalDays > 0 ? totalDays : 60}
               onStudentUpdated={() => {
                 onStudentUpdated();
                 const fresh = getStudents().find((s) => s.id === activeStudent.id);
