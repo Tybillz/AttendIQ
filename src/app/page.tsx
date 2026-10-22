@@ -194,6 +194,9 @@ export default function Home() {
       setAuthSession(null);
     });
 
+    const handleOpenAuditModal = () => setIsAuditModalOpen(true);
+    window.addEventListener('attendiq:open-audit-modal', handleOpenAuditModal);
+
     window.addEventListener('attend-iq-storage-update', handleStorageUpdate);
     window.addEventListener('attend-iq-auth-update', handleStorageUpdate);
     window.addEventListener('storage', handleStorageUpdate);
@@ -204,6 +207,7 @@ export default function Home() {
       window.removeEventListener('storage', handleStorageUpdate);
       window.removeEventListener('attendiq:branding-updated', handleBranding);
       window.removeEventListener('attendiq:license-updated', handleLicense);
+      window.removeEventListener('attendiq:open-audit-modal', handleOpenAuditModal);
     };
   }, [syncData]);
 

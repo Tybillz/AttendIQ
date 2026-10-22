@@ -31,7 +31,12 @@ import {
   LogOut,
   Shuffle,
   Building,
+  BookOpen,
+  HelpCircle,
+  ArrowRight,
+  Compass,
 } from 'lucide-react';
+import { AdminManualModal } from './AdminManualModal';
 import {
   Student,
   ClassSection,
@@ -99,6 +104,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [activeTab, setActiveTab] = useState<'overview' | 'chronic_absentees' | 'teacher_analytics' | 'reports' | 'access_control'>('overview');
+  const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
   const [selectedBroadsheetClass, setSelectedBroadsheetClass] = useState<string>('all');
   const [selectedTerm, setSelectedTerm] = useState<string>('First Term (2026/2027 Session)');
   const [broadsheetMode, setBroadsheetMode] = useState<'comprehensive' | 'attendance_only'>('comprehensive');
@@ -549,6 +555,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <div className="flex flex-wrap items-center gap-2.5">
             <button
+              onClick={() => setIsManualModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-600 hover:to-indigo-800 text-white font-black text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition cursor-pointer"
+              title="Open Complete Administrator Console Navigation Manual & Sitemap"
+            >
+              <BookOpen className="h-4 w-4 text-sky-200" />
+              <span>Admin Manual & Guide</span>
+            </button>
+
+            <button
               onClick={handleSendPrincipalWhatsAppSummary}
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md active:scale-95 transition"
               title="Share executive summary directly via WhatsApp"
@@ -601,6 +616,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Lost User Navigation Beacon */}
+      <div className="bg-gradient-to-r from-indigo-50 via-sky-50 to-indigo-50 border border-indigo-200/90 rounded-2xl p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <Compass className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-indigo-950">New to the Administrator Console or looking for where to find a feature?</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-200/80 text-indigo-900">
+                Operator Help
+              </span>
+            </div>
+            <p className="text-indigo-800/90 text-[11px] mt-0.5">
+              Open the interactive guide for step-by-step instructions on daily roll calls, parent alerts, teacher GPS geofencing, NERDC broadsheets, and PIN management.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setIsManualModalOpen(true)}
+          className="self-start sm:self-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm active:scale-95 transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          <span>Open Navigation Manual</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* KPI Highlight Cards */}
@@ -730,12 +773,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <KeyRound className="h-4 w-4 text-amber-600" /> Staff PINs, Passwords & Geofence
         </button>
-        <button
-          onClick={() => onOpenDatabaseModal('teachers')}
-          className="py-3.5 px-4 font-bold text-xs border-b-2 border-transparent text-indigo-600 hover:text-indigo-900 hover:border-indigo-300 transition flex items-center gap-1.5 sm:ml-auto"
-        >
-          <GraduationCap className="h-4 w-4" /> Teachers Roster & Assignments ({teachers.length}) &rarr;
-        </button>
+        <div className="flex items-center gap-1 sm:ml-auto">
+          <button
+            onClick={() => onOpenDatabaseModal('teachers')}
+            className="py-3.5 px-3 font-bold text-xs border-b-2 border-transparent text-indigo-600 hover:text-indigo-900 hover:border-indigo-300 transition flex items-center gap-1.5"
+          >
+            <GraduationCap className="h-4 w-4" /> Teachers Roster ({teachers.length})
+          </button>
+          <button
+            onClick={() => setIsManualModalOpen(true)}
+            className="py-3.5 px-3 font-black text-xs border-b-2 border-transparent text-sky-700 hover:text-sky-950 hover:border-sky-400 transition flex items-center gap-1.5"
+            title="Open Interactive Navigation Manual"
+          >
+            <BookOpen className="h-4 w-4 text-sky-600" /> Manual Guide &rarr;
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: OVERVIEW & CLASS TRENDS */}
@@ -2143,6 +2195,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Interactive Administrator Navigation & Operations Manual Modal */}
+      <AdminManualModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        onNavigateTab={(tab) => setActiveTab(tab)}
+        onOpenDatabaseModal={onOpenDatabaseModal}
+        onOpenSettingsModal={onOpenSettingsModal}
+        onOpenWhitelabelModal={onOpenWhitelabelModal}
+        onOpenAuditModal={() => {
+          window.dispatchEvent(new CustomEvent('attendiq:open-audit-modal'));
+        }}
+      />
     </div>
   );
 };
