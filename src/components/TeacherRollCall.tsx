@@ -36,6 +36,7 @@ import {
   AlertSettings,
 } from '@/types/attendance';
 import { INITIAL_ALERT_SETTINGS } from '@/lib/initialData';
+import { calculateStudentAttendanceMetrics } from '@/lib/academicCalculations';
 import {
   recordAttendanceEntry,
   autoTagUnmarkedPupilsAbsent,
@@ -616,9 +617,8 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
             const isAddingNote = activeNotePupilId === student.id;
             const excuse = getExcuseForStudentOnDate(student.id, selectedDate);
 
-            const totalStudentDays = student.totalPresent + student.totalAbsent;
-            const studentRate =
-              totalStudentDays > 0 ? Math.round((student.totalPresent / totalStudentDays) * 100) : 100;
+            const { attendanceRate: studentRate, totalDays: totalStudentDays } =
+              calculateStudentAttendanceMetrics(student);
 
             return (
               <div

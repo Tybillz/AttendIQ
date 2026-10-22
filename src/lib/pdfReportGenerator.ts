@@ -1,4 +1,5 @@
 import { Student, ClassSection, SubjectGradeRecord, AttendanceSession } from '@/types/attendance';
+import { getUnifiedAcademicReport } from './academicCalculations';
 
 async function getJsPDFWithAutoTable(): Promise<any> {
   if (typeof window === 'undefined') return null;
@@ -26,11 +27,12 @@ async function getJsPDFWithAutoTable(): Promise<any> {
 
 export async function downloadStudentReportCardPDF(
   student: Student,
-  classSection?: ClassSection,
-  grades?: SubjectGradeRecord[]
+  classSection?: ClassSection
 ): Promise<void> {
   const JsPDFClass = await getJsPDFWithAutoTable();
   if (!JsPDFClass) return;
+
+  const report = getUnifiedAcademicReport(student, classSection?.name, classSection);
 
   const doc = new JsPDFClass({
     orientation: 'portrait',
@@ -72,81 +74,45 @@ export async function downloadStudentReportCardPDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...primaryColor);
-  doc.text(`PUPIL NAME: ${student.name.toUpperCase()}`, 16, 48);
-  doc.text(`ADMISSION / ROLL NO: ${student.rollNumber}`, 16, 55);
-  doc.text(`CLASS: ${classSection?.name || 'Class Room'}`, 16, 62);
+  doc.text(`PUPIL NAME: ${report.student.name.toUpperCase()}`, 16, 48);
+  doc.text(`ADMISSION / ROLL NO: ${report.student.rollNumber}`, 16, 55);
+  doc.text(`CLASS: ${report.className}`, 16, 62);
 
-  doc.text(`GENDER: ${student.gender || 'Not Specified'}`, 110, 48);
+  doc.text(`GENDER: ${report.student.gender || 'Not Specified'}`, 110, 48);
   doc.text(`ACADEMIC SESSION: 2026/2027`, 110, 55);
   doc.text(`TERM: First Term`, 110, 62);
 
-  doc.text(`PARENT PHONE: ${student.parentPhone || 'N/A'}`, 110, 68);
+  doc.text(`PARENT PHONE: ${report.student.parentPhone || 'N/A'}`, 110, 68);
   doc.text(`DATE ISSUED: ${new Date().toLocaleDateString('en-GB')}`, 16, 68);
 
-  // 3. Attendance Summary Box
-  const totalDays = (student.totalPresent || 0) + (student.totalAbsent || 0);
-  const attRate = totalDays > 0 ? Math.round(((student.totalPresent || 0) / totalDays) * 100) : 100;
-
+  // 3. Attendance Summary Box (Zero discrepancy, identical to profile card)
   doc.setFillColor(248, 250, 252);
   doc.roundedRect(12, 74, pageWidth - 24, 16, 1.5, 1.5, 'FD');
 
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text(`TIMES SCHOOL OPENED: ${totalDays > 0 ? totalDays : 60}`, 16, 81);
-  doc.text(`TIMES PRESENT: ${student.totalPresent || 0}`, 75, 81);
-  doc.text(`TIMES ABSENT: ${student.totalAbsent || 0}`, 125, 81);
-  doc.text(`ATTENDANCE RATE: ${attRate}%`, 165, 81);
+  doc.text(`TIMES SCHOOL OPENED: ${report.attendance.totalDays}`, 16, 81);
+  doc.text(`TIMES PRESENT: ${report.attendance.totalPresent}`, 75, 81);
+  doc.text(`TIMES ABSENT: ${report.attendance.totalAbsent}`, 125, 81);
+  doc.text(`ATTENDANCE RATE: ${report.attendance.attendanceRateFormatted}`, 165, 81);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Punctuality Status: ${attRate >= 85 ? 'Exemplary Attendance' : attRate >= 70 ? 'Moderate Attendance' : 'Requires Administrative Attention'}`, 16, 86);
+  doc.text(`Punctuality Status: ${report.attendance.attendanceRate >= 85 ? 'Exemplary Attendance' : report.attendance.attendanceRate >= 70 ? 'Moderate Attendance' : 'Requires Administrative Attention'}`, 16, 86);
 
   // 4. Academic Evaluation Table
-  const defaultSubjects = [
-    { subject: 'Mathematics', ca1: 14, ca2: 13, assignment: 9, exam: 54, total: 90, grade: 'A', remark: 'Excellent' },
-    { subject: 'English Language', ca1: 13, ca2: 14, assignment: 8, exam: 50, total: 85, grade: 'A', remark: 'Excellent' },
-    { subject: 'Basic Science & Tech', ca1: 12, ca2: 11, assignment: 9, exam: 48, total: 80, grade: 'A', remark: 'Distinction' },
-    { subject: 'Social Studies', ca1: 11, ca2: 12, assignment: 8, exam: 44, total: 75, grade: 'B', remark: 'Very Good' },
-    { subject: 'Civic Education', ca1: 14, ca2: 13, assignment: 10, exam: 52, total: 89, grade: 'A', remark: 'Excellent' },
-    { subject: 'Computer Studies', ca1: 15, ca2: 14, assignment: 10, exam: 55, total: 94, grade: 'A', remark: 'Outstanding' },
-    { subject: 'Agricultural Science', ca1: 12, ca2: 11, assignment: 7, exam: 42, total: 72, grade: 'B', remark: 'Very Good' },
-  ];
-
-  let studentGrades: any[] = [];
-  if (grades && grades.length > 0) {
-    studentGrades = grades
-      .filter((g) => g.studentId === student.id || g.studentId === student.rollNumber)
-      .map((g) => ({
-        subject: g.subject,
-        ca1: g.ca1,
-        ca2: g.ca2,
-        assignment: g.assignment || 0,
-        exam: g.exam,
-        total: g.total,
-        grade: g.grade,
-        remark: g.remark,
-      }));
-  }
-
-  if (studentGrades.length === 0) {
-    studentGrades = defaultSubjects;
-  }
-
-  const tableRows = studentGrades.map((g) => [
+  const tableRows = report.subjects.map((g) => [
     g.subject,
     g.ca1.toString(),
     g.ca2.toString(),
-    (g.assignment || 0).toString(),
+    g.assignment.toString(),
     g.exam.toString(),
     g.total.toString(),
     g.grade,
     g.remark,
   ]);
-
-  const totalScore = studentGrades.reduce((acc, curr) => acc + curr.total, 0);
-  const averageScore = Math.round(totalScore / studentGrades.length);
 
   (doc as any).autoTable({
     startY: 94,
@@ -198,32 +164,24 @@ export async function downloadStudentReportCardPDF(
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...primaryColor);
-  doc.text(`TERM OVERALL TOTAL: ${totalScore} / ${studentGrades.length * 100}`, 16, finalY + 11.5);
-  doc.text(`AVERAGE SCORE: ${averageScore}%`, 85, finalY + 11.5);
-  doc.text(`CLASS RANKING: 2nd / 28 Pupils`, 140, finalY + 11.5);
+  doc.text(`TERM OVERALL TOTAL: ${report.grandTotal} / ${report.maxPossible}`, 16, finalY + 11.5);
+  doc.text(`AVERAGE SCORE: ${report.termAverage}%`, 85, finalY + 11.5);
+  doc.text(`CLASS RANKING: ${report.classPositionString} Pupils`, 140, finalY + 11.5);
 
   // 6. Remarks and Endorsements
   doc.roundedRect(12, finalY + 19, pageWidth - 24, 32, 2, 2, 'D');
-
-  const teacherRemark =
-    student.terminalEvaluation?.teacherRemark ||
-    `${student.name.split(' ')[0]} is a highly disciplined, attentive pupil who demonstrates consistent academic curiosity and punctuality.`;
-
-  const principalRec =
-    student.terminalEvaluation?.principalRecommendation ||
-    'Commendable terminal conduct and academic result. Keep up the high standard.';
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.text('FORM TEACHER REMARK:', 16, finalY + 24.5);
   doc.setFont('helvetica', 'italic');
-  const teacherLines = doc.splitTextToSize(teacherRemark, pageWidth - 32);
+  const teacherLines = doc.splitTextToSize(report.teacherRemark, pageWidth - 32);
   doc.text(teacherLines.slice(0, 2), 16, finalY + 29);
 
   doc.setFont('helvetica', 'bold');
   doc.text('PRINCIPAL ENDORSEMENT:', 16, finalY + 38);
   doc.setFont('helvetica', 'italic');
-  const principalLines = doc.splitTextToSize(principalRec, pageWidth - 32);
+  const principalLines = doc.splitTextToSize(report.principalRecommendation, pageWidth - 32);
   doc.text(principalLines.slice(0, 2), 16, finalY + 42.5);
 
   // 7. Signature Blocks

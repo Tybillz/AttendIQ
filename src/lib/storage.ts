@@ -766,7 +766,7 @@ export function exportAttendanceReportCSV(classId?: string): string {
 
   students.forEach((s) => {
     const totalDays = s.totalPresent + s.totalAbsent;
-    const rate = totalDays > 0 ? ((s.totalPresent / totalDays) * 100).toFixed(1) : '100.0';
+    const rate = totalDays > 0 ? Math.round((s.totalPresent / totalDays) * 100) : 100;
     const className = classMap.get(s.classId) || s.classId;
     csv += `"${s.rollNumber}","${s.name}","${className}",${s.totalPresent},${s.totalAbsent},"${rate}%","${s.riskLevel}","${s.parentName}","${s.parentPhone}"\n`;
   });

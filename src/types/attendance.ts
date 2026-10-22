@@ -8,7 +8,7 @@ export interface TestExamRecord {
   subject: string;
   score: number;
   maxScore: number;
-  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
   date: string;
   term: string;
 }

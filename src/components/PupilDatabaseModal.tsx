@@ -32,6 +32,7 @@ import {
   bulkImportPupilsFromCSV,
   downloadCSVFile,
 } from '@/lib/storage';
+import { calculateStudentAttendanceMetrics } from '@/lib/academicCalculations';
 
 interface PupilDatabaseModalProps {
   isOpen: boolean;
@@ -369,8 +370,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                   <tbody className="divide-y divide-slate-100">
                     {filteredStudents.map((s) => {
                       const cName = classes.find((c) => c.id === s.classId)?.name || s.classId;
-                      const total = s.totalPresent + s.totalAbsent;
-                      const rate = total > 0 ? Math.round((s.totalPresent / total) * 100) : 100;
+                      const { attendanceRate: rate } = calculateStudentAttendanceMetrics(s);
 
                       return (
                         <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">

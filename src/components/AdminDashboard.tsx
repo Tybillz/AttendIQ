@@ -43,6 +43,7 @@ import {
   SchoolPerimeterConfig,
 } from '@/types/attendance';
 import { exportAttendanceReportCSV, downloadCSVFile, getSubjectGrades } from '@/lib/storage';
+import { calculateStudentAttendanceMetrics, getUnifiedAcademicReport } from '@/lib/academicCalculations';
 import {
   getPerimeterConfig,
   savePerimeterConfig,
@@ -1384,12 +1385,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <tr>
                       <th className="py-3 px-3 font-bold w-12 text-center">Rank</th>
                       <th className="py-3 px-4 font-bold min-w-[170px]">Pupil Details</th>
-                      <th className="py-3 px-3 font-bold text-center">Attendance (60 Sessions)</th>
-                      <th className="py-3 px-2 font-bold text-center w-20">Mathematics</th>
-                      <th className="py-3 px-2 font-bold text-center w-20">English</th>
-                      <th className="py-3 px-2 font-bold text-center w-20">Science</th>
-                      <th className="py-3 px-2 font-bold text-center w-20">Civic</th>
-                      <th className="py-3 px-3 font-bold text-center bg-slate-800 text-emerald-400">Total (/400)</th>
+                      <th className="py-3 px-3 font-bold text-center">Attendance</th>
+                      <th className="py-3 px-2 font-bold text-center w-16">Math</th>
+                      <th className="py-3 px-2 font-bold text-center w-16">English</th>
+                      <th className="py-3 px-2 font-bold text-center w-16">Science</th>
+                      <th className="py-3 px-2 font-bold text-center w-16">Civic</th>
+                      <th className="py-3 px-2 font-bold text-center w-16">ICT</th>
+                      <th className="py-3 px-3 font-bold text-center bg-slate-800 text-emerald-400">Total (/500)</th>
                       <th className="py-3 px-2 font-bold text-center bg-slate-800 text-sky-400">Average %</th>
                       <th className="py-3 px-3 font-bold text-center">Status</th>
                       <th className="py-3 px-3 font-bold text-right no-print">Action</th>
@@ -1397,41 +1399,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {(() => {
-                      const subjectGrades = getSubjectGrades();
                       const filteredPupils = students.filter(
                         (s) => selectedBroadsheetClass === 'all' || s.classId === selectedBroadsheetClass
                       );
 
-                      // Compute scores and ranks
-                      const pupilsWithScores = filteredPupils.map((pupil) => {
-                        const pupilGrades = subjectGrades.filter((g) => g.studentId === pupil.id);
-                        const math = pupilGrades.find((g) => g.subject.toLowerCase() === 'mathematics')?.total || (pupil.id === 'stu-101' ? 94 : pupil.id === 'stu-102' ? 82 : 75);
-                        const eng = pupilGrades.find((g) => g.subject.toLowerCase().includes('english'))?.total || (pupil.id === 'stu-101' ? 85 : pupil.id === 'stu-102' ? 91 : 78);
-                        const sci = pupilGrades.find((g) => g.subject.toLowerCase().includes('science'))?.total || 84;
-                        const civ = pupilGrades.find((g) => g.subject.toLowerCase().includes('civic'))?.total || 80;
-                        const totalScore = math + eng + sci + civ;
-                        const avg = (totalScore / 4).toFixed(1);
-                        const totalDays = pupil.totalPresent + pupil.totalAbsent;
-                        const rate = totalDays > 0 ? Math.round((pupil.totalPresent / totalDays) * 100) : 100;
+                      // Compute unified academic report for each pupil
+                      const pupilsWithReports = filteredPupils.map((pupil) => {
+                        const pupilClass = classes.find((c) => c.id === pupil.classId);
+                        const report = getUnifiedAcademicReport(pupil, pupilClass?.name, pupilClass);
+                        const math = report.subjects.find((s) => s.subject.toLowerCase().includes('math'))?.total ?? 0;
+                        const eng = report.subjects.find((s) => s.subject.toLowerCase().includes('eng'))?.total ?? 0;
+                        const sci = report.subjects.find((s) => s.subject.toLowerCase().includes('sci'))?.total ?? 0;
+                        const civ = report.subjects.find((s) => s.subject.toLowerCase().includes('civic'))?.total ?? 0;
+                        const ict = report.subjects.find((s) => s.subject.toLowerCase().includes('computer') || s.subject.toLowerCase().includes('ict'))?.total ?? 0;
 
                         return {
                           pupil,
+                          pupilClass,
+                          report,
                           math,
                           eng,
                           sci,
                           civ,
-                          totalScore,
-                          avg,
-                          rate,
+                          ict,
                         };
                       });
 
-                      // Sort by totalScore desc
-                      pupilsWithScores.sort((a, b) => b.totalScore - a.totalScore);
+                      // Sort by term average descending
+                      pupilsWithReports.sort((a, b) => b.report.termAverageNum - a.report.termAverageNum);
 
-                      return pupilsWithScores.map((item, idx) => {
-                        const { pupil, math, eng, sci, civ, totalScore, avg, rate } = item;
-                        const pupilClass = classes.find((c) => c.id === pupil.classId);
+                      return pupilsWithReports.map((item, idx) => {
+                        const { pupil, pupilClass, report, math, eng, sci, civ, ict } = item;
 
                         return (
                           <tr key={pupil.id} className="hover:bg-slate-50 transition">
@@ -1453,25 +1451,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </div>
                             </td>
                             <td className="py-3 px-3 text-center">
-                              <span className="font-bold text-emerald-700">{pupil.totalPresent}</span>
-                              <span className="text-slate-500"> / 60</span>
-                              <span className="block text-[10px] text-indigo-700 font-semibold">{rate}% Present</span>
+                              <span className="font-bold text-emerald-700">{report.attendance.totalPresent}</span>
+                              <span className="text-slate-500"> / {report.attendance.totalDays}</span>
+                              <span className="block text-[10px] text-indigo-700 font-semibold">{report.attendance.attendanceRate}% Present</span>
                             </td>
                             <td className="py-3 px-2 text-center font-bold text-slate-800">{math}</td>
                             <td className="py-3 px-2 text-center font-bold text-slate-800">{eng}</td>
                             <td className="py-3 px-2 text-center font-bold text-slate-800">{sci}</td>
                             <td className="py-3 px-2 text-center font-bold text-slate-800">{civ}</td>
+                            <td className="py-3 px-2 text-center font-bold text-slate-800">{ict}</td>
                             <td className="py-3 px-3 text-center font-black text-emerald-800 bg-emerald-50/60">
-                              {totalScore}
+                              {report.grandTotal}
                             </td>
                             <td className="py-3 px-2 text-center font-black text-sky-800 bg-sky-50/60 text-sm">
-                              {avg}%
+                              {report.termAverage}%
                             </td>
                             <td className="py-3 px-3 text-center">
                               <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                Number(avg) >= 75 ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-sky-50 text-sky-800 border border-sky-300'
+                                report.termAverageNum >= 75 ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-sky-50 text-sky-800 border border-sky-300'
                               }`}>
-                                {Number(avg) >= 75 ? 'Distinction' : 'Promoted'}
+                                {report.termAverageNum >= 75 ? 'Distinction' : 'Promoted'}
                               </span>
                             </td>
                             <td className="py-3 px-3 text-right no-print">
@@ -1511,8 +1510,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {students
                       .filter((s) => selectedBroadsheetClass === 'all' || s.classId === selectedBroadsheetClass)
                       .map((pupil) => {
-                        const totalDays = pupil.totalPresent + pupil.totalAbsent;
-                        const rate = totalDays > 0 ? Math.round((pupil.totalPresent / totalDays) * 100) : 100;
+                        const { attendanceRate: rate, totalDays } = calculateStudentAttendanceMetrics(pupil);
                         const pupilClass = classes.find((c) => c.id === pupil.classId);
 
                         let punctuality = 'Excellent (5/5)';
@@ -1538,7 +1536,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <td className="py-3 px-4 font-mono font-bold text-slate-500">{pupil.rollNumber}</td>
                             <td className="py-3 px-4 font-bold text-slate-900">{pupil.name}</td>
                             <td className="py-3 px-4 text-slate-600 font-medium">{pupilClass?.name || 'Class'}</td>
-                            <td className="py-3 px-4 text-center font-bold text-slate-700">{schoolSessionsOpened}</td>
+                            <td className="py-3 px-4 text-center font-bold text-slate-700">{totalDays}</td>
                             <td className="py-3 px-4 text-center font-black text-emerald-600">{pupil.totalPresent}</td>
                             <td className="py-3 px-4 text-center font-black text-rose-600">{pupil.totalAbsent}</td>
                             <td className="py-3 px-4 text-center font-black text-indigo-700">{rate}%</td>

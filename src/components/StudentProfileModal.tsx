@@ -38,6 +38,7 @@ import {
 } from '@/lib/storage';
 import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
 import { generateWhatsAppUrl } from '@/lib/notifications';
+import { calculateStudentAttendanceMetrics, calculateGradeAndRemark } from '@/lib/academicCalculations';
 
 interface StudentProfileModalProps {
   student: Student | null;
@@ -118,26 +119,23 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   if (!isOpen || !student) return null;
 
   const activeStudent: Student = localStudent || student;
-  const totalDays = activeStudent.totalPresent + activeStudent.totalAbsent;
-  const attendanceRate = totalDays > 0 ? Math.round((activeStudent.totalPresent / totalDays) * 100) : 100;
+  const attendanceMetrics = calculateStudentAttendanceMetrics(activeStudent);
+  const totalDays = attendanceMetrics.totalDays;
+  const attendanceRate = attendanceMetrics.attendanceRate;
 
   const handleSaveExam = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newExamTitle.trim()) return;
 
     const percentage = Math.round((newExamScore / newExamMax) * 100);
-    let grade: 'A' | 'B' | 'C' | 'D' | 'F' = 'F';
-    if (percentage >= 90) grade = 'A';
-    else if (percentage >= 80) grade = 'B';
-    else if (percentage >= 70) grade = 'C';
-    else if (percentage >= 60) grade = 'D';
+    const { grade } = calculateGradeAndRemark(percentage);
 
-    addAcademicRecord(student.id, {
+    addAcademicRecord(activeStudent.id, {
       title: newExamTitle.trim(),
       subject: newExamSubject,
       score: Number(newExamScore),
       maxScore: Number(newExamMax),
-      grade,
+      grade: grade,
       date: new Date().toISOString().split('T')[0],
       term: 'Fall Term',
     });
@@ -163,11 +161,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     if (!editingRecordId || !editExamTitle.trim()) return;
 
     const percentage = Math.round((editExamScore / editExamMax) * 100);
-    let grade: 'A' | 'B' | 'C' | 'D' | 'F' = 'F';
-    if (percentage >= 75) grade = 'A';
-    else if (percentage >= 65) grade = 'B';
-    else if (percentage >= 50) grade = 'C';
-    else if (percentage >= 45) grade = 'D';
+    const { grade } = calculateGradeAndRemark(percentage);
 
     const updatedRecord: TestExamRecord = {
       id: editingRecordId,
@@ -175,7 +169,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       subject: editExamSubject,
       score: Number(editExamScore),
       maxScore: Number(editExamMax),
-      grade,
+      grade: grade,
       date: editExamDate,
       term: editExamTerm,
     };
@@ -511,7 +505,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           <div className="ml-auto flex items-center pr-2 py-1.5">
             <button
               type="button"
-              onClick={() => downloadStudentReportCardPDF(student, { id: student.classId, name: classNameTitle } as any)}
+              onClick={() => downloadStudentReportCardPDF(activeStudent, { id: activeStudent.classId, name: classNameTitle } as any)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition shadow-xs cursor-pointer"
               title="Download official PDF report card with Apex Crest letterhead"
             >

@@ -31,6 +31,7 @@ import {
   downloadCSVFile,
 } from '@/lib/storage';
 import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
+import { computeGrade } from '@/lib/academicCalculations';
 
 interface SubjectGradebookProps {
   currentTeacher: Teacher | undefined;
@@ -126,15 +127,6 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
     });
   }, [allStudents, assignedClassIdSet, selectedClassId, searchQuery]);
 
-  // Compute grade from total (Nigerian NERDC / WAEC standard)
-  const computeGrade = (total: number): { grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F'; remark: string; badgeColor: string } => {
-    if (total >= 75) return { grade: 'A', remark: 'Excellent (Distinction)', badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300' };
-    if (total >= 65) return { grade: 'B', remark: 'Very Good', badgeColor: 'bg-sky-50 text-sky-800 border-sky-300' };
-    if (total >= 50) return { grade: 'C', remark: 'Credit / Good', badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300' };
-    if (total >= 45) return { grade: 'D', remark: 'Pass', badgeColor: 'bg-amber-50 text-amber-800 border-amber-300' };
-    if (total >= 40) return { grade: 'E', remark: 'Fair Pass', badgeColor: 'bg-orange-50 text-orange-800 border-orange-300' };
-    return { grade: 'F', remark: 'Needs Support', badgeColor: 'bg-rose-50 text-rose-800 border-rose-300' };
-  };
 
   // Score change handler
   const handleScoreChange = (

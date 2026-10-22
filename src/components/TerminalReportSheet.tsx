@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Student, ClassSection, SubjectGradeRecord, TerminalEvaluation } from '@/types/attendance';
 import { getSubjectGrades, updateTerminalEvaluation } from '@/lib/storage';
+import { getUnifiedAcademicReport } from '@/lib/academicCalculations';
 
 interface TerminalReportSheetProps {
   student: Student;
@@ -78,97 +79,18 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
     }
   }, [student]);
 
-  // Load recorded subject grades from storage
-  const recordedGrades = React.useMemo(() => {
-    try {
-      const all = getSubjectGrades();
-      return all.filter((g) => g.studentId === student.id);
-    } catch {
-      return [];
-    }
-  }, [student.id]);
+  // Unified calculation engine guarantees zero discrepancies with Student Profile and PDF Report Card
+  const reportData = React.useMemo(() => {
+    return getUnifiedAcademicReport(student, className);
+  }, [student, className]);
 
-  // Default Nigerian school curriculum subjects if not all recorded yet
-  const defaultSubjects = [
-    { subject: 'Mathematics', ca1: 14, ca2: 14, assignment: 10, exam: 56, vitalNotes: 'Strong analytical skills' },
-    { subject: 'English Language', ca1: 13, ca2: 13, assignment: 10, exam: 52, vitalNotes: 'Eloquent speech & composition' },
-    { subject: 'Basic Science & Tech', ca1: 14, ca2: 13, assignment: 9, exam: 54, vitalNotes: 'Keen scientific curiosity' },
-    { subject: 'Civic Education', ca1: 13, ca2: 14, assignment: 10, exam: 48, vitalNotes: 'Exemplary civic responsibility' },
-    { subject: 'Computer Studies / ICT', ca1: 14, ca2: 14, assignment: 10, exam: 55, vitalNotes: 'Practical computer literacy' },
-  ];
-
-  // Merge recorded grades with default subjects so report card is rich and complete
-  const subjectsList = React.useMemo(() => {
-    const list = defaultSubjects.map((def) => {
-      const found = recordedGrades.find((rg) => rg.subject.toLowerCase() === def.subject.toLowerCase());
-      if (found) {
-        return {
-          subject: found.subject,
-          ca1: found.ca1,
-          ca2: found.ca2,
-          assignment: found.assignment || 10,
-          exam: found.exam,
-          vitalNotes: found.vitalNotes || def.vitalNotes,
-        };
-      }
-      return def;
-    });
-
-    // Also append any extra recorded subjects
-    recordedGrades.forEach((rg) => {
-      const exists = list.some((l) => l.subject.toLowerCase() === rg.subject.toLowerCase());
-      if (!exists) {
-        list.push({
-          subject: rg.subject,
-          ca1: rg.ca1,
-          ca2: rg.ca2,
-          assignment: rg.assignment || 10,
-          exam: rg.exam,
-          vitalNotes: rg.vitalNotes || 'Satisfactory progress',
-        });
-      }
-    });
-
-    return list;
-  }, [recordedGrades]);
-
-  // Compute total and grade for each subject
-  const computedSubjects = subjectsList.map((s) => {
-    const total = s.ca1 + s.ca2 + s.assignment + s.exam;
-    let grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' = 'F';
-    let remark = 'Needs Support';
-
-    if (total >= 75) {
-      grade = 'A';
-      remark = 'Excellent (Distinction)';
-    } else if (total >= 65) {
-      grade = 'B';
-      remark = 'Very Good';
-    } else if (total >= 50) {
-      grade = 'C';
-      remark = 'Credit / Good';
-    } else if (total >= 45) {
-      grade = 'D';
-      remark = 'Pass';
-    } else if (total >= 40) {
-      grade = 'E';
-      remark = 'Fair Pass';
-    }
-
-    return {
-      ...s,
-      total,
-      grade,
-      remark,
-    };
-  });
-
-  const grandTotal = computedSubjects.reduce((sum, s) => sum + s.total, 0);
-  const maxPossible = computedSubjects.length * 100;
-  const termAverage = maxPossible > 0 ? (grandTotal / computedSubjects.length).toFixed(1) : '0';
-  const actualTrackedDays = (student.totalPresent || 0) + (student.totalAbsent || 0);
-  const effectiveSessionsHeld = actualTrackedDays > 0 ? actualTrackedDays : (totalSessionsHeld || 60);
-  const attendanceRate = effectiveSessionsHeld > 0 ? Math.round((student.totalPresent / effectiveSessionsHeld) * 100) : 100;
+  const computedSubjects = reportData.subjects;
+  const grandTotal = reportData.grandTotal;
+  const maxPossible = reportData.maxPossible;
+  const termAverage = reportData.termAverage;
+  const effectiveSessionsHeld = reportData.attendance.totalDays;
+  const attendanceRate = reportData.attendance.attendanceRate;
+  const effectiveClassPosition = reportData.classPositionString;
 
   const handlePrintTrigger = () => {
     if (onPrint) {
@@ -714,7 +636,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
                   {grandTotal} / {maxPossible}
                 </td>
                 <td colSpan={2} className="py-2.5 px-3">
-                  Term Average: <strong className="text-emerald-700 text-sm">{termAverage}%</strong> &bull; Class Position: <strong className="text-slate-950 text-sm">{classRank} of {classPupilsCount}</strong>
+                  Term Average: <strong className="text-emerald-700 text-sm">{termAverage}%</strong> &bull; Class Position: <strong className="text-slate-950 text-sm">{effectiveClassPosition}</strong>
                 </td>
               </tr>
             </tfoot>
