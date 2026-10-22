@@ -262,7 +262,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#eef2f6] text-slate-800 flex flex-col relative">
+    <div className="min-h-screen app-main-layout flex flex-col relative">
       {/* Top Navigation */}
       <Navbar
         currentRole={currentRole}

@@ -21,6 +21,14 @@ body {
   font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Base app main layout */
+.app-main-layout {
+  background-color: #eef2f6;
+  color: #1e293b;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* Custom scrollbars */
@@ -45,6 +53,7 @@ body {
   border: 1px solid #e2e8f0;
   border-radius: 1.5rem;
   box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
 /* Inputs, Selects, and Textareas */
@@ -59,6 +68,7 @@ textarea {
   background-color: #ffffff;
   color: #0f172a;
   border: 1px solid #cbd5e1;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 input:focus,
@@ -67,6 +77,208 @@ textarea:focus {
   border-color: #3b82f6;
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* ========================================================
+   DARK EYE-CARE GRADIENT THEME (Active when dark theme toggled)
+   ======================================================== */
+
+body.dark-theme,
+html.dark body {
+  background-color: #080c16 !important;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.16) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(14, 165, 233, 0.12) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+    linear-gradient(180deg, #060911 0%, #080c16 50%, #0d1322 100%) !important;
+  background-attachment: fixed !important;
+  color: #e2e8f0 !important;
+}
+
+body.dark-theme ::-webkit-scrollbar-track {
+  background: #0f172a !important;
+}
+body.dark-theme ::-webkit-scrollbar-thumb {
+  background: #334155 !important;
+}
+body.dark-theme ::-webkit-scrollbar-thumb:hover {
+  background: #475569 !important;
+}
+
+/* App layout container */
+body.dark-theme .app-main-layout {
+  background-color: transparent !important;
+  color: #f1f5f9 !important;
+}
+
+/* Top Navigation Header */
+body.dark-theme header {
+  background-color: rgba(11, 15, 25, 0.94) !important;
+  border-bottom-color: rgba(30, 41, 59, 0.8) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+/* Dark mode card surfaces */
+body.dark-theme .bg-white:not(.print-paper) {
+  background-color: #111827 !important;
+  color: #f1f5f9 !important;
+  border-color: #1f293d !important;
+}
+
+body.dark-theme .school-card {
+  background-color: #111827 !important;
+  border-color: #1f293d !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Sub-panels, pills, and section backgrounds */
+body.dark-theme .bg-slate-50,
+body.dark-theme .bg-slate-100 {
+  background-color: #162032 !important;
+  color: #f1f5f9 !important;
+  border-color: #222f49 !important;
+}
+
+body.dark-theme .bg-slate-50\/80,
+body.dark-theme .bg-slate-50\/60,
+body.dark-theme .bg-slate-100\/60 {
+  background-color: rgba(22, 32, 50, 0.8) !important;
+}
+
+/* Table rows and list item hover states */
+body.dark-theme .hover\:bg-slate-50:hover,
+body.dark-theme .hover\:bg-slate-50\/80:hover,
+body.dark-theme .hover\:bg-slate-100:hover {
+  background-color: #1c2840 !important;
+}
+
+/* Borders and Dividers */
+body.dark-theme .border-slate-200,
+body.dark-theme .border-slate-200\/90,
+body.dark-theme .border-slate-200\/80,
+body.dark-theme .border-slate-200\/60,
+body.dark-theme .border-slate-300,
+body.dark-theme .border-slate-100 {
+  border-color: #222f49 !important;
+}
+
+body.dark-theme .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+body.dark-theme .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #222f49 !important;
+}
+
+/* High contrast typography in dark mode */
+body.dark-theme .text-slate-900,
+body.dark-theme .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+body.dark-theme .text-slate-700,
+body.dark-theme .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+body.dark-theme .text-slate-500,
+body.dark-theme .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* Inputs, Selects, and Textareas in dark mode */
+body.dark-theme input[type="text"],
+body.dark-theme input[type="date"],
+body.dark-theme input[type="email"],
+body.dark-theme input[type="tel"],
+body.dark-theme input[type="number"],
+body.dark-theme input[type="password"],
+body.dark-theme select,
+body.dark-theme textarea {
+  background-color: #141c2e !important;
+  color: #f8fafc !important;
+  border-color: #2d3d5e !important;
+}
+
+body.dark-theme input:focus,
+body.dark-theme select:focus,
+body.dark-theme textarea:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+  background-color: #172238 !important;
+}
+
+/* Badges and Chips in dark mode */
+body.dark-theme .bg-indigo-50,
+body.dark-theme .bg-indigo-50\/80,
+body.dark-theme .bg-indigo-100 {
+  background-color: rgba(99, 102, 241, 0.18) !important;
+  color: #c7d2fe !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+body.dark-theme .bg-emerald-50,
+body.dark-theme .bg-emerald-50\/60,
+body.dark-theme .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  color: #a7f3d0 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+body.dark-theme .bg-sky-50,
+body.dark-theme .bg-sky-50\/60,
+body.dark-theme .bg-sky-100 {
+  background-color: rgba(14, 165, 233, 0.18) !important;
+  color: #bae6fd !important;
+  border-color: rgba(14, 165, 233, 0.35) !important;
+}
+
+body.dark-theme .bg-amber-50,
+body.dark-theme .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.18) !important;
+  color: #fde68a !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+body.dark-theme .bg-rose-50,
+body.dark-theme .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.18) !important;
+  color: #fecdd3 !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+body.dark-theme .bg-blue-50,
+body.dark-theme .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.18) !important;
+  color: #bfdbfe !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+/* Modals elevation in dark mode */
+body.dark-theme .shadow-2xl,
+body.dark-theme .shadow-xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75) !important;
+}
+
+/* Terminal Report Sheet (Official document in dark mode) */
+body.dark-theme .print-report-card {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+body.dark-theme .print-report-card .border-slate-900 {
+  border-color: #475569 !important;
+}
+
+body.dark-theme .print-report-card .bg-slate-100,
+body.dark-theme .print-report-card .bg-slate-50 {
+  background-color: #1e293b !important;
+}
+
+body.dark-theme .print-report-card .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+body.dark-theme .print-report-card .text-slate-800 {
+  color: #e2e8f0 !important;
 }
 
 /* Print styles for PDF / Printable report generator */

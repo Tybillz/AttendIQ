@@ -123,14 +123,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       setTodayStr(new Date().toISOString().split('T')[0]);
       const savedTheme = localStorage.getItem('attend_iq_theme');
-      if (savedTheme === 'light') {
-        setIsDarkMode(false);
-        document.body.classList.remove('dark-theme');
-        document.body.classList.add('light-theme');
-      } else {
+      if (savedTheme === 'dark') {
         setIsDarkMode(true);
+        document.documentElement.classList.add('dark');
         document.body.classList.add('dark-theme');
         document.body.classList.remove('light-theme');
+      } else {
+        setIsDarkMode(false);
+        document.documentElement.classList.remove('dark');
+        document.body.classList.remove('dark-theme');
+        document.body.classList.add('light-theme');
       }
 
       return () => {
@@ -181,10 +183,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     try {
       if (nextDark) {
         localStorage.setItem('attend_iq_theme', 'dark');
+        document.documentElement.classList.add('dark');
         document.body.classList.add('dark-theme');
         document.body.classList.remove('light-theme');
       } else {
         localStorage.setItem('attend_iq_theme', 'light');
+        document.documentElement.classList.remove('dark');
         document.body.classList.remove('dark-theme');
         document.body.classList.add('light-theme');
       }
@@ -372,14 +376,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Dark Gradient / Light Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
+              className={`p-2 rounded-xl border transition-all flex items-center justify-center cursor-pointer ${
                 isDarkMode
-                  ? 'bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-yellow-500/15 border-amber-400/30 text-amber-300 hover:border-amber-400 shadow-sm shadow-amber-500/10'
+                  ? 'bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-yellow-500/20 border-amber-400/40 text-amber-300 hover:border-amber-300 shadow-sm shadow-amber-500/10'
                   : 'bg-gradient-to-r from-indigo-50 to-sky-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 shadow-sm'
               }`}
-              title={isDarkMode ? 'Switch to Light Theme' : 'Switch to Dark Eye-Care Gradient'}
+              title={isDarkMode ? 'Switch to Light Theme' : 'Switch to Dark Eye-Care Theme'}
             >
-              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {isDarkMode ? <Sun className="h-4 w-4 text-amber-300" /> : <Moon className="h-4 w-4 text-indigo-700" />}
             </button>
 
             {/* Management Database Actions (Visible in Admin Mode) */}
