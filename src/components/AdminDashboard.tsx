@@ -67,7 +67,6 @@ import {
   getPortalCredentials,
   updateTeacherPin,
   updateAdminPasscode,
-  updateGatePasscode,
   randomizeAllTeacherPins,
   generateRandomPin,
 } from '@/lib/auth';
@@ -118,7 +117,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Security & Access Control State
   const [creds, setCreds] = useState(getPortalCredentials());
   const [adminPassInput, setAdminPassInput] = useState(creds.adminPasscode);
-  const [gatePassInput, setGatePassInput] = useState(creds.gatePasscode);
   const [teacherPinsState, setTeacherPinsState] = useState<Record<string, string>>({ ...creds.teacherPins });
   const [customDailyCodeInput, setCustomDailyCodeInput] = useState('');
   const [accessFeedback, setAccessFeedback] = useState<string | null>(null);
@@ -147,7 +145,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const currentCreds = getPortalCredentials();
       setCreds(currentCreds);
       setAdminPassInput(currentCreds.adminPasscode);
-      setGatePassInput(currentCreds.gatePasscode);
       setTeacherPinsState({ ...currentCreds.teacherPins });
     };
     loadClockRecords();
@@ -251,17 +248,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     updateAdminPasscode(adminPassInput);
     setAccessFeedback('Administrator master passcode updated successfully!');
-    setTimeout(() => setAccessFeedback(null), 4000);
-  };
-
-  const handleSaveGatePasscode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!gatePassInput || gatePassInput.trim().length < 4) {
-      alert('Gatehouse scanner passcode must be at least 4 characters.');
-      return;
-    }
-    updateGatePasscode(gatePassInput);
-    setAccessFeedback('Gatehouse security passcode updated successfully!');
     setTimeout(() => setAccessFeedback(null), 4000);
   };
 
@@ -1957,10 +1943,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </span>
             </div>
 
-            {/* Admin & Gate Security Passcodes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Admin Security Passcode */}
+            <div className="mb-6">
               {/* Administrator Master Passcode */}
-              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
+              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl max-w-xl">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-indigo-600" />
@@ -1978,33 +1964,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition"
-                  >
-                    Save Passcode
-                  </button>
-                </form>
-              </div>
-
-              {/* Gatehouse Security Passcode */}
-              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="h-4 w-4 text-emerald-600" />
-                    <span className="text-xs font-bold text-slate-800">Gatehouse Scanner Passcode</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-semibold">Default: 1234</span>
-                </div>
-                <form onSubmit={handleSaveGatePasscode} className="flex gap-2 mt-2">
-                  <input
-                    type="text"
-                    value={gatePassInput}
-                    onChange={(e) => setGatePassInput(e.target.value)}
-                    placeholder="Enter new gate passcode"
-                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
                   >
                     Save Passcode
                   </button>

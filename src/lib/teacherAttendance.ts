@@ -432,36 +432,31 @@ export function clockInTeacher(
     };
   }
 
-  // 2. ANTI-CHEAT: HARDWARE DEVICE LOCKING
+  // 2. ANTI-CHEAT: HARDWARE DEVICE LOCKING & EXCLUSIVITY
   if (hardwareProfile) {
-    const existingLock = getTeacherDeviceLock(teacherId);
+    const allLocks = getDeviceLocks();
 
-    if (!existingLock) {
-      // First time clock-in: Automatically pair and lock this teacher to this physical device!
-      pairTeacherDevice({
-        teacherId,
-        teacherName,
-        deviceFingerprint: hardwareProfile.fingerprint,
-        deviceName: hardwareProfile.deviceName,
-        pairedAt: `${dateStr} ${formatTimeAmPm(new Date())}`,
-        hardwareSignature: {
-          gpu: hardwareProfile.gpuRenderer,
-          cpuCores: hardwareProfile.cpuCores,
-          screenRes: hardwareProfile.screenRes,
-        },
-      });
-    } else {
-      // Device already locked: Validate that this device matches the registered hardware fingerprint
-      if (existingLock.deviceFingerprint !== hardwareProfile.fingerprint) {
-        return {
-          success: false,
-          message: `🛑 Anti-Cheat Device Mismatch: Your account is locked to your registered device (${existingLock.deviceName}). You cannot clock in for yourself from another phone, nor can colleagues clock in for you. Please notify the Principal if you changed phones.`,
-        };
-      }
+    // 2A. DEVICE EXCLUSIVITY: Check if this physical device is already bound to another teacher
+    const boundToOther = allLocks.find(
+      (l) => l.deviceFingerprint === hardwareProfile.fingerprint && l.teacherId !== teacherId
+    );
+    if (boundToOther) {
+      return {
+        success: false,
+        message: `🛑 Device Already Bound: This physical device is already bound to ${boundToOther.teacherName}. AttendIQ enforces strict single-device ownership to prevent proxy clock-ins ("buddy punching"). Each teacher must use their personal device.`,
+      };
     }
 
-    // 3. ANTI-CHEAT: SINGLE-DEVICE PER DAY CONSTRAINT
-    // Ensure this physical device has not already clocked in another teacher today
+    // 2B. TEACHER LOCK: If this teacher is already locked to another device, prevent mismatch
+    const existingLock = allLocks.find((l) => l.teacherId === teacherId);
+    if (existingLock && existingLock.deviceFingerprint !== hardwareProfile.fingerprint) {
+      return {
+        success: false,
+        message: `🛑 Anti-Cheat Device Mismatch: Your account is locked to your registered device (${existingLock.deviceName}). You cannot clock in for yourself from another phone, nor can colleagues clock in for you. Please notify the Principal if you changed phones.`,
+      };
+    }
+
+    // 2C. SINGLE-DEVICE PER DAY CONSTRAINT: Ensure this physical device has not clocked in another teacher today
     const allRecords = getTeacherClockRecords();
     const conflictRecord = allRecords.find(
       (r) =>
@@ -536,6 +531,25 @@ export function clockInTeacher(
   }
 
   saveTeacherClockRecords(records);
+
+  // Pair device only upon 100% verified clock-in completion
+  if (hardwareProfile) {
+    const existingLock = getTeacherDeviceLock(teacherId);
+    if (!existingLock) {
+      pairTeacherDevice({
+        teacherId,
+        teacherName,
+        deviceFingerprint: hardwareProfile.fingerprint,
+        deviceName: hardwareProfile.deviceName,
+        pairedAt: `${dateStr} ${formattedTime}`,
+        hardwareSignature: {
+          gpu: hardwareProfile.gpuRenderer,
+          cpuCores: hardwareProfile.cpuCores,
+          screenRes: hardwareProfile.screenRes,
+        },
+      });
+    }
+  }
 
   return {
     success: true,
