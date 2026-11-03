@@ -62,6 +62,9 @@ import {
   unpairTeacherDevice,
   clearAllDeviceLocks,
   resetTeacherClockRecordsForDate,
+  toggleRemoteAcademicAccessAll,
+  toggleTeacherRemoteAcademicAccess,
+  isRemoteAcademicAllowed,
   getLivePortalUrl,
 } from '@/lib/teacherAttendance';
 import { TeacherDeviceLock } from '@/types/attendance';
@@ -1945,10 +1948,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </span>
             </div>
 
-            {/* Admin Security Passcode */}
-            <div className="mb-6">
+            {/* Admin Security Passcode & Remote Academic Access Master Switch */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {/* Administrator Master Passcode */}
-              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl max-w-xl">
+              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-indigo-600" />
@@ -1971,6 +1974,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     Save Passcode
                   </button>
                 </form>
+              </div>
+
+              {/* Remote Academic Session School-Wide Master Policy */}
+              <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-900">Remote Academic Session (Off-Campus)</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      perimeterConfig.remoteAcademicAccessAll
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-amber-50 text-amber-800 border-amber-300'
+                    }`}>
+                      {perimeterConfig.remoteAcademicAccessAll ? 'All Staff Enabled' : 'Individual Control'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    Allows teachers to log in from laptops at home and grade Continuous Assessment (CA) or update dossiers without an on-campus clock-in.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700">School-Wide Access (All Teachers):</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !perimeterConfig.remoteAcademicAccessAll;
+                      const updated = toggleRemoteAcademicAccessAll(next);
+                      setPerimeterConfig({ ...updated });
+                      setAccessFeedback(
+                        next
+                          ? '🏠 Remote Academic Session enabled for ALL staff members!'
+                          : '🔒 School-wide remote access disabled. Controlled per individual teacher.'
+                      );
+                      setTimeout(() => setAccessFeedback(null), 4000);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                      perimeterConfig.remoteAcademicAccessAll
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                    }`}
+                  >
+                    <span>{perimeterConfig.remoteAcademicAccessAll ? '✓ Enabled for All Staff' : 'Enable for All Staff'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2026,6 +2075,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="py-2.5 px-4">Staff Member & Contact</th>
                       <th className="py-2.5 px-4">Assigned Section & Subjects</th>
                       <th className="py-2.5 px-4">Individual 4-Digit PIN</th>
+                      <th className="py-2.5 px-4">Remote Laptop/Home Access</th>
                       <th className="py-2.5 px-4 text-right">Dispatch & Actions</th>
                     </tr>
                   </thead>
@@ -2078,6 +2128,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <Shuffle className="h-3.5 w-3.5" />
                               </button>
                             </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {perimeterConfig.remoteAcademicAccessAll ? (
+                              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 inline-flex items-center gap-1">
+                                <span>✓ All Staff Policy</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = toggleTeacherRemoteAcademicAccess(teacher.id);
+                                  setPerimeterConfig({ ...updated });
+                                  const isAllowed = updated.remoteAcademicTeacherIds?.includes(teacher.id);
+                                  setAccessFeedback(
+                                    isAllowed
+                                      ? `🏠 Remote Academic Access granted to ${teacher.name}!`
+                                      : `🔒 Remote Academic Access revoked for ${teacher.name}.`
+                                  );
+                                  setTimeout(() => setAccessFeedback(null), 4000);
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                                  perimeterConfig.remoteAcademicTeacherIds?.includes(teacher.id)
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
+                                }`}
+                                title="Toggle off-campus Gradebook & Dossier access for this teacher"
+                              >
+                                {perimeterConfig.remoteAcademicTeacherIds?.includes(teacher.id) ? (
+                                  <span>🏠 Remote: Allowed</span>
+                                ) : (
+                                  <span>🔒 Remote: Locked</span>
+                                )}
+                              </button>
+                            )}
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">

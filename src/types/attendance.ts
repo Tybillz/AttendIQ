@@ -258,6 +258,8 @@ export interface SchoolPerimeterConfig {
   portalWebUrl?: string; // Live production URL for WhatsApp slips (e.g. https://attendiq.vercel.app)
   dailyEntranceCodeOverride?: Record<string, string>; // date -> 4-digit code
   testingMode?: boolean; // Testing sandbox mode: allows single computer/device to clock in multiple teachers
+  remoteAcademicAccessAll?: boolean; // School-wide switch: enables off-campus Gradebook & Dossier access for all staff
+  remoteAcademicTeacherIds?: string[]; // Specific teacher IDs authorized for remote off-campus academic work
 }
 
 export interface TeacherDeviceLock {

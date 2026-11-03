@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, BookOpen, Users, FolderOpen, Lock, ShieldAlert } from 'lucide-react';
+import { Calendar, BookOpen, Users, FolderOpen, Lock, ShieldAlert, Sparkles } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { TeacherRollCall } from '@/components/TeacherRollCall';
 import { TeacherClockCard } from '@/components/TeacherClockCard';
@@ -10,7 +10,7 @@ import { AdminDashboard } from '@/components/AdminDashboard';
 import { GateCheckIn } from '@/components/GateCheckIn';
 import { AuthScreen } from '@/components/AuthScreen';
 import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud, initInactivityTracker, loginAsAdmin, saveAuthSession } from '@/lib/auth';
-import { getTeacherRecordForDate } from '@/lib/teacherAttendance';
+import { getTeacherRecordForDate, isRemoteAcademicAllowed, getPerimeterConfig } from '@/lib/teacherAttendance';
 import { StudentProfileModal } from '@/components/StudentProfileModal';
 import { AlertSettingsModal } from '@/components/AlertSettingsModal';
 import { ParentAlertsModal } from '@/components/ParentAlertsModal';
@@ -81,29 +81,37 @@ export default function Home() {
   const [teacherActiveTab, setTeacherActiveTab] = useState<'attendance' | 'dossiers' | 'gradebook'>('attendance');
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isTeacherClockedIn, setIsTeacherClockedIn] = useState<boolean>(false);
+  const [perimeterConfig, setPerimeterConfig] = useState(getPerimeterConfig());
 
   const checkTeacherClockStatus = useCallback(() => {
     if (typeof window === 'undefined') return;
     const realToday = new Date().toISOString().split('T')[0];
     const rec = getTeacherRecordForDate(currentTeacherId, realToday);
     setIsTeacherClockedIn(Boolean(rec && rec.clockInTime));
+    setPerimeterConfig(getPerimeterConfig());
   }, [currentTeacherId]);
 
   useEffect(() => {
     checkTeacherClockStatus();
     const handleClockUpdate = () => checkTeacherClockStatus();
+    const handlePerimeterUpdate = () => setPerimeterConfig(getPerimeterConfig());
     window.addEventListener('attend-iq-teacher-clock-update', handleClockUpdate);
+    window.addEventListener('attend-iq-perimeter-update', handlePerimeterUpdate);
     return () => {
       window.removeEventListener('attend-iq-teacher-clock-update', handleClockUpdate);
+      window.removeEventListener('attend-iq-perimeter-update', handlePerimeterUpdate);
     };
   }, [checkTeacherClockStatus]);
 
-  // RESTRICTION: If staff is unable to clock in, lock access so they can ONLY access daily attendance roll call
+  const isRemoteAllowed = isRemoteAcademicAllowed(currentTeacherId, perimeterConfig);
+  const canAccessAcademics = isTeacherClockedIn || isRemoteAllowed;
+
+  // RESTRICTION: If staff is unable to clock in AND remote access is not authorized, restrict to roll call
   useEffect(() => {
-    if (currentRole === 'teacher' && !isTeacherClockedIn && teacherActiveTab !== 'attendance') {
+    if (currentRole === 'teacher' && !canAccessAcademics && teacherActiveTab !== 'attendance') {
       setTeacherActiveTab('attendance');
     }
-  }, [currentRole, isTeacherClockedIn, teacherActiveTab]);
+  }, [currentRole, canAccessAcademics, teacherActiveTab]);
 
   // Modals state
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
@@ -449,8 +457,29 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Security restriction banner when teacher has not clocked in */}
-            {!isTeacherClockedIn && (
+            {/* Security banner: Remote Academic Session vs Clock-In Required */}
+            {!isTeacherClockedIn && isRemoteAllowed && (
+              <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-indigo-200/90 text-indigo-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-700 shrink-0">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-indigo-950 flex items-center gap-2">
+                      <span>🏠 Remote Academic Session Active</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-200/60 text-indigo-800 border border-indigo-300">
+                        Authorized by Principal
+                      </span>
+                    </p>
+                    <p className="text-indigo-800 text-[11px] mt-0.5">
+                      You are working off-campus. <strong>Pupil Dossiers</strong> and the <strong>Subject Gradebook</strong> are fully unlocked for entering scores and term remarks.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isTeacherClockedIn && !isRemoteAllowed && (
               <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700 shrink-0">
@@ -461,7 +490,7 @@ export default function Home() {
                       Staff Clock-In Pending — Restricted Access Mode
                     </p>
                     <p className="text-amber-800 text-[11px] mt-0.5">
-                      You are currently restricted to taking the <strong>Daily Attendance Roll Call</strong>. Complete your morning gate clock-in above to unlock <strong>Pupil Dossiers</strong> and the <strong>Subject Gradebook</strong>.
+                      You are currently restricted to taking the <strong>Daily Attendance Roll Call</strong>. Complete your morning gate clock-in on campus, or ask the Principal to enable <strong>Remote Academic Access</strong> to work from home.
                     </p>
                   </div>
                 </div>
@@ -486,7 +515,7 @@ export default function Home() {
               <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200 flex-wrap">
                 <button
                   onClick={() => setTeacherActiveTab('attendance')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
                     teacherActiveTab === 'attendance'
                       ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
@@ -498,28 +527,28 @@ export default function Home() {
 
                 <button
                   onClick={() => {
-                    if (!isTeacherClockedIn) {
-                      alert('🔒 Staff Clock-In Required: You must clock in within school grounds before accessing sensitive pupil dossiers and emergency parent contacts.');
+                    if (!canAccessAcademics) {
+                      alert('🔒 Staff Clock-In Required: You must clock in on campus or have Remote Academic Access authorized by the Principal to access pupil dossiers.');
                       return;
                     }
                     setTeacherActiveTab('dossiers');
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
-                    !isTeacherClockedIn
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
+                    !canAccessAcademics
                       ? 'text-slate-400 bg-slate-100/60 cursor-not-allowed opacity-80'
                       : teacherActiveTab === 'dossiers'
                       ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title={!isTeacherClockedIn ? 'Clock-in required to unlock pupil dossiers' : undefined}
+                  title={!canAccessAcademics ? 'Clock-in or Remote Access required to unlock pupil dossiers' : undefined}
                 >
-                  {!isTeacherClockedIn ? (
+                  {!canAccessAcademics ? (
                     <Lock className="h-3.5 w-3.5 text-amber-500" />
                   ) : (
                     <FolderOpen className="h-4 w-4 text-sky-600" />
                   )}
                   <span>Pupil Dossiers & Profiles ({classStudents.length})</span>
-                  {!isTeacherClockedIn && (
+                  {!canAccessAcademics && (
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
                       Locked
                     </span>
@@ -528,28 +557,28 @@ export default function Home() {
 
                 <button
                   onClick={() => {
-                    if (!isTeacherClockedIn) {
-                      alert('🔒 Staff Clock-In Required: You must clock in within school grounds before accessing the continuous assessment and exam gradebook.');
+                    if (!canAccessAcademics) {
+                      alert('🔒 Staff Clock-In Required: You must clock in on campus or have Remote Academic Access authorized by the Principal to access the gradebook.');
                       return;
                     }
                     setTeacherActiveTab('gradebook');
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
-                    !isTeacherClockedIn
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
+                    !canAccessAcademics
                       ? 'text-slate-400 bg-slate-100/60 cursor-not-allowed opacity-80'
                       : teacherActiveTab === 'gradebook'
                       ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title={!isTeacherClockedIn ? 'Clock-in required to unlock gradebook' : undefined}
+                  title={!canAccessAcademics ? 'Clock-in or Remote Access required to unlock gradebook' : undefined}
                 >
-                  {!isTeacherClockedIn ? (
+                  {!canAccessAcademics ? (
                     <Lock className="h-3.5 w-3.5 text-amber-500" />
                   ) : (
                     <BookOpen className="h-4 w-4 text-emerald-600" />
                   )}
                   <span>Subject Gradebook (CA & Exams)</span>
-                  {!isTeacherClockedIn && (
+                  {!canAccessAcademics && (
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
                       Locked
                     </span>
@@ -584,8 +613,8 @@ export default function Home() {
                   students={students}
                   currentSession={currentSession}
                   onSelectStudentProfile={(student) => {
-                    if (currentRole === 'teacher' && !isTeacherClockedIn) {
-                      alert('🔒 Staff Clock-In Required: Pupil dossiers and medical records are locked until you clock in within school grounds.');
+                    if (currentRole === 'teacher' && !canAccessAcademics) {
+                      alert('🔒 Staff Clock-In Required: Pupil dossiers and medical records are locked until you clock in within school grounds or receive Remote Academic Authorization from the Principal.');
                       return;
                     }
                     setSelectedStudentForProfile(student);
@@ -594,14 +623,14 @@ export default function Home() {
                   currentRole={currentRole}
                 />
               </div>
-            ) : !isTeacherClockedIn ? (
+            ) : !canAccessAcademics ? (
               <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm text-center max-w-lg mx-auto my-6 space-y-4">
                 <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
                   <Lock className="h-8 w-8" />
                 </div>
-                <h3 className="text-lg font-black text-slate-900">Clock-In Required for Academic Records</h3>
+                <h3 className="text-lg font-black text-slate-900">Clock-In or Remote Access Required</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  In accordance with school policy, pupil profiles, emergency parent telephone numbers, and continuous assessment gradebooks are strictly locked until your morning clock-in is registered within school grounds.
+                  In accordance with school policy, pupil profiles, emergency parent telephone numbers, and continuous assessment gradebooks are locked until your morning clock-in is registered within school grounds or Remote Academic Session is authorized by the Principal.
                 </p>
                 <button
                   onClick={() => setTeacherActiveTab('attendance')}

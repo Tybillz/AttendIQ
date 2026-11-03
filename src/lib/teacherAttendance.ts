@@ -10,6 +10,8 @@ export const DEFAULT_PERIMETER_CONFIG: SchoolPerimeterConfig = {
   closingTime: '02:30 PM',
   portalWebUrl: 'https://attendiq.vercel.app',
   dailyEntranceCodeOverride: {},
+  remoteAcademicAccessAll: false,
+  remoteAcademicTeacherIds: [],
 };
 
 const STORAGE_KEYS = {
@@ -180,6 +182,48 @@ export function pairTeacherDevice(lock: TeacherDeviceLock): void {
   const locks = getDeviceLocks().filter((l) => l.teacherId !== lock.teacherId);
   locks.push(lock);
   saveDeviceLocks(locks);
+}
+
+/**
+ * Check if a specific teacher has Remote Academic Session authorization
+ */
+export function isRemoteAcademicAllowed(teacherId: string, config?: SchoolPerimeterConfig): boolean {
+  const c = config || getPerimeterConfig();
+  if (c.remoteAcademicAccessAll) return true;
+  if (Array.isArray(c.remoteAcademicTeacherIds) && c.remoteAcademicTeacherIds.includes(teacherId)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Toggle remote academic access for all staff
+ */
+export function toggleRemoteAcademicAccessAll(enabled: boolean): SchoolPerimeterConfig {
+  const config = getPerimeterConfig();
+  config.remoteAcademicAccessAll = enabled;
+  savePerimeterConfig(config);
+  return config;
+}
+
+/**
+ * Toggle remote academic access for a specific individual teacher
+ */
+export function toggleTeacherRemoteAcademicAccess(teacherId: string, enabled?: boolean): SchoolPerimeterConfig {
+  const config = getPerimeterConfig();
+  let list = Array.isArray(config.remoteAcademicTeacherIds) ? [...config.remoteAcademicTeacherIds] : [];
+  const currentlyAllowed = list.includes(teacherId);
+  const willAllow = enabled !== undefined ? enabled : !currentlyAllowed;
+
+  if (willAllow) {
+    if (!list.includes(teacherId)) list.push(teacherId);
+  } else {
+    list = list.filter((id) => id !== teacherId);
+  }
+
+  config.remoteAcademicTeacherIds = list;
+  savePerimeterConfig(config);
+  return config;
 }
 
 /**
