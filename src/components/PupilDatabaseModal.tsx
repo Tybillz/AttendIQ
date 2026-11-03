@@ -26,6 +26,7 @@ import {
   addStudent,
   deleteStudent,
   addClass,
+  deleteClass,
   addTeacher,
   deleteTeacher,
   reassignClassTeacher,
@@ -160,6 +161,18 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
     setNewClassName('');
     setActiveTab('classes');
     onDataUpdated();
+  };
+
+  const handleDeleteClass = (classId: string, className: string) => {
+    const pupilCount = students.filter((s) => s.classId === classId).length;
+    const msg = pupilCount > 0
+      ? `Are you sure you want to delete class "${className}"?\n\n⚠️ Warning: There are currently ${pupilCount} enrolled pupils in this class. Their records will NOT be deleted, but they will be moved to "Unassigned" in the school directory so you can reassign them.`
+      : `Are you sure you want to delete class "${className}"?`;
+
+    if (confirm(msg)) {
+      deleteClass(classId);
+      onDataUpdated();
+    }
   };
 
   const handleRunBulkImport = () => {
@@ -683,9 +696,19 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-900">{c.name}</span>
-                        <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                          {count} Pupils
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                            {count} Pupils
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteClass(c.id, c.name)}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title={`Delete class section "${c.name}"`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-xs text-slate-500">{c.room} &bull; {c.grade}</p>
                       <p className="text-[11px] text-slate-400 mt-1">{c.scheduleTime}</p>

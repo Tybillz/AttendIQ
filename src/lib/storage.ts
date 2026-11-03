@@ -198,6 +198,59 @@ export function addClass(newClass: Omit<ClassSection, 'id' | 'pupilCount'>): Cla
   return created;
 }
 
+export function deleteClass(classId: string): boolean {
+  const classes = getClasses();
+  const targetClass = classes.find((c) => c.id === classId);
+  if (!targetClass) return false;
+
+  const updatedClasses = classes.filter((c) => c.id !== classId);
+  saveClasses(updatedClasses);
+
+  // Safely move any pupils in this deleted class to 'unassigned' so their records are not lost
+  const students = getStudents();
+  let studentsUpdated = false;
+  students.forEach((s) => {
+    if (s.classId === classId) {
+      s.classId = 'unassigned';
+      studentsUpdated = true;
+    }
+  });
+  if (studentsUpdated) {
+    saveStudents(students);
+  }
+
+  // Remove class from teacher assignments
+  const teachers = getTeachers();
+  let teachersUpdated = false;
+  teachers.forEach((t) => {
+    if (t.assignedClassIds?.includes(classId)) {
+      t.assignedClassIds = t.assignedClassIds.filter((id) => id !== classId);
+      teachersUpdated = true;
+    }
+  });
+  if (teachersUpdated) {
+    saveTeachers(teachers);
+  }
+
+  try {
+    addAuditLog({
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      actorRole: 'admin',
+      action: 'RECORD_REVERTED',
+      targetType: 'session',
+      targetId: classId,
+      targetName: targetClass.name,
+      className: targetClass.name,
+      classId,
+      severity: 'warning',
+      details: `Administrator deleted class section "${targetClass.name}". Enrolled pupils were safely moved to Unassigned in the school directory.`,
+    });
+  } catch {}
+
+  return true;
+}
+
 // Teachers
 export function getTeachers(): Teacher[] {
   const loaded = getStored<Teacher[]>(KEYS.TEACHERS, INITIAL_TEACHERS);
