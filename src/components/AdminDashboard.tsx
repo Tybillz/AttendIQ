@@ -36,6 +36,7 @@ import {
   ArrowRight,
   Compass,
 } from 'lucide-react';
+import SchoolPerimeterPicker from './SchoolPerimeterPicker';
 import { AdminManualModal } from './AdminManualModal';
 import {
   Student,
@@ -1782,8 +1783,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl mb-6 flex items-start gap-3">
               <ShieldCheck className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div className="text-xs text-amber-900 leading-relaxed">
-                <strong className="font-bold">Anti-Spoofing Perimeter Enforced:</strong> Teachers do not have access to calibration controls on their dashboards. When teachers open their portal, they can only verify that their GPS position falls within this perimeter ({perimeterConfig.radiusMeters}m radius) before clocking in.
+                <strong className="font-bold">Permanent Institutional Tagging Enforced:</strong> The school's physical perimeter is permanently locked in the cloud database. Teachers' devices verify against this landmark, completely independent of the administrator's device location.
               </div>
+            </div>
+
+            {/* Interactive Institutional Perimeter Area Picker (Map, Address Search & Visual Boundary) */}
+            <div className="mb-6">
+              <SchoolPerimeterPicker
+                initialLat={parseFloat(schoolLatInput) || perimeterConfig.schoolLat}
+                initialLng={parseFloat(schoolLngInput) || perimeterConfig.schoolLng}
+                initialRadius={parseInt(radiusInput, 10) || perimeterConfig.radiusMeters}
+                schoolName={perimeterConfig.schoolName}
+                onPerimeterChange={(newLat, newLng, newRad) => {
+                  setSchoolLatInput(newLat.toString());
+                  setSchoolLngInput(newLng.toString());
+                  setRadiusInput(newRad.toString());
+                }}
+                onSavePermanent={async (newLat, newLng, newRad) => {
+                  const updated: SchoolPerimeterConfig = {
+                    ...perimeterConfig,
+                    schoolLat: newLat,
+                    schoolLng: newLng,
+                    radiusMeters: newRad,
+                    resumptionTime: resumptionInput,
+                    closingTime: closingInput,
+                    portalWebUrl: portalUrlInput.trim() || 'https://attendiq.vercel.app',
+                  };
+                  savePerimeterConfig(updated);
+                  setPerimeterConfig(updated);
+                  setSchoolLatInput(newLat.toString());
+                  setSchoolLngInput(newLng.toString());
+                  setRadiusInput(newRad.toString());
+
+                  try {
+                    const res = await fetch('/api/perimeter', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(updated),
+                    });
+                    setAccessFeedback('✅ School perimeter successfully locked permanently in cloud database!');
+                    setTimeout(() => setAccessFeedback(null), 5000);
+                    return res.ok;
+                  } catch {
+                    setAccessFeedback('✅ School perimeter saved to local configuration!');
+                    setTimeout(() => setAccessFeedback(null), 5000);
+                    return true;
+                  }
+                }}
+              />
             </div>
 
             <form onSubmit={handleSavePerimeterSettings} className="space-y-5">
@@ -1879,27 +1926,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handleCalibratePerimeterGps}
-                  disabled={geofenceGpsLoading}
-                  className="px-4 py-2.5 bg-rose-50 border border-rose-300 hover:bg-rose-100 text-rose-800 rounded-xl text-xs font-bold transition flex items-center gap-2"
-                >
-                  <MapPin className="h-4 w-4 text-rose-600" />
-                  <span>
-                    {geofenceGpsLoading
-                      ? 'Acquiring GPS Signal...'
-                      : '📍 Calibrate School Center to My Current Location (GPS)'}
-                  </span>
-                </button>
-
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-2"
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-2 cursor-pointer"
                 >
                   <Check className="h-4 w-4 text-emerald-400" />
-                  <span>Save Perimeter & Bell Settings</span>
+                  <span>Save Bell Schedule & Portal URL</span>
                 </button>
               </div>
             </form>

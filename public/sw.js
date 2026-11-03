@@ -1,5 +1,5 @@
 // AttendIQ Offline-First Service Worker
-const CACHE_NAME = 'attendiq-offline-v3';
+const CACHE_NAME = 'attendiq-offline-v4';
 
 const STATIC_ASSETS = [
   '/',
