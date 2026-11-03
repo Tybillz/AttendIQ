@@ -49,7 +49,7 @@ import {
   getExcuseForStudentOnDate,
 } from '@/lib/storage';
 import { downloadClassAttendanceDossierPDF } from '@/lib/pdfReportGenerator';
-import { generateWhatsAppUrl } from '@/lib/notifications';
+import { generateWhatsAppUrl, generateChildStatusWhatsAppMessage, sendLiveNotification } from '@/lib/notifications';
 
 interface TeacherRollCallProps {
   classes: ClassSection[];
@@ -82,6 +82,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
   const [noteText, setNoteText] = useState('');
   const [selectedFlag, setSelectedFlag] = useState<PupilFlag>('late arrival');
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
+  const [isDispatchingWhatsApp, setIsDispatchingWhatsApp] = useState(false);
 
   React.useEffect(() => {
     const handleBranding = () => setBranding(getSchoolBranding());
@@ -252,6 +253,57 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
     }
   };
 
+  const handleAutomateParentWhatsApp = async () => {
+    if (classStudents.length === 0) {
+      alert('No pupils in this class to notify.');
+      return;
+    }
+
+    const pupilsWithParents = classStudents.filter((s) => s.parentPhone);
+    if (pupilsWithParents.length === 0) {
+      alert('No parent phone numbers registered in this class.');
+      return;
+    }
+
+    const absentPupils = pupilsWithParents.filter((s) => currentSession?.records[s.id]?.status === 'absent');
+    const presentPupils = pupilsWithParents.filter(
+      (s) => currentSession?.records[s.id]?.status === 'present' || !currentSession?.records[s.id]?.status
+    );
+    const latePupils = pupilsWithParents.filter((s) => currentSession?.records[s.id]?.status === 'late');
+
+    const confirmMsg = `Automated WhatsApp Parent Communication:\n\nReady to dispatch automated updates to ${pupilsWithParents.length} parents:\n• ${presentPupils.length} Present\n• ${latePupils.length} Late\n• ${absentPupils.length} Absent\n\nEach parent will receive a personalized message informing them of their child. Proceed?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    setIsDispatchingWhatsApp(true);
+    let count = 0;
+    for (const s of pupilsWithParents) {
+      const status = currentSession?.records[s.id]?.status || 'present';
+      const msg = generateChildStatusWhatsAppMessage({
+        studentName: s.name,
+        parentName: s.parentName,
+        className: currentClass?.name || 'Class',
+        schoolName: branding.schoolName,
+        status: status as any,
+        time: currentSession?.records[s.id]?.markedAt,
+        date: selectedDate,
+        rollNumber: s.rollNumber,
+      });
+
+      await sendLiveNotification({
+        studentName: s.name,
+        parentName: s.parentName,
+        parentPhone: s.parentPhone,
+        message: msg,
+        channel: 'WhatsApp',
+        type: status === 'absent' ? 'Urgent Absence Alert' : 'Daily Presence Ping',
+      });
+      count++;
+    }
+    setIsDispatchingWhatsApp(false);
+    alert(`Automated WhatsApp Engine:\n\nSuccessfully dispatched ${count} personalized WhatsApp updates informing parents of their child's attendance!`);
+  };
+
   const toggleExpand = (studentId: string) => {
     setExpandedPupilIds((prev) => ({
       ...prev,
@@ -385,6 +437,17 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
           >
             <Zap className="h-4 w-4" />
             <span>Auto-Tag Absent ({unmarkedCount})</span>
+          </button>
+
+          {/* Automate Parent WhatsApp */}
+          <button
+            onClick={handleAutomateParentWhatsApp}
+            disabled={isDispatchingWhatsApp || classStudents.length === 0}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-600/20 transition active:scale-95 disabled:opacity-40"
+            title="Automate WhatsApp status notifications to all parents informing them of their child today"
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span>{isDispatchingWhatsApp ? 'Dispatching...' : 'Automate Parent WhatsApp'}</span>
           </button>
 
           {/* Export Class CSV */}
@@ -725,11 +788,21 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                             <a
                               href={generateWhatsAppUrl(
                                 student.parentPhone,
-                                `Hello ${student.parentName}, this is a notice from ${branding.schoolName} regarding ${student.name} in ${currentClass?.name || 'class'}.`
+                                generateChildStatusWhatsAppMessage({
+                                  studentName: student.name,
+                                  parentName: student.parentName,
+                                  className: currentClass?.name || 'Class',
+                                  schoolName: branding.schoolName,
+                                  status: (entry?.status as any) || 'present',
+                                  time: entry?.markedAt,
+                                  date: selectedDate,
+                                  rollNumber: student.rollNumber,
+                                })
                               )}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 transition"
+                              title="Send automated WhatsApp update to parent informing them of their child"
                             >
                               <MessageSquare className="h-3 w-3" /> WhatsApp Parent
                             </a>

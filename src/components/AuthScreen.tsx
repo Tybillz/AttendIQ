@@ -53,7 +53,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   classes: initialClasses,
   onLoginSuccess,
 }) => {
-  const [tab, setTab] = useState<'teacher' | 'admin' | 'gate' | 'vendor'>('teacher');
+  const [tab, setTab] = useState<'teacher' | 'admin' | 'vendor'>('teacher');
   const [teacherList, setTeacherList] = useState<Teacher[]>(initialTeachers);
   const [classList, setClassList] = useState<ClassSection[]>(initialClasses);
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
@@ -358,21 +358,7 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
             <span>Principal</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setTab('gate');
-              setError(null);
-            }}
-            className={`flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-xl transition flex items-center justify-center gap-1 shrink-0 ${
-              tab === 'gate'
-                ? 'bg-white text-amber-700 shadow-xs border border-slate-200'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <ShieldAlert className="h-3.5 w-3.5" />
-            <span>Gate</span>
-          </button>
+
 
           <button
             type="button"
@@ -525,53 +511,8 @@ _Thank you for choosing AttendIQ Multi-Tenant Enterprise._`;
                 <ArrowRight className="h-4 w-4" />
               </button>
             </form>
-          ) : tab === 'gate' ? (
-            <form onSubmit={handleGateLogin} className="space-y-4">
-              <div>
-                <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl mb-3 flex items-start gap-2.5">
-                  <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-900">
-                    <p className="font-bold">Gate Security Post</p>
-                    <p className="text-[11px] text-amber-700/80 mt-0.5">
-                      Fast physical gatekeeper scanner and late-arrival register.
-                    </p>
-                  </div>
-                </div>
-
-                <label className="text-xs font-bold text-slate-700 block mb-1.5 flex items-center justify-between">
-                  <span>Enter Gate Security Passcode:</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Gatehouse</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={gatePasscode}
-                    onChange={(e) => setGatePasscode(e.target.value)}
-                    placeholder="••••"
-                    className="w-full px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-300 font-mono text-center text-xl tracking-[0.3em] font-black text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none placeholder:text-slate-300"
-                    required
-                  />
-                  <Lock className="h-4 w-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-              </div>
-
-              {error && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 text-center">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold text-sm shadow-md shadow-amber-600/20 active:scale-98 transition flex items-center justify-center gap-2"
-              >
-                <span>Access Gate Terminal</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </form>
           ) : (
-            /* TAB 4: VENDOR MASTER PORTAL & REVOCATIONS AUTHORITY */
+            /* TAB 3: VENDOR MASTER PORTAL & REVOCATIONS AUTHORITY */
             <div className="space-y-4">
               {!vendorUnlocked ? (
                 /* Master PIN Gate */
