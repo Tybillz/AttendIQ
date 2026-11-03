@@ -25,7 +25,9 @@ import {
   Unlock,
   FileText,
   CheckCircle2,
+  UserPlus,
 } from 'lucide-react';
+import { AddPupilToClassModal } from './AddPupilToClassModal';
 import confetti from 'canvas-confetti';
 import {
   Student,
@@ -83,6 +85,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
   const [selectedFlag, setSelectedFlag] = useState<PupilFlag>('late arrival');
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [isDispatchingWhatsApp, setIsDispatchingWhatsApp] = useState(false);
+  const [isAddPupilModalOpen, setIsAddPupilModalOpen] = useState(false);
 
   React.useEffect(() => {
     const handleBranding = () => setBranding(getSchoolBranding());
@@ -411,7 +414,16 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
 
         {/* Quick Actions Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-
+          {/* Add Existing Pupil from Directory */}
+          <button
+            type="button"
+            onClick={() => setIsAddPupilModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-xs hover:bg-indigo-100 hover:text-indigo-900 shadow-xs transition active:scale-95 cursor-pointer"
+            title="Enroll or transfer an existing student from the school-wide directory into this class"
+          >
+            <UserPlus className="h-4 w-4 text-indigo-600" />
+            <span>➕ Add Pupil to Class</span>
+          </button>
 
           {/* Mark All Present */}
           <button
@@ -1129,6 +1141,26 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
               </div>
             );
           })
+        ) : classStudents.length === 0 ? (
+          <div className="bg-white rounded-3xl p-10 text-center border border-slate-200 space-y-4">
+            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <UserPlus className="h-7 w-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">No Pupils Enrolled in {currentClass?.name}</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                This classroom register currently has 0 pupils assigned. As Form Teacher, you can search the central school directory and enroll or transfer existing students into your class roll call.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAddPupilModalOpen(true)}
+              className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl transition shadow-md flex items-center gap-2 mx-auto cursor-pointer"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>➕ Add Pupil from School Directory</span>
+            </button>
+          </div>
         ) : (
           <div className="bg-white rounded-3xl p-12 text-center border border-slate-200">
             <Search className="h-8 w-8 text-slate-300 mx-auto mb-2" />
@@ -1139,6 +1171,21 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal for adding/transferring pupils from school directory */}
+      {currentClass && (
+        <AddPupilToClassModal
+          isOpen={isAddPupilModalOpen}
+          onClose={() => setIsAddPupilModalOpen(false)}
+          targetClass={currentClass}
+          allStudents={students}
+          allClasses={classes}
+          currentTeacherName={currentClass.teacherName || 'Form Teacher'}
+          onStudentEnrolled={() => {
+            onDataUpdated();
+          }}
+        />
+      )}
     </div>
   );
 };
