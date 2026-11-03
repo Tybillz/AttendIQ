@@ -60,6 +60,8 @@ import {
   getTeacherClockRecords,
   getDeviceLocks,
   unpairTeacherDevice,
+  clearAllDeviceLocks,
+  resetTeacherClockRecordsForDate,
   getLivePortalUrl,
 } from '@/lib/teacherAttendance';
 import { TeacherDeviceLock } from '@/types/attendance';
@@ -2120,9 +2122,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Staff devices are locked to prevent proxy clock-ins ("buddy punching"). Unpair a device if a staff member gets a new phone.
                 </p>
               </div>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3 py-1 rounded-xl">
-                {deviceLocks.length} Devices Paired
-              </span>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Testing Sandbox Mode Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextState = !perimeterConfig.testingMode;
+                    const updated = { ...perimeterConfig, testingMode: nextState };
+                    savePerimeterConfig(updated);
+                    setPerimeterConfig(updated);
+                    setAccessFeedback(
+                      nextState
+                        ? '🧪 Testing Sandbox Mode ACTIVATED: Single-device constraints disabled for multi-teacher evaluation on 1 computer!'
+                        : '🔒 Production Mode RESTORED: Strict 1-device-per-teacher anti-cheat rules enforced.'
+                    );
+                    setTimeout(() => setAccessFeedback(null), 5000);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+                    perimeterConfig.testingMode
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-sm animate-pulse'
+                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                  }`}
+                  title="Enable sandbox mode to test clocking in multiple teachers on the same PC/phone"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>{perimeterConfig.testingMode ? '🧪 Sandbox Mode: ACTIVE' : 'Enable Testing Sandbox'}</span>
+                </button>
+
+                {/* Reset Today's Punches Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("Reset today's attendance clock-in punches? This clears conflicting punches so you can test clock-in afresh today.")) {
+                      resetTeacherClockRecordsForDate(selectedDate);
+                      setTeacherClockRecords(getTeacherClockRecords());
+                      setAccessFeedback("✅ Today's clock-in punches cleared for fresh testing!");
+                      setTimeout(() => setAccessFeedback(null), 4000);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  title="Clear today's clock-in records to test punches afresh"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>Reset Today's Clock-Ins</span>
+                </button>
+
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3 py-1.5 rounded-xl">
+                  {deviceLocks.length} Devices Paired
+                </span>
+              </div>
             </div>
 
             {deviceLocks.length === 0 ? (

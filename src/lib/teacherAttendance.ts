@@ -159,6 +159,21 @@ export function unpairTeacherDevice(teacherId: string): void {
 }
 
 /**
+ * Principal resets all device locks (useful for fresh onboarding or testing)
+ */
+export function clearAllDeviceLocks(): void {
+  saveDeviceLocks([]);
+}
+
+/**
+ * Reset/Clear clock-in attendance records for a specific date (for testing or audit reset)
+ */
+export function resetTeacherClockRecordsForDate(dateStr: string): void {
+  const records = getTeacherClockRecords().filter((r) => r.date !== dateStr);
+  saveTeacherClockRecords(records);
+}
+
+/**
  * Manually lock a teacher to a device
  */
 export function pairTeacherDevice(lock: TeacherDeviceLock): void {
@@ -436,41 +451,44 @@ export function clockInTeacher(
   if (hardwareProfile) {
     const allLocks = getDeviceLocks();
 
-    // 2A. DEVICE EXCLUSIVITY: Check if this physical device is already bound to another teacher
-    const boundToOther = allLocks.find(
-      (l) => l.deviceFingerprint === hardwareProfile.fingerprint && l.teacherId !== teacherId
-    );
-    if (boundToOther) {
-      return {
-        success: false,
-        message: `🛑 Device Already Bound: This physical device is already bound to ${boundToOther.teacherName}. AttendIQ enforces strict single-device ownership to prevent proxy clock-ins ("buddy punching"). Each teacher must use their personal device.`,
-      };
-    }
+    // When testingMode is disabled (Production), enforce strict 1-device-per-teacher & single-device-per-day rules
+    if (!config.testingMode) {
+      // 2A. DEVICE EXCLUSIVITY: Check if this physical device is already bound to another teacher
+      const boundToOther = allLocks.find(
+        (l) => l.deviceFingerprint === hardwareProfile.fingerprint && l.teacherId !== teacherId
+      );
+      if (boundToOther) {
+        return {
+          success: false,
+          message: `🛑 Device Already Bound: This physical device is already bound to ${boundToOther.teacherName}. AttendIQ enforces strict single-device ownership to prevent proxy clock-ins ("buddy punching"). Each teacher must use their personal device.`,
+        };
+      }
 
-    // 2B. TEACHER LOCK: If this teacher is already locked to another device, prevent mismatch
-    const existingLock = allLocks.find((l) => l.teacherId === teacherId);
-    if (existingLock && existingLock.deviceFingerprint !== hardwareProfile.fingerprint) {
-      return {
-        success: false,
-        message: `🛑 Anti-Cheat Device Mismatch: Your account is locked to your registered device (${existingLock.deviceName}). You cannot clock in for yourself from another phone, nor can colleagues clock in for you. Please notify the Principal if you changed phones.`,
-      };
-    }
+      // 2B. TEACHER LOCK: If this teacher is already locked to another device, prevent mismatch
+      const existingLock = allLocks.find((l) => l.teacherId === teacherId);
+      if (existingLock && existingLock.deviceFingerprint !== hardwareProfile.fingerprint) {
+        return {
+          success: false,
+          message: `🛑 Anti-Cheat Device Mismatch: Your account is locked to your registered device (${existingLock.deviceName}). You cannot clock in for yourself from another phone, nor can colleagues clock in for you. Please notify the Principal if you changed phones.`,
+        };
+      }
 
-    // 2C. SINGLE-DEVICE PER DAY CONSTRAINT: Ensure this physical device has not clocked in another teacher today
-    const allRecords = getTeacherClockRecords();
-    const conflictRecord = allRecords.find(
-      (r) =>
-        r.date === dateStr &&
-        r.clockInTime &&
-        r.teacherId !== teacherId &&
-        r.deviceInfo?.includes(hardwareProfile.fingerprint)
-    );
+      // 2C. SINGLE-DEVICE PER DAY CONSTRAINT: Ensure this physical device has not clocked in another teacher today
+      const allRecords = getTeacherClockRecords();
+      const conflictRecord = allRecords.find(
+        (r) =>
+          r.date === dateStr &&
+          r.clockInTime &&
+          r.teacherId !== teacherId &&
+          r.deviceInfo?.includes(hardwareProfile.fingerprint)
+      );
 
-    if (conflictRecord) {
-      return {
-        success: false,
-        message: `🛑 Anti-Cheat Device Sharing Conflict: This smartphone has already clocked in ${conflictRecord.teacherName} today. A single device cannot be shared to clock in multiple teachers.`,
-      };
+      if (conflictRecord) {
+        return {
+          success: false,
+          message: `🛑 Anti-Cheat Device Sharing Conflict: This device has already clocked in ${conflictRecord.teacherName} today. A single device cannot be shared to clock in multiple teachers. (To test multiple teachers on one computer, enable "Testing Sandbox Mode" in Admin Dashboard or click "Reset Today's Test Punches").`,
+        };
+      }
     }
   }
 

@@ -257,6 +257,7 @@ export interface SchoolPerimeterConfig {
   closingTime: string; // "02:00 PM"
   portalWebUrl?: string; // Live production URL for WhatsApp slips (e.g. https://attendiq.vercel.app)
   dailyEntranceCodeOverride?: Record<string, string>; // date -> 4-digit code
+  testingMode?: boolean; // Testing sandbox mode: allows single computer/device to clock in multiple teachers
 }
 
 export interface TeacherDeviceLock {
