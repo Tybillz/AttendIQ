@@ -205,7 +205,10 @@ export type AuditActionType =
   | 'PUPIL_TRANSFERRED'
   | 'PUPIL_DELETED'
   | 'TEACHER_REASSIGNED'
-  | 'SECURITY_ALERT';
+  | 'SECURITY_ALERT'
+  | 'SYSTEM_SNAPSHOT_CREATED'
+  | 'SYSTEM_ROLLBACK_EXECUTED'
+  | 'SYSTEM_BACKUP_RESTORED';
 
 export interface AuditLogEntry {
   id: string;
@@ -273,5 +276,30 @@ export interface TeacherDeviceLock {
     gpu?: string;
     cpuCores?: number;
     screenRes?: string;
+  };
+}
+
+export interface SchoolBackupSnapshot {
+  id: string;
+  timestamp: string; // ISO string
+  formattedTime: string; // "Nov 3, 2026, 05:45 PM"
+  reason: string;
+  triggerType: 'auto' | 'manual';
+  stats: {
+    students: number;
+    classes: number;
+    teachers: number;
+    sessions: number;
+    grades: number;
+  };
+  data: {
+    students: Student[];
+    classes: ClassSection[];
+    teachers: Teacher[];
+    sessions: AttendanceSession[];
+    subjectGrades?: SubjectGradeRecord[];
+    alerts?: ParentAlert[];
+    settings?: AlertSettings;
+    analytics?: TeacherAnalytics[];
   };
 }

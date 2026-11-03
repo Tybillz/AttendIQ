@@ -15,6 +15,7 @@ import {
   AuditLogEntry,
   AuditActionType,
   ParentExcuse,
+  SchoolBackupSnapshot,
 } from '@/types/attendance';
 import {
   INITIAL_CLASSES,
@@ -39,6 +40,7 @@ const KEYS = {
   AUDIT_LOGS: 'attend_iq_audit_logs_v2',
   EXCUSES: 'attend_iq_excuses_v2',
   OFFLINE_QUEUE: 'attend_iq_offline_queue_v2',
+  SNAPSHOTS: 'attend_iq_snapshots_v2',
 };
 
 // Safe LocalStorage helpers
@@ -100,8 +102,30 @@ export function updateStudent(updated: Student): void {
 }
 
 export function deleteStudent(studentId: string): void {
-  const students = getStudents().filter((s) => s.id !== studentId);
-  saveStudents(students);
+  const students = getStudents();
+  const target = students.find((s) => s.id === studentId);
+  if (target) {
+    createSnapshot(`Auto-saved before deleting pupil "${target.name}" (${target.rollNumber})`, 'auto');
+  }
+  const filtered = students.filter((s) => s.id !== studentId);
+  saveStudents(filtered);
+
+  if (target) {
+    try {
+      addAuditLog({
+        actorId: 'admin',
+        actorName: 'School Administrator',
+        actorRole: 'admin',
+        action: 'PUPIL_DELETED',
+        targetType: 'pupil',
+        targetId: studentId,
+        targetName: target.name,
+        severity: 'warning',
+        details: `Pupil ${target.name} (Roll: ${target.rollNumber}) was deleted from directory. Auto-recovery snapshot captured.`,
+        canRevert: true,
+      });
+    } catch {}
+  }
 }
 
 export function addAcademicRecord(studentId: string, record: Omit<TestExamRecord, 'id'>): void {
@@ -202,6 +226,9 @@ export function deleteClass(classId: string): boolean {
   const classes = getClasses();
   const targetClass = classes.find((c) => c.id === classId);
   if (!targetClass) return false;
+
+  // Auto-protection snapshot before deleting class section
+  createSnapshot(`Auto-saved before deleting class "${targetClass.name}"`, 'auto');
 
   const updatedClasses = classes.filter((c) => c.id !== classId);
   saveClasses(updatedClasses);
@@ -394,8 +421,14 @@ export function updateTeacher(updated: Teacher): void {
 }
 
 export function deleteTeacher(teacherId: string): void {
-  const teachers = getTeachers().filter((t) => t.id !== teacherId);
-  saveTeachers(teachers);
+  const teachers = getTeachers();
+  const target = teachers.find((t) => t.id === teacherId);
+  if (target) {
+    createSnapshot(`Auto-saved before deleting staff member "${target.name}"`, 'auto');
+  }
+
+  const updatedTeachers = teachers.filter((t) => t.id !== teacherId);
+  saveTeachers(updatedTeachers);
 
   // Clear teacher from assigned classes
   const classes = getClasses();
@@ -771,6 +804,9 @@ export function bulkImportPupilsFromCSV(csvContent: string, classId: string): { 
   if (lines.length < 2) {
     return { added: 0, errors: ['CSV file is empty or missing data rows.'] };
   }
+
+  // Auto-protection snapshot before executing bulk import
+  createSnapshot('Auto-saved before CSV bulk pupil import', 'auto');
 
   // Header format expected: Name, RollNumber, Gender, ParentName, ParentPhone, ParentEmail, DOB
   const dataLines = lines.slice(1);
@@ -1223,4 +1259,242 @@ export function toggleAdminSessionUnlock(
   });
 
   return newState;
+}
+
+// -------------------------------------------------------------
+// SNAPSHOTS, ROLLBACK & DISASTER RECOVERY ENGINE
+// -------------------------------------------------------------
+
+export function saveAttendanceSessions(sessions: AttendanceSession[]): void {
+  setStored(KEYS.SESSIONS, sessions);
+}
+
+export function getSnapshots(): SchoolBackupSnapshot[] {
+  return getStored<SchoolBackupSnapshot[]>(KEYS.SNAPSHOTS, []);
+}
+
+export function saveSnapshots(snapshots: SchoolBackupSnapshot[]): void {
+  setStored(KEYS.SNAPSHOTS, snapshots);
+}
+
+export function createSnapshot(
+  reason: string,
+  triggerType: 'auto' | 'manual' = 'manual'
+): SchoolBackupSnapshot {
+  const students = getStudents();
+  const classes = getClasses();
+  const teachers = getTeachers();
+  const sessions = getAttendanceSessions();
+  const subjectGrades = getSubjectGrades();
+  const alerts = getParentAlerts();
+  const settings = getAlertSettings();
+  const analytics = getTeacherAnalytics();
+
+  const now = new Date();
+  const formattedTime =
+    now.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }) +
+    ', ' +
+    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const snapshot: SchoolBackupSnapshot = {
+    id: `snap-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+    timestamp: now.toISOString(),
+    formattedTime,
+    reason: reason.trim() || 'Manual System Snapshot',
+    triggerType,
+    stats: {
+      students: students.length,
+      classes: classes.length,
+      teachers: teachers.length,
+      sessions: sessions.length,
+      grades: subjectGrades.length,
+    },
+    data: {
+      students: JSON.parse(JSON.stringify(students)),
+      classes: JSON.parse(JSON.stringify(classes)),
+      teachers: JSON.parse(JSON.stringify(teachers)),
+      sessions: JSON.parse(JSON.stringify(sessions)),
+      subjectGrades: JSON.parse(JSON.stringify(subjectGrades)),
+      alerts: JSON.parse(JSON.stringify(alerts)),
+      settings: JSON.parse(JSON.stringify(settings)),
+      analytics: JSON.parse(JSON.stringify(analytics)),
+    },
+  };
+
+  const existing = getSnapshots();
+  // Keep last 15 rolling snapshots to prevent local storage exhaustion
+  const updated = [snapshot, ...existing].slice(0, 15);
+  saveSnapshots(updated);
+
+  try {
+    addAuditLog({
+      actorId: 'admin',
+      actorName: 'System Engine',
+      actorRole: 'admin',
+      action: 'SYSTEM_SNAPSHOT_CREATED',
+      targetType: 'session',
+      targetId: snapshot.id,
+      targetName: snapshot.reason,
+      severity: 'info',
+      details: `Captured ${triggerType} snapshot "${snapshot.reason}". Stats: ${students.length} pupils, ${classes.length} classes, ${teachers.length} staff.`,
+      canRevert: true,
+    });
+  } catch {}
+
+  return snapshot;
+}
+
+export function rollbackToSnapshot(snapshotId: string): {
+  success: boolean;
+  error?: string;
+  snapshot?: SchoolBackupSnapshot;
+} {
+  const snapshots = getSnapshots();
+  const target = snapshots.find((s) => s.id === snapshotId);
+  if (!target) {
+    return { success: false, error: 'Snapshot not found in local archives.' };
+  }
+
+  // Safety first: capture an automated safety snapshot of the state RIGHT NOW before executing rollback!
+  createSnapshot(
+    `Pre-Rollback Safety Point (before reverting to: ${target.formattedTime} - ${target.reason})`,
+    'auto'
+  );
+
+  try {
+    if (Array.isArray(target.data.students)) saveStudents(target.data.students);
+    if (Array.isArray(target.data.classes)) saveClasses(target.data.classes);
+    if (Array.isArray(target.data.teachers)) saveTeachers(target.data.teachers);
+    if (Array.isArray(target.data.sessions)) saveAttendanceSessions(target.data.sessions);
+    if (Array.isArray(target.data.subjectGrades)) saveSubjectGrades(target.data.subjectGrades);
+    if (Array.isArray(target.data.alerts)) setStored(KEYS.ALERTS, target.data.alerts);
+    if (target.data.settings) saveAlertSettings(target.data.settings);
+    if (Array.isArray(target.data.analytics)) setStored(KEYS.ANALYTICS, target.data.analytics);
+
+    addAuditLog({
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      actorRole: 'admin',
+      action: 'SYSTEM_ROLLBACK_EXECUTED',
+      targetType: 'session',
+      targetId: target.id,
+      targetName: target.reason,
+      severity: 'critical',
+      details: `Principal executed database rollback to snapshot captured on ${target.formattedTime}. Restored ${target.stats.students} pupils, ${target.stats.classes} classes, ${target.stats.teachers} staff.`,
+      canRevert: false,
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('attend-iq-storage-update'));
+    }
+
+    return { success: true, snapshot: target };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to rollback snapshot data.' };
+  }
+}
+
+export function deleteSnapshot(snapshotId: string): void {
+  const existing = getSnapshots().filter((s) => s.id !== snapshotId);
+  saveSnapshots(existing);
+}
+
+export function exportFullSchoolBackupJSON(): string {
+  const backup = {
+    attendIqVersion: '2.0.0',
+    backupType: 'COMPLETE_INSTITUTIONAL_DATABASE',
+    exportedAt: new Date().toISOString(),
+    schoolMeta: {
+      name: 'Innovative International Secondary School',
+      district: 'Gwarinpa / Maitama District, Abuja FCT, Nigeria',
+    },
+    stats: {
+      pupilsCount: getStudents().length,
+      classesCount: getClasses().length,
+      teachersCount: getTeachers().length,
+      attendanceSessionsCount: getAttendanceSessions().length,
+      subjectGradesCount: getSubjectGrades().length,
+    },
+    data: {
+      students: getStudents(),
+      classes: getClasses(),
+      teachers: getTeachers(),
+      sessions: getAttendanceSessions(),
+      subjectGrades: getSubjectGrades(),
+      alerts: getParentAlerts(),
+      settings: getAlertSettings(),
+      analytics: getTeacherAnalytics(),
+      excuses: getParentExcuses(),
+    },
+  };
+  return JSON.stringify(backup, null, 2);
+}
+
+export function restoreSchoolFromJSON(jsonString: string): {
+  success: boolean;
+  error?: string;
+  counts?: { students: number; classes: number; teachers: number; sessions: number };
+} {
+  try {
+    const parsed = JSON.parse(jsonString);
+    if (!parsed || !parsed.data) {
+      return { success: false, error: 'Invalid backup format: missing root database payload.' };
+    }
+
+    const { students, classes, teachers, sessions, subjectGrades, alerts, settings, analytics, excuses } =
+      parsed.data;
+
+    if (!Array.isArray(students) || !Array.isArray(classes) || !Array.isArray(teachers)) {
+      return {
+        success: false,
+        error: 'Corrupt backup file: Expected valid arrays for pupils, classes, and teachers.',
+      };
+    }
+
+    // Safety snapshot before restoring external backup
+    createSnapshot('Pre-Restore Safety Point (before importing external backup file)', 'auto');
+
+    saveStudents(students);
+    saveClasses(classes);
+    saveTeachers(teachers);
+    if (Array.isArray(sessions)) saveAttendanceSessions(sessions);
+    if (Array.isArray(subjectGrades)) saveSubjectGrades(subjectGrades);
+    if (Array.isArray(alerts)) setStored(KEYS.ALERTS, alerts);
+    if (settings) saveAlertSettings(settings);
+    if (Array.isArray(analytics)) setStored(KEYS.ANALYTICS, analytics);
+    if (Array.isArray(excuses)) saveParentExcuses(excuses);
+
+    addAuditLog({
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      actorRole: 'admin',
+      action: 'SYSTEM_BACKUP_RESTORED',
+      targetType: 'session',
+      targetId: `restore-${Date.now()}`,
+      targetName: 'External JSON Backup',
+      severity: 'critical',
+      details: `Restored entire school database from offline backup file. Loaded ${students.length} pupils, ${classes.length} classes, and ${teachers.length} staff.`,
+      canRevert: false,
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('attend-iq-storage-update'));
+    }
+
+    return {
+      success: true,
+      counts: {
+        students: students.length,
+        classes: classes.length,
+        teachers: teachers.length,
+        sessions: Array.isArray(sessions) ? sessions.length : 0,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to parse JSON backup.' };
+  }
 }

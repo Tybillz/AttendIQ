@@ -28,6 +28,7 @@ import {
   syncDataFromCloud,
 } from '@/lib/storage';
 import { AuditLogModal } from '@/components/AuditLogModal';
+import { DisasterRecoveryModal } from '@/components/DisasterRecoveryModal';
 import {
   INITIAL_CLASSES,
   INITIAL_STUDENTS,
@@ -119,6 +120,7 @@ export default function Home() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [isWhitelabelModalOpen, setIsWhitelabelModalOpen] = useState(false);
   const [whitelabelModalTab, setWhitelabelModalTab] = useState<'branding' | 'licensing'>('branding');
   const [databaseModalTab, setDatabaseModalTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers'>('pupils');
@@ -203,7 +205,9 @@ export default function Home() {
     });
 
     const handleOpenAuditModal = () => setIsAuditModalOpen(true);
+    const handleOpenRecoveryModal = () => setIsRecoveryModalOpen(true);
     window.addEventListener('attendiq:open-audit-modal', handleOpenAuditModal);
+    window.addEventListener('attendiq:open-recovery-modal', handleOpenRecoveryModal);
 
     window.addEventListener('attend-iq-storage-update', handleStorageUpdate);
     window.addEventListener('attend-iq-auth-update', handleStorageUpdate);
@@ -216,6 +220,7 @@ export default function Home() {
       window.removeEventListener('attendiq:branding-updated', handleBranding);
       window.removeEventListener('attendiq:license-updated', handleLicense);
       window.removeEventListener('attendiq:open-audit-modal', handleOpenAuditModal);
+      window.removeEventListener('attendiq:open-recovery-modal', handleOpenRecoveryModal);
     };
   }, [syncData]);
 
@@ -800,6 +805,13 @@ export default function Home() {
           setLicenseStatus(getLicenseStatus());
           syncData();
         }}
+      />
+
+      {/* Disaster Recovery, 1-Click Rollback & Full Database Backups Modal */}
+      <DisasterRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        onDataRestored={syncData}
       />
     </div>
   );

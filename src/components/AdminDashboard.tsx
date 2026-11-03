@@ -35,9 +35,13 @@ import {
   HelpCircle,
   ArrowRight,
   Compass,
+  Shield,
+  History,
+  RotateCcw,
 } from 'lucide-react';
 import SchoolPerimeterPicker from './SchoolPerimeterPicker';
 import { AdminManualModal } from './AdminManualModal';
+import { DisasterRecoveryModal } from './DisasterRecoveryModal';
 import {
   Student,
   ClassSection,
@@ -106,10 +110,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenSettingsModal,
   onSelectStudentProfile,
   onOpenWhitelabelModal,
+  onDataUpdated,
 }) => {
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [activeTab, setActiveTab] = useState<'overview' | 'chronic_absentees' | 'teacher_analytics' | 'reports' | 'access_control'>('overview');
   const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState<boolean>(false);
   const [selectedBroadsheetClass, setSelectedBroadsheetClass] = useState<string>('all');
   const [selectedTerm, setSelectedTerm] = useState<string>('First Term (2026/2027 Session)');
   const [broadsheetMode, setBroadsheetMode] = useState<'comprehensive' | 'attendance_only'>('comprehensive');
@@ -567,6 +573,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
 
             <button
+              onClick={() => setIsRecoveryModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 shadow-md active:scale-95 transition cursor-pointer"
+              title="Rollback points, disaster recovery, and offline backups"
+            >
+              <Shield className="h-4 w-4 text-emerald-400" />
+              <span>🛡️ Backup & Rollback</span>
+            </button>
+
+            <button
               onClick={() => onOpenDatabaseModal('teachers')}
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md active:scale-95 transition"
             >
@@ -755,6 +770,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }`}
         >
           <KeyRound className="h-4 w-4 text-amber-600" /> Staff PINs, Passwords & Geofence
+        </button>
+        <button
+          onClick={() => setIsRecoveryModalOpen(true)}
+          className="py-3.5 px-4 font-bold text-xs border-b-2 border-transparent text-amber-700 hover:text-amber-900 hover:bg-amber-50/50 rounded-t-xl transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <Shield className="h-4 w-4 text-amber-600" /> 🛡️ Snapshots & Rollback
         </button>
         <button
           onClick={() => onOpenDatabaseModal('teachers')}
@@ -2315,6 +2336,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onOpenAuditModal={() => {
           window.dispatchEvent(new CustomEvent('attendiq:open-audit-modal'));
         }}
+      />
+
+      {/* Zero Data Loss Disaster Recovery, Snapshot Rollback & Backup Modal */}
+      <DisasterRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        onDataRestored={onDataUpdated}
       />
     </div>
   );

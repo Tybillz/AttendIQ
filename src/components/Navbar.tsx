@@ -24,6 +24,7 @@ import {
   X,
   Building,
   Key,
+  Shield,
 } from 'lucide-react';
 import { AlertSettings, Teacher, ClassSection } from '@/types/attendance';
 import { flushOfflineQueue } from '@/lib/storage';
@@ -458,6 +459,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                     )}
                   </button>
                 )}
+
+                {/* System Rollback & Disaster Recovery Snapshots */}
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('attendiq:open-recovery-modal'))}
+                  className="p-2 rounded-lg text-slate-700 hover:text-amber-800 hover:bg-amber-50 border border-slate-200 transition-colors hidden xl:flex items-center gap-1.5 text-xs font-bold bg-white cursor-pointer"
+                  title="Disaster Recovery, Snapshot Rollback & Offline Backups"
+                >
+                  <Shield className="h-4 w-4 text-amber-600" />
+                  <span>Snapshots & Rollback</span>
+                </button>
 
                 {/* Parent Alerts Center */}
                 <button
