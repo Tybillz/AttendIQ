@@ -75,19 +75,19 @@ const STORAGE_KEYS = {
 // Cryptographic secret salt for license signing (Known only to software vendor)
 const VENDOR_SECRET_SALT = 'ATIQ_PRO_NIGERIA_SECURE_SALT_2026_X99';
 
-// Default initial branding (Apex Crest Academy default)
+// Default initial branding (Innovative International Secondary School default)
 export const DEFAULT_SCHOOL_BRANDING: SchoolBranding = {
-  schoolName: 'Apex Crest Academy',
-  shortName: 'Apex Crest',
+  schoolName: 'Innovative International Secondary School',
+  shortName: 'Innovative International',
   branchLocation: 'Abuja (FCT), Nigeria',
-  motto: 'Excellence, Integrity & Academic Distinction',
+  motto: 'Knowledge, Character & Excellence',
   crestEmoji: '🎓',
-  principalName: 'Mrs. Victoria Adebayo (M.Ed, TRCN)',
-  vicePrincipalName: 'Mr. Chinedu Okonkwo (B.Sc, PGDE)',
+  principalName: 'School Principal',
+  vicePrincipalName: 'Vice Principal (Academics)',
   contactPhone: '+234 803 456 7890',
-  contactEmail: 'admin@apexcrest.edu.ng',
-  address: 'Plot 104, Diplomatic Crescent, Maitama Extension, Abuja',
-  website: 'https://apexcrest.edu.ng',
+  contactEmail: 'admin@innovative.edu.ng',
+  address: 'Abuja (FCT), Nigeria',
+  website: 'https://attendiq.vercel.app',
   currentTerm: 'First Term (2026/2027 Session)',
   resumptionDate: 'Monday, 11th January 2027',
   updatedAt: new Date().toISOString(),
@@ -257,7 +257,7 @@ export function getSchoolLicense(): SchoolLicense | null {
     const raw = localStorage.getItem(STORAGE_KEYS.LICENSE);
     if (!raw) {
       // Default to bundled 1-Year Commercial Enterprise License for default school
-      const defaultLicense = generateSignedLicenseKey('Apex Crest Academy', 'annual', 12, 1000, 100).license;
+      const defaultLicense = generateSignedLicenseKey('Innovative International Secondary School', 'annual', 12, 1000, 100).license;
       localStorage.setItem(STORAGE_KEYS.LICENSE, JSON.stringify(defaultLicense));
       return defaultLicense;
     }

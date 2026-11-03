@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 // Default calibrated coordinates for Apex Crest Academy (Abuja, Nigeria)
 const FALLBACK_PERIMETER = {
-  schoolName: 'Apex Crest Academy',
+  schoolName: 'Innovative International Secondary School',
   schoolLat: 9.121251,
   schoolLng: 7.384811,
   radiusMeters: 250,

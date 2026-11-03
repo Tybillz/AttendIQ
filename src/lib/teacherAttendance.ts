@@ -2,7 +2,7 @@ import { TeacherClockRecord, SchoolPerimeterConfig, TeacherDeviceLock } from '@/
 import { addAuditLog } from './storage';
 
 export const DEFAULT_PERIMETER_CONFIG: SchoolPerimeterConfig = {
-  schoolName: 'Apex Crest Academy',
+  schoolName: 'Innovative International Secondary School',
   schoolLat: 9.121251, // Calibrated School Coordinates (Apex Crest Academy, Abuja)
   schoolLng: 7.384811,
   radiusMeters: 250, // 250m school perimeter

@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const whatsappToken = process.env.WHATSAPP_CLOUD_TOKEN;
     const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
     const termiiApiKey = process.env.TERMII_API_KEY;
-    const termiiSenderId = process.env.TERMII_SENDER_ID || 'APEXCREST';
+    const termiiSenderId = process.env.TERMII_SENDER_ID || 'ATTENDIQ';
     const webhookUrl = process.env.NOTIFICATION_WEBHOOK_URL;
 
     let dispatched = false;
