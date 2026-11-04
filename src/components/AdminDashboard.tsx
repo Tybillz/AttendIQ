@@ -3993,7 +3993,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 1: ISSUE OFFICIAL STAFF QUERY */}
       {isNewQueryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsNewQueryModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in"
+        >
           <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -4120,7 +4125,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 2: REVIEW STAFF QUERY & RECORD ADMINISTRATIVE RESOLUTION */}
       {selectedQueryForReview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedQueryForReview(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in"
+        >
           <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -4209,7 +4219,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 3: BROADCAST STAFF CIRCULAR / ANNOUNCEMENT */}
       {isNewAncModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsNewAncModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in"
+        >
           <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">

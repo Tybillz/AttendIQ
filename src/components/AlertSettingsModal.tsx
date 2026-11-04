@@ -37,6 +37,16 @@ export const AlertSettingsModal: React.FC<AlertSettingsModalProps> = ({
     setFormData({ ...settings });
   }, [settings]);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -51,31 +61,40 @@ export const AlertSettingsModal: React.FC<AlertSettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in"
+    >
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full max-h-[90vh] overflow-hidden flex flex-col relative animate-in zoom-in-95">
         {/* Header */}
-        <div className="p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between shrink-0 shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+            <div className="h-10 w-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
               <Sliders className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold">Parent Alert & Automation Settings</h3>
-              <p className="text-xs text-slate-300">
+              <h3 className="text-sm sm:text-base font-bold">Parent Alert & Automation Settings</h3>
+              <p className="text-[11px] sm:text-xs text-slate-300">
                 Configure chronic absence triggers, auto-notifications, and end-of-day policies
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-rose-600 text-white font-bold text-xs transition active:scale-95 cursor-pointer border border-white/20 shadow-xs shrink-0"
+            title="Cancel & Close (Esc)"
           >
             <X className="h-4 w-4" />
+            <span className="hidden sm:inline">Cancel</span>
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {/* Form Body with Internal Scroll */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 overscroll-contain">
           {/* Section 1: High Absence Alert Threshold */}
           <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200">
             <div className="flex items-center gap-2 text-amber-900 font-bold text-xs mb-1">
@@ -381,28 +400,30 @@ export const AlertSettingsModal: React.FC<AlertSettingsModalProps> = ({
               </label>
             </div>
           </div>
+          </div>
 
-          {/* Modal Footer */}
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+          {/* Modal Footer (Fixed at bottom) */}
+          <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
             {savedSuccess ? (
               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
                 <CheckCircle2 className="h-4 w-4" /> Preferences saved!
               </span>
             ) : (
-              <span className="text-[11px] text-slate-400">Settings sync automatically</span>
+              <span className="text-[11px] text-slate-500">Press ESC or click Cancel to exit</span>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition cursor-pointer shadow-2xs active:scale-95"
               >
-                Close
+                <X className="h-3.5 w-3.5" />
+                <span>Cancel</span>
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer active:scale-95"
               >
                 <Save className="h-4 w-4" /> Save Configuration
               </button>

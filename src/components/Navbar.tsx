@@ -473,7 +473,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Admin Passcode Verification Modal */}
       {isAdminModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsAdminModalOpen(false);
+              setAdminPasscodeInput('');
+              setAdminModalError(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in"
+        >
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 relative overflow-hidden animate-in zoom-in-95">
             <div className="h-1.5 w-full absolute top-0 left-0 bg-gradient-to-r from-indigo-600 via-sky-500 to-indigo-600" />
 
