@@ -159,11 +159,19 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
       return;
     }
 
-    if (isInsidePerimeter === false) {
-      setFeedback({
-        type: 'error',
-        message: `🛑 School Perimeter Breach: You are ${distanceMeters}m away from school grounds (Allowed: ${perimeterConfig.radiusMeters}m). Clock-in is only accepted within school grounds.`,
-      });
+    // Strict Perimeter Enforcement: Staff are strictly blocked from clocking in outside school grounds
+    if (isInsidePerimeter !== true && !perimeterConfig.testingMode) {
+      if (isInsidePerimeter === false) {
+        setFeedback({
+          type: 'error',
+          message: `🛑 School Perimeter Breach: You are ${distanceMeters}m away from school grounds (Allowed: ${perimeterConfig.radiusMeters}m). Staff are strictly blocked from clocking in outside the school perimeter.`,
+        });
+      } else {
+        setFeedback({
+          type: 'error',
+          message: `🛑 GPS Verification Required: Your location could not be verified within school grounds. Staff must be physically located within the school perimeter with device location enabled to clock in.`,
+        });
+      }
       return;
     }
 
@@ -462,10 +470,16 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
               {/* Clock In Submit Button */}
               <button
                 onClick={handleClockIn}
-                disabled={actionLoading || digits.join('').length !== 4 || isInsidePerimeter === false}
+                disabled={
+                  actionLoading ||
+                  digits.join('').length !== 4 ||
+                  (isInsidePerimeter !== true && !perimeterConfig.testingMode)
+                }
                 className={`w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition shadow-lg ${
-                  isInsidePerimeter === false
+                  isInsidePerimeter === false && !perimeterConfig.testingMode
                     ? 'bg-rose-950/80 text-rose-300 border border-rose-700/80 cursor-not-allowed'
+                    : isInsidePerimeter !== true && !perimeterConfig.testingMode
+                    ? 'bg-amber-950/80 text-amber-300 border border-amber-700/80 cursor-not-allowed'
                     : digits.join('').length === 4
                     ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/20 active:scale-98 cursor-pointer'
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed'
@@ -473,10 +487,15 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
               >
                 {actionLoading ? (
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : isInsidePerimeter === false ? (
+                ) : isInsidePerimeter === false && !perimeterConfig.testingMode ? (
                   <>
                     <AlertTriangle className="h-4 w-4 text-rose-400" />
-                    <span>Outside School Perimeter ({distanceMeters}m Away)</span>
+                    <span>Blocked: Outside School Grounds ({distanceMeters}m)</span>
+                  </>
+                ) : isInsidePerimeter !== true && !perimeterConfig.testingMode ? (
+                  <>
+                    <AlertTriangle className="h-4 w-4 text-amber-400" />
+                    <span>Blocked: Must Be in School Perimeter (GPS Unverified)</span>
                   </>
                 ) : (
                   <>

@@ -375,8 +375,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* LICENSE EXPIRED ALERT BANNER (If not revoked) */}
-        {licenseStatus.isExpired && licenseStatus.status !== 'revoked' && (
+        {/* LICENSE EXPIRED ALERT BANNER (Only visible to Admin) */}
+        {currentRole === 'admin' && licenseStatus.isExpired && licenseStatus.status !== 'revoked' && (
           <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-rose-600 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl border border-rose-500 animate-in fade-in">
             <div className="flex items-center gap-3.5">
               <span className="p-2.5 rounded-2xl bg-white/20 text-white text-xl">🚨</span>
@@ -401,8 +401,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* LICENSE EXPIRING SOON BANNER */}
-        {!licenseStatus.isExpired && licenseStatus.isExpiringSoon && (
+        {/* LICENSE EXPIRING SOON BANNER (Only visible to Admin) */}
+        {currentRole === 'admin' && !licenseStatus.isExpired && licenseStatus.isExpiringSoon && (
           <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-amber-500 text-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg border border-amber-400 animate-in fade-in">
             <div className="flex items-center gap-3.5">
               <span className="p-2.5 rounded-2xl bg-slate-950/15 text-slate-950 text-xl">⚠️</span>

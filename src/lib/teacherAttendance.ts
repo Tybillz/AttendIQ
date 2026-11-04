@@ -536,10 +536,17 @@ export function clockInTeacher(
     }
   }
 
-  // 4. Verify School Perimeter Geofence
+  // 4. Strict School Perimeter Geofence Enforcement
   let distanceMeters = 0;
   let isWithin = true;
-  if (userCoords) {
+  if (!config.testingMode) {
+    if (!userCoords) {
+      return {
+        success: false,
+        message: `🛑 GPS Verification Required: Could not verify your location within school grounds. Staff must be physically located within the school perimeter with device location enabled to clock in.`,
+      };
+    }
+
     const perimeterCheck = checkSchoolPerimeter(
       userCoords.lat,
       userCoords.lng,
@@ -552,9 +559,18 @@ export function clockInTeacher(
     if (!isWithin) {
       return {
         success: false,
-        message: `🛑 School Parameter Breach: You are ${distanceMeters} meters away from school grounds (Maximum allowed: ${config.radiusMeters}m). Clock-in is only accepted within school grounds.`,
+        message: `🛑 School Parameter Breach: You are ${distanceMeters} meters away from school grounds (Maximum allowed: ${config.radiusMeters}m). Staff are strictly blocked from clocking in outside school premises.`,
       };
     }
+  } else if (userCoords) {
+    const perimeterCheck = checkSchoolPerimeter(
+      userCoords.lat,
+      userCoords.lng,
+      config,
+      accuracyMeters
+    );
+    distanceMeters = perimeterCheck.distanceMeters;
+    isWithin = perimeterCheck.isInside;
   }
 
   const now = new Date();

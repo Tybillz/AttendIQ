@@ -247,7 +247,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60 hidden sm:inline-block">
                   {branding.shortName || 'School Portal'}
                 </span>
-                {onOpenWhitelabelModal && (
+                {currentRole === 'admin' && onOpenWhitelabelModal && (
                   <button
                     onClick={() => onOpenWhitelabelModal('licensing')}
                     className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border flex items-center gap-1 transition ${licenseStatus.badgeColor} hover:opacity-85 cursor-pointer shadow-2xs`}
@@ -294,20 +294,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </div>
 
-                {/* Switch to Admin Console Button (Protected with Master Passcode) */}
-                <button
-                  onClick={() => {
-                    setAdminPasscodeInput('');
-                    setAdminModalError(null);
-                    setIsAdminModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs border border-slate-700 transition"
-                  title="Switch to Admin Console (Requires Master Passcode)"
-                >
-                  <Lock className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Admin Console</span>
-                </button>
-
                 {/* Sign Out Button */}
                 {onLogout && (
                   <button
@@ -326,20 +312,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
                   <span>Gate Security Post</span>
                 </div>
-
-                {/* Switch to Admin Console Button (Protected with Master Passcode) */}
-                <button
-                  onClick={() => {
-                    setAdminPasscodeInput('');
-                    setAdminModalError(null);
-                    setIsAdminModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs border border-slate-700 transition"
-                  title="Switch to Admin Console (Requires Master Passcode)"
-                >
-                  <Lock className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Admin Console</span>
-                </button>
 
                 {onLogout && (
                   <button
