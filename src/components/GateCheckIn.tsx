@@ -18,7 +18,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Student, ClassSection } from '@/types/attendance';
-import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
+import { getSchoolBranding, SchoolBranding, isLicenseWriteRestricted } from '@/lib/licensing';
 
 export interface GateArrivalEntry {
   id: string;
@@ -38,6 +38,7 @@ interface GateCheckInProps {
   classes: ClassSection[];
   selectedDate: string;
   onDataUpdated: () => void;
+  isLicenseLocked?: boolean;
 }
 
 export const GateCheckIn: React.FC<GateCheckInProps> = ({
@@ -45,7 +46,9 @@ export const GateCheckIn: React.FC<GateCheckInProps> = ({
   classes,
   selectedDate,
   onDataUpdated,
+  isLicenseLocked = false,
 }) => {
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState('all');
   const [currentTimeStr, setCurrentTimeStr] = useState('');
@@ -106,6 +109,10 @@ export const GateCheckIn: React.FC<GateCheckInProps> = ({
   const isViewingToday = selectedDate === todayStr;
 
   const handleLogArrival = (student: Student) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Gate arrival register is in strict read-only mode (License Expired or Revoked).');
+      return;
+    }
     // ANTI-TAMPER: Only allow gate logging on today's active school day
     if (!isViewingToday) {
       alert(`🛑 Security Violation: Gate arrivals cannot be recorded for historical date ${selectedDate}. Real-time check-in is strictly limited to today (${todayStr}).`);

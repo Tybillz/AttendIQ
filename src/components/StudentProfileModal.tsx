@@ -46,7 +46,7 @@ import {
   isStudentBirthdayToday,
   getStudentAgeToday,
 } from '@/lib/academicCalculations';
-import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
+import { getSchoolBranding, SchoolBranding, isLicenseWriteRestricted } from '@/lib/licensing';
 
 interface StudentProfileModalProps {
   student: Student | null;
@@ -54,6 +54,7 @@ interface StudentProfileModalProps {
   onClose: () => void;
   classNameTitle: string;
   onStudentUpdated: () => void;
+  isLicenseLocked?: boolean;
 }
 
 export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
@@ -62,7 +63,9 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   onClose,
   classNameTitle,
   onStudentUpdated,
+  isLicenseLocked = false,
 }) => {
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
   const [activeTab, setActiveTab] = useState<'academics' | 'attendance' | 'notes' | 'edit' | 'id_card' | 'terminal_report'>('academics');
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
 
@@ -146,7 +149,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   const handleSaveExam = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newExamTitle.trim()) return;
+    if (isStrictReadOnly || !newExamTitle.trim()) return;
 
     const percentage = Math.round((newExamScore / newExamMax) * 100);
     const { grade } = calculateGradeAndRemark(percentage);
@@ -167,6 +170,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   };
 
   const handleStartEditExam = (record: TestExamRecord) => {
+    if (isStrictReadOnly) return;
     setEditingRecordId(record.id);
     setEditExamTitle(record.title);
     setEditExamSubject(record.subject);
@@ -201,6 +205,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   };
 
   const handleDeleteExam = (recordId: string, recordTitle: string) => {
+    if (isStrictReadOnly) return;
     if (confirm(`Delete the academic record "${recordTitle}"? This will remove it from the student dossier.`)) {
       deleteAcademicRecord(student.id, recordId);
       if (editingRecordId === recordId) {
@@ -211,6 +216,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   };
 
   const handleStartEditNote = (note: BehavioralNote) => {
+    if (isStrictReadOnly) return;
     setEditingNoteId(note.id);
     setEditNoteText(note.note);
     setEditNoteType(note.type);
@@ -221,7 +227,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   const handleUpdateNote = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingNoteId || !editNoteText.trim() || !activeStudent) return;
+    if (isStrictReadOnly || !editingNoteId || !editNoteText.trim() || !activeStudent) return;
 
     const updatedNote: BehavioralNote = {
       id: editingNoteId,
@@ -246,7 +252,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   };
 
   const handleDeleteNote = (noteId: string) => {
-    if (!activeStudent) return;
+    if (isStrictReadOnly || !activeStudent) return;
     if (confirm('Delete this observation note from the student dossier?')) {
       deleteBehavioralNote(activeStudent.id, noteId);
       const updated = {
@@ -265,7 +271,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   const handleSaveNote = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNoteText.trim() || !activeStudent) return;
+    if (isStrictReadOnly || !newNoteText.trim() || !activeStudent) return;
 
     const newNote: BehavioralNote = {
       id: `bn-${Date.now()}`,
@@ -291,6 +297,10 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   const handleSaveStudentDetails = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Student profile cannot be modified while system is in read-only mode.');
+      return;
+    }
     const updated: Student = {
       ...student,
       name: editName.trim() || student.name,
@@ -1228,9 +1238,14 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center gap-1.5 shadow-sm"
+                  disabled={isStrictReadOnly}
+                  className={`px-5 py-2 text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm ${
+                    isStrictReadOnly
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
+                  }`}
                 >
-                  <Save className="h-4 w-4" /> Save Profile Changes
+                  <Save className="h-4 w-4" /> {isStrictReadOnly ? 'Read-Only Mode' : 'Save Profile Changes'}
                 </button>
               </div>
             </form>

@@ -34,6 +34,7 @@ import {
   downloadCSVFile,
 } from '@/lib/storage';
 import { calculateStudentAttendanceMetrics, isStudentBirthdayToday, getStudentAgeToday } from '@/lib/academicCalculations';
+import { isLicenseWriteRestricted } from '@/lib/licensing';
 
 interface PupilDatabaseModalProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ interface PupilDatabaseModalProps {
   onDataUpdated: () => void;
   onSelectStudentProfile: (student: Student) => void;
   defaultTab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers';
+  isLicenseLocked?: boolean;
 }
 
 export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
@@ -55,7 +57,9 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   onDataUpdated,
   onSelectStudentProfile,
   defaultTab = 'pupils',
+  isLicenseLocked = false,
 }) => {
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
   const [activeTab, setActiveTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers'>(defaultTab);
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,6 +117,10 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
 
   const handleCreatePupil = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot add pupils in strict read-only mode.');
+      return;
+    }
     if (!name.trim()) return;
 
     const defaultAvatar =
@@ -145,6 +153,10 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
 
   const handleCreateClass = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot add classes in strict read-only mode.');
+      return;
+    }
     if (!newClassName.trim()) return;
 
     const teacher = teachers.find((t) => t.id === newTeacherId);
@@ -164,6 +176,10 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   };
 
   const handleDeleteClass = (classId: string, className: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot delete classes in strict read-only mode.');
+      return;
+    }
     const pupilCount = students.filter((s) => s.classId === classId).length;
     const msg = pupilCount > 0
       ? `Are you sure you want to delete class "${className}"?\n\n⚠️ Warning: There are currently ${pupilCount} enrolled pupils in this class. Their records will NOT be deleted, but they will be moved to "Unassigned" in the school directory so you can reassign them.`
@@ -176,6 +192,10 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   };
 
   const handleRunBulkImport = () => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot bulk import pupils in strict read-only mode.');
+      return;
+    }
     if (!csvContent.trim()) return;
     const targetClass = selectedClassFilter !== 'all' ? selectedClassFilter : classes[0]?.id;
     const res = bulkImportPupilsFromCSV(csvContent, targetClass);
@@ -194,10 +214,12 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
     downloadCSVFile(sample, 'AttendIQ_Pupil_Import_Template.csv');
   };
 
-
-
   const handleCreateTeacher = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot add teachers in strict read-only mode.');
+      return;
+    }
     if (!tName.trim()) return;
 
     addTeacher({
@@ -219,11 +241,13 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
   };
 
   const handleReassign = (classId: string, teacherId: string) => {
+    if (isStrictReadOnly) return;
     reassignClassTeacher(classId, teacherId);
     onDataUpdated();
   };
 
   const handleDeleteTeacherAction = (teacherId: string, teacherName: string) => {
+    if (isStrictReadOnly) return;
     if (confirm(`Remove teacher "${teacherName}" from staff database? Their assigned classes will become unassigned.`)) {
       deleteTeacher(teacherId);
       onDataUpdated();

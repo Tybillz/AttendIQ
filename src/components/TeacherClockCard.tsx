@@ -28,6 +28,7 @@ import {
   clockOutTeacher,
   checkSchoolPerimeter,
 } from '@/lib/teacherAttendance';
+import { isLicenseWriteRestricted } from '@/lib/licensing';
 import { getHardwareDeviceProfile, HardwareProfile } from '@/lib/hardwareFingerprint';
 import { getPortalCredentials } from '@/lib/auth';
 import { Teacher, ClassSection, TeacherClockRecord, TeacherDeviceLock, SchoolPerimeterConfig } from '@/types/attendance';
@@ -38,6 +39,7 @@ interface TeacherClockCardProps {
   selectedDate: string;
   onRecordUpdated?: () => void;
   onReturnToToday?: () => void;
+  isLicenseLocked?: boolean;
 }
 
 export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
@@ -46,6 +48,7 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
   selectedDate,
   onRecordUpdated,
   onReturnToToday,
+  isLicenseLocked = false,
 }) => {
   const [record, setRecord] = useState<TeacherClockRecord | undefined>(undefined);
   const [digits, setDigits] = useState<string[]>(['', '', '', '']);
@@ -60,6 +63,8 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
   const [perimeterConfig, setPerimeterConfig] = useState(getPerimeterConfig());
   const [hardwareProfile, setHardwareProfile] = useState<HardwareProfile | null>(null);
   const [deviceLock, setDeviceLock] = useState<TeacherDeviceLock | undefined>(undefined);
+
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
 
   const digitInputs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -562,9 +567,10 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
                     inputMode="numeric"
                     maxLength={1}
                     value={digit}
+                    disabled={isStrictReadOnly}
                     onChange={(e) => handleDigitChange(idx, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(idx, e)}
-                    className="w-12 h-14 text-center text-2xl font-black text-white bg-slate-900/90 border-2 border-indigo-700/60 rounded-xl focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/40 focus:outline-none transition font-mono shadow-inner"
+                    className="w-12 h-14 text-center text-2xl font-black text-white bg-slate-900/90 border-2 border-indigo-700/60 rounded-xl focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/40 focus:outline-none transition font-mono shadow-inner disabled:opacity-40 disabled:cursor-not-allowed"
                     placeholder="•"
                   />
                 ))}
@@ -574,12 +580,15 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
               <button
                 onClick={handleClockIn}
                 disabled={
+                  isStrictReadOnly ||
                   actionLoading ||
                   digits.join('').length !== 4 ||
                   (isInsidePerimeter !== true && !perimeterConfig.testingMode)
                 }
                 className={`w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition shadow-lg ${
-                  isInsidePerimeter === false && !perimeterConfig.testingMode
+                  isStrictReadOnly
+                    ? 'bg-rose-950/80 text-rose-300 border border-rose-700/80 cursor-not-allowed'
+                    : isInsidePerimeter === false && !perimeterConfig.testingMode
                     ? 'bg-rose-950/80 text-rose-300 border border-rose-700/80 cursor-not-allowed'
                     : isInsidePerimeter !== true && !perimeterConfig.testingMode
                     ? 'bg-amber-950/80 text-amber-300 border border-amber-700/80 cursor-not-allowed'
@@ -590,6 +599,11 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
               >
                 {actionLoading ? (
                   <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : isStrictReadOnly ? (
+                  <>
+                    <Lock className="h-4 w-4 text-rose-400" />
+                    <span>Clock-In Disabled: Read-Only Audit Mode</span>
+                  </>
                 ) : isInsidePerimeter === false && !perimeterConfig.testingMode ? (
                   <>
                     <AlertTriangle className="h-4 w-4 text-rose-400" />
@@ -626,11 +640,20 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
               {/* Clock Out Button */}
               <button
                 onClick={handleClockOut}
-                disabled={actionLoading}
-                className="w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white shadow-lg shadow-rose-600/20 active:scale-98 transition flex items-center justify-center gap-2"
+                disabled={isStrictReadOnly || actionLoading}
+                className={`w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 ${
+                  isStrictReadOnly
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                    : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white shadow-lg shadow-rose-600/20 active:scale-98 cursor-pointer'
+                }`}
               >
                 {actionLoading ? (
                   <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : isStrictReadOnly ? (
+                  <>
+                    <Lock className="h-4 w-4 text-rose-400" />
+                    <span>Clock-Out Disabled (Read-Only Mode)</span>
+                  </>
                 ) : (
                   <>
                     <LogOut className="h-4 w-4" />

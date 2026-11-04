@@ -224,6 +224,10 @@ export function getSchoolBranding(): SchoolBranding {
  */
 export function saveSchoolBranding(branding: Partial<SchoolBranding>): SchoolBranding {
   const current = getSchoolBranding();
+  if (isLicenseWriteRestricted()) {
+    console.warn('School branding update blocked: System in strict read-only mode.');
+    return current;
+  }
   const updated: SchoolBranding = {
     ...current,
     ...branding,
@@ -467,6 +471,44 @@ export function getLicenseStatus(schoolName?: string): LicenseStatusResult {
     maxStaff: license.maxStaff,
     isWriteRestricted: isExpired,
   };
+}
+
+/**
+ * Universal gatekeeper: Returns true if the system must operate in strict Read-Only mode
+ */
+export function isLicenseWriteRestricted(): boolean {
+  if (typeof window === 'undefined') return false;
+  const status = getLicenseStatus();
+  return (
+    status.isWriteRestricted ||
+    status.isExpired ||
+    status.isRevoked === true ||
+    status.status === 'revoked' ||
+    status.status === 'expired' ||
+    status.status === 'unlicensed' ||
+    status.status === 'name_mismatch' ||
+    !status.isValid
+  );
+}
+
+/**
+ * Provides an authoritative user-facing reason explaining why modifications are locked
+ */
+export function getLicenseRestrictionReason(): string {
+  const status = getLicenseStatus();
+  if (status.status === 'revoked' || status.isRevoked) {
+    return `⛔ STRICT READ-ONLY AUDIT MODE: Software Licensor has revoked access (${status.revocationReason || 'Commercial Rental Default / Terminated'}). All additions, modifications, and deletions are strictly frozen.`;
+  }
+  if (status.isExpired || status.status === 'expired') {
+    return `🔒 STRICT READ-ONLY AUDIT MODE: Institutional license expired on ${status.validUntilFormatted}. Roll calls, clock-ins, and score entries are locked until renewal.`;
+  }
+  if (status.status === 'name_mismatch') {
+    return `🔒 STRICT READ-ONLY MODE: Active license is assigned to "${status.schoolName}". License binding mismatch.`;
+  }
+  if (!status.isValid) {
+    return '🔒 STRICT READ-ONLY MODE: System requires an active commercial license.';
+  }
+  return '';
 }
 
 /**

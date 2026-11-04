@@ -55,6 +55,7 @@ import {
   toggleAdminSessionUnlock,
   getExcuseForStudentOnDate,
 } from '@/lib/storage';
+import { isLicenseWriteRestricted } from '@/lib/licensing';
 import { downloadClassAttendanceDossierPDF } from '@/lib/pdfReportGenerator';
 import { generateWhatsAppUrl, generateChildStatusWhatsAppMessage, sendLiveNotification } from '@/lib/notifications';
 
@@ -68,6 +69,7 @@ interface TeacherRollCallProps {
   onSelectStudentProfile: (student: Student) => void;
   onDataUpdated: () => void;
   currentRole?: 'teacher' | 'admin' | 'gate';
+  isLicenseLocked?: boolean;
 }
 
 export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
@@ -80,6 +82,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
   onSelectStudentProfile,
   onDataUpdated,
   currentRole = 'teacher',
+  isLicenseLocked = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'late' | 'absent' | 'unmarked' | 'flagged'>('all');
@@ -161,14 +164,20 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
     return true;
   });
 
-  const isLocked = isSessionTimeLocked(
+  const isLicenseRestricted = isLicenseLocked || isLicenseWriteRestricted();
+  const isTimeLocked = isSessionTimeLocked(
     selectedDate,
     selectedClassId,
     alertSettings,
     currentRole
   );
+  const isLocked = isTimeLocked || isLicenseRestricted;
 
   const handleToggleAdminUnlock = () => {
+    if (isLicenseRestricted) {
+      alert('⛔ Action Blocked: Cannot unlock attendance sessions while system is in strict read-only mode (License Expired or Revoked).');
+      return;
+    }
     const isCurrentlyUnlocked = !!currentSession?.unlockedByAdmin;
     let reason = 'Principal authorized administrative correction';
     if (!isCurrentlyUnlocked) {
@@ -547,7 +556,28 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
       </div>
 
       {/* Time-Lock & Anti-Tamper Status Banner */}
-      {isLocked ? (
+      {isLicenseRestricted ? (
+        <div className="p-4 rounded-2xl bg-rose-950/70 border border-rose-600/70 text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-rose-600/30 border border-rose-500/50 flex items-center justify-center text-rose-400 shrink-0">
+              <Lock className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-rose-300">
+                  Attendance Recording Frozen — Strict Read-Only Mode
+                </span>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-900/60 text-rose-200 border border-rose-700/60">
+                  License Inactive / Revoked
+                </span>
+              </div>
+              <p className="text-slate-300 text-[11px] mt-0.5">
+                Daily pupil roll calls, status edits, and markings are disabled. Database is in read-only audit inspection mode.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : isLocked ? (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">

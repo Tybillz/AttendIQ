@@ -32,6 +32,7 @@ import {
 } from '@/lib/storage';
 import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
 import { computeGrade } from '@/lib/academicCalculations';
+import { isLicenseWriteRestricted } from '@/lib/licensing';
 
 interface SubjectGradebookProps {
   currentTeacher: Teacher | undefined;
@@ -39,6 +40,7 @@ interface SubjectGradebookProps {
   allStudents: Student[];
   onDataUpdated?: () => void;
   onSelectStudentProfile?: (student: Student) => void;
+  isLicenseLocked?: boolean;
 }
 
 export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
@@ -47,7 +49,9 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
   allStudents,
   onDataUpdated,
   onSelectStudentProfile,
+  isLicenseLocked = false,
 }) => {
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
   // Determine available subjects for this teacher
   const teacherSubjects = useMemo(() => {
     if (currentTeacher?.subjects && currentTeacher.subjects.length > 0) {
@@ -135,6 +139,7 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
     value: string,
     maxLimit: number
   ) => {
+    if (isStrictReadOnly) return;
     const num = value === '' ? 0 : Math.min(maxLimit, Math.max(0, Number(value) || 0));
     setRecordsMap((prev) => {
       const current = prev[studentId] || { ca1: 0, ca2: 0, assignment: 0, exam: 0, vitalNotes: '' };
@@ -166,6 +171,10 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
 
   // Save all grades (15 + 15 + 10 + 60 = 100)
   const handleSaveGrades = () => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Gradebook is in strict read-only mode (License Expired or Revoked).');
+      return;
+    }
     const toSave: SubjectGradeRecord[] = targetStudents.map((s) => {
       const rec = recordsMap[s.id] || { ca1: 0, ca2: 0, assignment: 0, exam: 0, vitalNotes: '' };
       const total = rec.ca1 + rec.ca2 + rec.assignment + rec.exam;
@@ -304,15 +313,18 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleSaveGrades}
+              disabled={isStrictReadOnly}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs shadow-sm transition active:scale-95 ${
-                hasUnsavedChanges
+                isStrictReadOnly
+                  ? 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'
+                  : hasUnsavedChanges
                   ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-emerald-600/30 ring-2 ring-emerald-500/50'
                   : 'bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
               }`}
-              title="Save all grades to database & student dossiers"
+              title={isStrictReadOnly ? 'Score submissions disabled: System in Read-Only Mode' : 'Save all grades to database & student dossiers'}
             >
               <Save className="h-4 w-4" />
-              <span>{hasUnsavedChanges ? 'Save Changes *' : 'Grades Saved'}</span>
+              <span>{isStrictReadOnly ? 'Read-Only Mode' : hasUnsavedChanges ? 'Save Changes *' : 'Grades Saved'}</span>
             </button>
 
             <button
@@ -629,10 +641,12 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
                           type="number"
                           min="0"
                           max="15"
+                          disabled={isStrictReadOnly}
+                          readOnly={isStrictReadOnly}
                           value={rec.ca1 === 0 ? '' : rec.ca1}
                           placeholder="0"
                           onChange={(e) => handleScoreChange(student.id, 'ca1', e.target.value, 15)}
-                          className="w-14 mx-auto text-center font-bold text-sm bg-slate-50 border border-slate-300 rounded-xl py-1.5 text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="w-14 mx-auto text-center font-bold text-sm bg-slate-50 border border-slate-300 rounded-xl py-1.5 text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -642,10 +656,12 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
                           type="number"
                           min="0"
                           max="15"
+                          disabled={isStrictReadOnly}
+                          readOnly={isStrictReadOnly}
                           value={rec.ca2 === 0 ? '' : rec.ca2}
                           placeholder="0"
                           onChange={(e) => handleScoreChange(student.id, 'ca2', e.target.value, 15)}
-                          className="w-14 mx-auto text-center font-bold text-sm bg-slate-50 border border-slate-300 rounded-xl py-1.5 text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="w-14 mx-auto text-center font-bold text-sm bg-slate-50 border border-slate-300 rounded-xl py-1.5 text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -655,10 +671,12 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
                           type="number"
                           min="0"
                           max="10"
+                          disabled={isStrictReadOnly}
+                          readOnly={isStrictReadOnly}
                           value={rec.assignment === 0 ? '' : rec.assignment}
                           placeholder="0"
                           onChange={(e) => handleScoreChange(student.id, 'assignment', e.target.value, 10)}
-                          className="w-14 mx-auto text-center font-bold text-sm bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-xl py-1.5 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="w-14 mx-auto text-center font-bold text-sm bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-xl py-1.5 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -668,10 +686,12 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
                           type="number"
                           min="0"
                           max="60"
+                          disabled={isStrictReadOnly}
+                          readOnly={isStrictReadOnly}
                           value={rec.exam === 0 ? '' : rec.exam}
                           placeholder="0"
                           onChange={(e) => handleScoreChange(student.id, 'exam', e.target.value, 60)}
-                          className="w-14 mx-auto text-center font-bold text-sm bg-slate-50 border border-slate-300 rounded-xl py-1.5 text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="w-14 mx-auto text-center font-bold text-sm bg-slate-50 border border-slate-300 rounded-xl py-1.5 text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </td>
 

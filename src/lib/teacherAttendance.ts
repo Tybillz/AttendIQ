@@ -1,5 +1,6 @@
 import { TeacherClockRecord, SchoolPerimeterConfig, TeacherDeviceLock } from '@/types/attendance';
 import { addAuditLog } from './storage';
+import { isLicenseWriteRestricted, getLicenseRestrictionReason } from './licensing';
 
 export const DEFAULT_PERIMETER_CONFIG: SchoolPerimeterConfig = {
   schoolName: 'Innovative International Secondary School',
@@ -61,6 +62,10 @@ export function getPerimeterConfig(): SchoolPerimeterConfig {
 
 export function savePerimeterConfig(config: SchoolPerimeterConfig): void {
   if (typeof window === 'undefined') return;
+  if (isLicenseWriteRestricted()) {
+    console.warn('savePerimeterConfig blocked: System in strict read-only mode.');
+    return;
+  }
   try {
     localStorage.setItem(STORAGE_KEYS.PERIMETER_CONFIG, JSON.stringify(config));
     window.dispatchEvent(new Event('attend-iq-perimeter-update'));
@@ -424,6 +429,10 @@ export function getTeacherClockRecords(): TeacherClockRecord[] {
 
 export function saveTeacherClockRecords(records: TeacherClockRecord[]): void {
   if (typeof window === 'undefined') return;
+  if (isLicenseWriteRestricted()) {
+    console.warn('saveTeacherClockRecords blocked: System in strict read-only mode.');
+    return;
+  }
   try {
     localStorage.setItem(STORAGE_KEYS.TEACHER_CLOCK_RECORDS, JSON.stringify(records));
     window.dispatchEvent(new Event('attend-iq-teacher-clock-update'));
@@ -464,6 +473,13 @@ export function clockInTeacher(
     screenRes?: string;
   }
 ): { success: boolean; message: string; record?: TeacherClockRecord } {
+  if (isLicenseWriteRestricted()) {
+    return {
+      success: false,
+      message: getLicenseRestrictionReason(),
+    };
+  }
+
   const config = getPerimeterConfig();
   const realToday = getRealTodayDateStr();
 
@@ -652,6 +668,13 @@ export function clockOutTeacher(
   teacherId: string,
   dateStr: string
 ): { success: boolean; message: string; record?: TeacherClockRecord } {
+  if (isLicenseWriteRestricted()) {
+    return {
+      success: false,
+      message: getLicenseRestrictionReason(),
+    };
+  }
+
   const realToday = getRealTodayDateStr();
 
   // ANTI-TAMPER: STRICT REAL-TIME DATE ENFORCEMENT

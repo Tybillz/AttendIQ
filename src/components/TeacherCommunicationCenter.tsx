@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { StaffQuery, StaffAnnouncement, Teacher } from '@/types/attendance';
 import { submitStaffQueryReply, acknowledgeStaffAnnouncement } from '@/lib/storage';
+import { isLicenseWriteRestricted } from '@/lib/licensing';
 
 interface TeacherCommunicationCenterProps {
   teacher: Teacher;
@@ -26,6 +27,7 @@ interface TeacherCommunicationCenterProps {
   activeSubTab: 'queries' | 'announcements';
   onSubTabChange: (tab: 'queries' | 'announcements') => void;
   onDataUpdated: () => void;
+  isLicenseLocked?: boolean;
 }
 
 export const TeacherCommunicationCenter: React.FC<TeacherCommunicationCenterProps> = ({
@@ -35,7 +37,9 @@ export const TeacherCommunicationCenter: React.FC<TeacherCommunicationCenterProp
   activeSubTab,
   onSubTabChange,
   onDataUpdated,
+  isLicenseLocked = false,
 }) => {
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
   // Queries state
   const [selectedQueryForReply, setSelectedQueryForReply] = useState<StaffQuery | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -55,6 +59,10 @@ export const TeacherCommunicationCenter: React.FC<TeacherCommunicationCenterProp
 
   const handleSubmitReply = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot submit query replies in read-only mode.');
+      return;
+    }
     if (!selectedQueryForReply || !replyText.trim()) return;
 
     setReplySubmitting(true);
@@ -77,6 +85,7 @@ export const TeacherCommunicationCenter: React.FC<TeacherCommunicationCenterProp
   };
 
   const handleAcknowledge = (ancId: string) => {
+    if (isStrictReadOnly) return;
     acknowledgeStaffAnnouncement(ancId, teacher.id);
     onDataUpdated();
   };

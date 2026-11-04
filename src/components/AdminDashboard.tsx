@@ -112,7 +112,7 @@ import {
   randomizeAllTeacherPins,
   generateRandomPin,
 } from '@/lib/auth';
-import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
+import { getSchoolBranding, SchoolBranding, isLicenseWriteRestricted } from '@/lib/licensing';
 
 interface AdminDashboardProps {
   students: Student[];
@@ -128,6 +128,7 @@ interface AdminDashboardProps {
   onSelectStudentProfile: (student: Student) => void;
   onDataUpdated?: () => void;
   onOpenWhitelabelModal?: (tab?: 'branding' | 'licensing') => void;
+  isLicenseLocked?: boolean;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -143,6 +144,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenSettingsModal,
   onSelectStudentProfile,
   onOpenWhitelabelModal,
+  isLicenseLocked = false,
   onDataUpdated,
 }) => {
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
@@ -161,6 +163,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   >('overview');
   const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState<boolean>(false);
+
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
 
   // Staff Queries State
   const [queries, setQueries] = useState<StaffQuery[]>(getStaffQueries());
@@ -278,6 +282,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const isCustomCodeToday = Boolean(perimeterConfig.dailyEntranceCodeOverride?.[selectedDate]);
 
   const handleCalibratePerimeterGps = () => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Geofence calibration is disabled in strict read-only mode.');
+      return;
+    }
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
       return;
@@ -310,6 +318,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSavePerimeterSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Perimeter configuration cannot be modified in strict read-only mode.');
+      return;
+    }
     const lat = parseFloat(schoolLatInput);
     const lng = parseFloat(schoolLngInput);
     const radius = parseInt(radiusInput, 10);
@@ -334,6 +346,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveAdminPasscode = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Admin passcode cannot be modified in strict read-only mode.');
+      return;
+    }
     if (!adminPassInput || adminPassInput.trim().length < 4) {
       alert('Admin passcode must be at least 4 characters.');
       return;
@@ -344,6 +360,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleUpdateSingleTeacherPin = (teacherId: string, pin: string) => {
+    if (isStrictReadOnly) return;
     if (!pin || pin.trim().length < 4) {
       alert('Staff PIN must be at least 4 digits.');
       return;
@@ -355,6 +372,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleRandomizeSinglePin = (teacherId: string) => {
+    if (isStrictReadOnly) return;
     const newPin = generateRandomPin();
     updateTeacherPin(teacherId, newPin);
     setTeacherPinsState((prev) => ({ ...prev, [teacherId]: newPin }));
@@ -363,6 +381,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleRandomizeAllPins = () => {
+    if (isStrictReadOnly) return;
     if (confirm('Generate brand-new, unique 4-digit PINs for ALL teachers? Every teacher will have their own distinct PIN.')) {
       const updated = randomizeAllTeacherPins(teachers.map((t) => t.id));
       setTeacherPinsState({ ...updated });
@@ -465,6 +484,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSetDailyCodeOverride = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) return;
     if (customDailyCodeInput.trim().length !== 4) {
       alert('Daily code must be exactly 4 digits.');
       return;
@@ -476,6 +496,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleResetDailyCodeOverride = () => {
+    if (isStrictReadOnly) return;
     const config = getPerimeterConfig();
     if (config.dailyEntranceCodeOverride && config.dailyEntranceCodeOverride[selectedDate]) {
       delete config.dailyEntranceCodeOverride[selectedDate];
@@ -487,6 +508,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleUnpairTeacher = (teacherId: string, teacherName: string) => {
+    if (isStrictReadOnly) return;
     if (confirm(`Are you sure you want to unpair the phone for ${teacherName}? They will be able to bind a new device on their next clock-in.`)) {
       unpairTeacherDevice(teacherId);
       setDeviceLocks(getDeviceLocks());
@@ -497,6 +519,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleCreateClassSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot add classes in strict read-only mode.');
+      return;
+    }
     if (!newClassName.trim()) return;
     const teacher = teachers.find((t) => t.id === newTeacherId);
     addClass({
@@ -528,6 +554,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeletePupilSubmit = (studentId: string, studentName: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot delete pupils in strict read-only mode.');
+      return;
+    }
     if (
       confirm(
         `Are you sure you want to delete pupil "${studentName}"? A safety recovery snapshot is automatically created so you can undo this anytime.`
@@ -541,6 +571,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleReassignTeacherSubmit = (classId: string, teacherId: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot reassign class teachers in strict read-only mode.');
+      return;
+    }
     reassignClassTeacher(classId, teacherId);
     setAccessFeedback('Class teacher assignment updated!');
     setTimeout(() => setAccessFeedback(null), 3000);
@@ -550,6 +584,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Staff Queries Handlers
   const handleCreateQuerySubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot issue official queries in strict read-only mode.');
+      return;
+    }
     const targetTeacher = teachers.find((t) => t.id === newQueryTeacherId);
     if (!targetTeacher || !newQueryTitle.trim() || !newQueryDescription.trim()) return;
 
@@ -577,6 +615,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleReviewQuerySubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot record query decisions in strict read-only mode.');
+      return;
+    }
     if (!selectedQueryForReview || !reviewNotes.trim()) return;
 
     resolveStaffQuery(selectedQueryForReview.id, {
@@ -594,6 +636,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteQuerySubmit = (queryId: string, queryNumber: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot delete query records in strict read-only mode.');
+      return;
+    }
     if (confirm(`Are you sure you want to delete Query record ${queryNumber}?`)) {
       deleteStaffQuery(queryId);
       setQueries(getStaffQueries());
@@ -604,6 +650,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Staff Announcements Handlers
   const handlePublishAnnouncementSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot publish announcements in strict read-only mode.');
+      return;
+    }
     if (!newAncTitle.trim() || !newAncContent.trim()) return;
 
     publishStaffAnnouncement({
@@ -624,6 +674,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteAnnouncementSubmit = (ancId: string, title: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot delete announcements in strict read-only mode.');
+      return;
+    }
     if (confirm(`Delete announcement "${title}"?`)) {
       deleteStaffAnnouncement(ancId);
       setAnnouncements(getStaffAnnouncements());
@@ -763,6 +817,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in shadow-xs">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{whatsAppNotice}</span>
+        </div>
+      )}
+
+      {/* STRICT READ-ONLY AUDIT LOCKOUT BANNER */}
+      {isStrictReadOnly && (
+        <div className="p-5 rounded-3xl bg-slate-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xl border-2 border-rose-500 animate-in fade-in">
+          <div className="flex items-center gap-3.5">
+            <span className="p-2.5 rounded-2xl bg-rose-600/30 text-rose-400 text-2xl border border-rose-500/50 shrink-0">⛔</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-sm uppercase tracking-wide text-rose-400">
+                  ADMIN CONSOLE IN STRICT READ-ONLY AUDIT MODE
+                </h4>
+                <span className="px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold">
+                  All Database Writes Frozen
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                The institutional license is inactive, expired, or revoked. Adding, updating, or deleting students, classes, staff assignments, queries, and perimeter coordinates is completely locked. Broadsheets and logs remain accessible for audit only.
+              </p>
+            </div>
+          </div>
+          {onOpenWhitelabelModal && (
+            <button
+              onClick={() => onOpenWhitelabelModal('licensing')}
+              className="px-5 py-2.5 rounded-2xl bg-rose-600 text-white font-black text-xs hover:bg-rose-500 transition shrink-0 cursor-pointer shadow-md active:scale-95"
+            >
+              Enter Renewal License Key &rarr;
+            </button>
+          )}
         </div>
       )}
 

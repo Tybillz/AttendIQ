@@ -322,6 +322,16 @@ export default function Home() {
     (a) => !a.acknowledgedByTeacherIds?.includes(activeTeacher?.id || '')
   );
 
+  const isLicenseLocked =
+    licenseStatus.isWriteRestricted ||
+    licenseStatus.isExpired ||
+    licenseStatus.isRevoked === true ||
+    licenseStatus.status === 'revoked' ||
+    licenseStatus.status === 'expired' ||
+    licenseStatus.status === 'unlicensed' ||
+    licenseStatus.status === 'name_mismatch' ||
+    !licenseStatus.isValid;
+
   // Render AuthScreen if unauthenticated
   if (!authSession) {
     return (
@@ -367,8 +377,8 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* LICENSE REVOKED / KILL-SWITCH BANNER */}
-        {licenseStatus.status === 'revoked' && (
+        {/* LICENSE REVOKED / KILL-SWITCH BANNER (Admin) */}
+        {currentRole === 'admin' && licenseStatus.status === 'revoked' && (
           <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-slate-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xl border-2 border-rose-500 animate-in fade-in">
             <div className="flex items-center gap-3.5">
               <span className="p-2.5 rounded-2xl bg-rose-600/30 text-rose-400 text-2xl border border-rose-500/50">⛔</span>
@@ -382,7 +392,7 @@ export default function Home() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-300 mt-1">
-                  Reason: <strong className="text-white">{licenseStatus.revocationReason || 'Commercial Rental Agreement Suspended / Default'}</strong>. All attendance write operations and reports are locked by the software licensor.
+                  Reason: <strong className="text-white">{licenseStatus.revocationReason || 'Commercial Rental Agreement Suspended / Default'}</strong>. All attendance write operations, roll calls, and scores are locked by the software licensor.
                 </p>
               </div>
             </div>
@@ -395,6 +405,28 @@ export default function Home() {
             >
               Resolve / Enter Key &rarr;
             </button>
+          </div>
+        )}
+
+        {/* STAFF READ-ONLY LOCKOUT BANNER (Teachers & Gate) */}
+        {currentRole !== 'admin' && isLicenseLocked && (
+          <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-slate-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xl border-2 border-rose-500 animate-in fade-in">
+            <div className="flex items-center gap-3.5">
+              <span className="p-2.5 rounded-2xl bg-rose-600/30 text-rose-400 text-2xl border border-rose-500/50 shrink-0">⛔</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-black text-sm uppercase tracking-wide text-rose-400">
+                    ATTENDANCE & ACADEMIC PORTAL FROZEN — READ-ONLY MODE
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold">
+                    {licenseStatus.status === 'revoked' ? 'License Revoked' : 'License Expired'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  The institutional license for <strong>{schoolBranding.schoolName}</strong> is {licenseStatus.status === 'revoked' ? 'revoked by the software licensor' : `expired on ${licenseStatus.validUntilFormatted}`}. Daily roll-call recording, staff clock-in, gradebook score entries, and pupil profile updates are strictly locked. Please contact the School Principal or Administrator to renew the license.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -696,6 +728,7 @@ export default function Home() {
                     selectedDate={selectedDate}
                     onRecordUpdated={syncData}
                     onReturnToToday={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                    isLicenseLocked={isLicenseLocked}
                   />
                 )}
                 <TeacherRollCall
@@ -705,6 +738,7 @@ export default function Home() {
                   selectedDate={selectedDate}
                   students={students}
                   currentSession={currentSession}
+                  isLicenseLocked={isLicenseLocked}
                   onSelectStudentProfile={(student) => {
                     if (currentRole === 'teacher' && !canAccessAcademics) {
                       alert('🔒 Staff Clock-In Required: Pupil dossiers and medical records are locked until you clock in within school grounds or receive Remote Academic Authorization from the Principal.');
@@ -725,6 +759,7 @@ export default function Home() {
                   activeSubTab={teacherActiveTab === 'announcements' ? 'announcements' : 'queries'}
                   onSubTabChange={(subTab) => setTeacherActiveTab(subTab)}
                   onDataUpdated={syncData}
+                  isLicenseLocked={isLicenseLocked}
                 />
               )
             ) : !canAccessAcademics ? (
@@ -799,6 +834,7 @@ export default function Home() {
                 allStudents={students}
                 onDataUpdated={syncData}
                 onSelectStudentProfile={(student) => setSelectedStudentForProfile(student)}
+                isLicenseLocked={isLicenseLocked}
               />
             )}
           </div>
@@ -808,6 +844,7 @@ export default function Home() {
             classes={classes}
             selectedDate={selectedDate}
             onDataUpdated={syncData}
+            isLicenseLocked={isLicenseLocked}
           />
         ) : (
           <AdminDashboard
@@ -819,6 +856,7 @@ export default function Home() {
             onDateChange={setSelectedDate}
             alertSettings={alertSettings}
             teacherAnalytics={teacherAnalytics}
+            isLicenseLocked={isLicenseLocked}
             onOpenDatabaseModal={(tab) => {
               if (tab) setDatabaseModalTab(tab);
               setIsDatabaseModalOpen(true);
@@ -852,6 +890,7 @@ export default function Home() {
           classes.find((c) => c.id === selectedStudentForProfile?.classId)?.name || 'Class'
         }
         onStudentUpdated={syncData}
+        isLicenseLocked={isLicenseLocked}
       />
 
       {/* Parent SMS & Email Alerts Center Modal */}
@@ -884,6 +923,7 @@ export default function Home() {
         onDataUpdated={syncData}
         onSelectStudentProfile={(student) => setSelectedStudentForProfile(student)}
         defaultTab={databaseModalTab}
+        isLicenseLocked={isLicenseLocked}
       />
 
       {/* Staff Activity & Anti-Tamper Security Audit Trail Modal */}

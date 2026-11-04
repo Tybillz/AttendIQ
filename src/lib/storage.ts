@@ -31,6 +31,7 @@ import {
   INITIAL_STAFF_QUERIES,
   INITIAL_ANNOUNCEMENTS,
 } from './initialData';
+import { isLicenseWriteRestricted, getLicenseRestrictionReason } from './licensing';
 
 const KEYS = {
   STUDENTS: 'attend_iq_students_v2',
@@ -77,6 +78,10 @@ export function getStudents(): Student[] {
 }
 
 export function saveStudents(students: Student[]): void {
+  if (isLicenseWriteRestricted()) {
+    console.warn('saveStudents blocked: System is in strict read-only mode.');
+    return;
+  }
   setStored(KEYS.STUDENTS, students);
 }
 
@@ -86,6 +91,11 @@ export function getStudentsByClass(classId: string): Student[] {
 }
 
 export function addStudent(newStudent: Omit<Student, 'id' | 'totalPresent' | 'totalAbsent' | 'consecutiveAbsences' | 'riskLevel'>): Student {
+  if (isLicenseWriteRestricted()) {
+    const reason = getLicenseRestrictionReason();
+    if (typeof window !== 'undefined') alert(reason);
+    throw new Error(reason);
+  }
   const students = getStudents();
   const student: Student = {
     ...newStudent,
@@ -103,11 +113,19 @@ export function addStudent(newStudent: Omit<Student, 'id' | 'totalPresent' | 'to
 }
 
 export function updateStudent(updated: Student): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
   const students = getStudents().map((s) => (s.id === updated.id ? updated : s));
   saveStudents(students);
 }
 
 export function deleteStudent(studentId: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
   const students = getStudents();
   const target = students.find((s) => s.id === studentId);
   if (target) {
@@ -135,6 +153,7 @@ export function deleteStudent(studentId: string): void {
 }
 
 export function addAcademicRecord(studentId: string, record: Omit<TestExamRecord, 'id'>): void {
+  if (isLicenseWriteRestricted()) return;
   const students = getStudents();
   const student = students.find((s) => s.id === studentId);
   if (!student) return;
@@ -149,6 +168,7 @@ export function addAcademicRecord(studentId: string, record: Omit<TestExamRecord
 }
 
 export function updateAcademicRecord(studentId: string, updatedRecord: TestExamRecord): void {
+  if (isLicenseWriteRestricted()) return;
   const students = getStudents();
   const student = students.find((s) => s.id === studentId);
   if (!student || !student.academicRecords) return;
@@ -160,6 +180,7 @@ export function updateAcademicRecord(studentId: string, updatedRecord: TestExamR
 }
 
 export function deleteAcademicRecord(studentId: string, recordId: string): void {
+  if (isLicenseWriteRestricted()) return;
   const students = getStudents();
   const student = students.find((s) => s.id === studentId);
   if (!student || !student.academicRecords) return;
@@ -169,6 +190,7 @@ export function deleteAcademicRecord(studentId: string, recordId: string): void 
 }
 
 export function updateBehavioralNote(studentId: string, updatedNote: BehavioralNote): void {
+  if (isLicenseWriteRestricted()) return;
   const students = getStudents();
   const student = students.find((s) => s.id === studentId);
   if (!student || !student.behavioralNotes) return;
@@ -180,6 +202,7 @@ export function updateBehavioralNote(studentId: string, updatedNote: BehavioralN
 }
 
 export function deleteBehavioralNote(studentId: string, noteId: string): void {
+  if (isLicenseWriteRestricted()) return;
   const students = getStudents();
   const student = students.find((s) => s.id === studentId);
   if (!student || !student.behavioralNotes) return;
@@ -189,6 +212,7 @@ export function deleteBehavioralNote(studentId: string, noteId: string): void {
 }
 
 export function updateTerminalEvaluation(studentId: string, evaluation: TerminalEvaluation): void {
+  if (isLicenseWriteRestricted()) return;
   const students = getStudents();
   const student = students.find((s) => s.id === studentId);
   if (!student) return;
@@ -206,6 +230,10 @@ export function getClasses(): ClassSection[] {
 }
 
 export function saveClasses(classes: ClassSection[]): void {
+  if (isLicenseWriteRestricted()) {
+    console.warn('saveClasses blocked: System in strict read-only mode.');
+    return;
+  }
   setStored(KEYS.CLASSES, classes);
   if (typeof window !== 'undefined') {
     fetch('/api/sync', {
@@ -217,6 +245,11 @@ export function saveClasses(classes: ClassSection[]): void {
 }
 
 export function addClass(newClass: Omit<ClassSection, 'id' | 'pupilCount'>): ClassSection {
+  if (isLicenseWriteRestricted()) {
+    const reason = getLicenseRestrictionReason();
+    if (typeof window !== 'undefined') alert(reason);
+    throw new Error(reason);
+  }
   const classes = getClasses();
   const created: ClassSection = {
     ...newClass,
@@ -229,6 +262,10 @@ export function addClass(newClass: Omit<ClassSection, 'id' | 'pupilCount'>): Cla
 }
 
 export function deleteClass(classId: string): boolean {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return false;
+  }
   const classes = getClasses();
   const targetClass = classes.find((c) => c.id === classId);
   if (!targetClass) return false;
@@ -305,6 +342,10 @@ export function getTeachers(): Teacher[] {
 }
 
 export function saveTeachers(teachers: Teacher[]): void {
+  if (isLicenseWriteRestricted()) {
+    console.warn('saveTeachers blocked: System in strict read-only mode.');
+    return;
+  }
   setStored(KEYS.TEACHERS, teachers);
   if (typeof window !== 'undefined') {
     fetch('/api/sync', {
@@ -367,6 +408,11 @@ export async function syncDataFromCloud(): Promise<{ teachers: Teacher[]; classe
 }
 
 export function addTeacher(newTeacher: Omit<Teacher, 'id'>): Teacher {
+  if (isLicenseWriteRestricted()) {
+    const reason = getLicenseRestrictionReason();
+    if (typeof window !== 'undefined') alert(reason);
+    throw new Error(reason);
+  }
   const teachers = getTeachers();
   const created: Teacher = {
     ...newTeacher,
@@ -409,6 +455,10 @@ export function addTeacher(newTeacher: Omit<Teacher, 'id'>): Teacher {
 }
 
 export function updateTeacher(updated: Teacher): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
   const teachers = getTeachers().map((t) => (t.id === updated.id ? updated : t));
   saveTeachers(teachers);
 
@@ -427,6 +477,10 @@ export function updateTeacher(updated: Teacher): void {
 }
 
 export function deleteTeacher(teacherId: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
   const teachers = getTeachers();
   const target = teachers.find((t) => t.id === teacherId);
   if (target) {
@@ -448,6 +502,10 @@ export function deleteTeacher(teacherId: string): void {
 }
 
 export function reassignClassTeacher(classId: string, teacherId: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
   const classes = getClasses();
   const teachers = getTeachers();
 
@@ -492,6 +550,10 @@ export function getAlertSettings(): AlertSettings {
 }
 
 export function saveAlertSettings(settings: AlertSettings): void {
+  if (isLicenseWriteRestricted()) {
+    console.warn('saveAlertSettings blocked: System in strict read-only mode.');
+    return;
+  }
   setStored(KEYS.SETTINGS, settings);
 }
 
@@ -501,6 +563,14 @@ export function getParentAlerts(): ParentAlert[] {
 }
 
 export function addParentAlert(alertData: Omit<ParentAlert, 'id' | 'timestamp' | 'status'>): ParentAlert {
+  if (isLicenseWriteRestricted()) {
+    return {
+      ...alertData,
+      id: `alt-blocked`,
+      timestamp: new Date().toISOString(),
+      status: 'pending',
+    };
+  }
   const alerts = getParentAlerts();
   const newAlert: ParentAlert = {
     ...alertData,
@@ -519,6 +589,7 @@ export function getParentExcuses(): ParentExcuse[] {
 }
 
 export function saveParentExcuses(excuses: ParentExcuse[]): void {
+  if (isLicenseWriteRestricted()) return;
   setStored(KEYS.EXCUSES, excuses);
   if (typeof window !== 'undefined') {
     fetch('/api/sync', {
@@ -530,6 +601,14 @@ export function saveParentExcuses(excuses: ParentExcuse[]): void {
 }
 
 export function addParentExcuse(excuseData: Omit<ParentExcuse, 'id' | 'submittedAt' | 'status'>): ParentExcuse {
+  if (isLicenseWriteRestricted()) {
+    return {
+      ...excuseData,
+      id: 'exc-blocked',
+      submittedAt: new Date().toISOString(),
+      status: 'pending',
+    };
+  }
   const excuses = getParentExcuses();
   const created: ParentExcuse = {
     ...excuseData,
@@ -562,6 +641,7 @@ export function getOfflineQueue(): OfflineAction[] {
 }
 
 export function queueOfflineAction(action: Omit<OfflineAction, 'id' | 'timestamp'>): void {
+  if (isLicenseWriteRestricted()) return;
   const queue = getOfflineQueue();
   queue.push({
     ...action,
@@ -611,6 +691,10 @@ export function recordAttendanceEntry(
   note?: string,
   teacherInfo?: { id: string; name: string; role?: 'teacher' | 'admin' | 'gate' }
 ): void {
+  if (isLicenseWriteRestricted()) {
+    console.warn('[License Restricted] Attendance write rejected: System in strict read-only mode.');
+    return;
+  }
   const actorRole = teacherInfo?.role || (teacherInfo?.name?.toLowerCase().includes('admin') || teacherInfo?.name?.toLowerCase().includes('principal') ? 'admin' : 'teacher');
 
   // Hard Tamper-Lock Enforcement at Data Layer:
@@ -768,6 +852,7 @@ export function recordAttendanceEntry(
 
 // Automatic absent tagging for unmarked pupils at end of day
 export function autoTagUnmarkedPupilsAbsent(dateStr: string, classId: string): number {
+  if (isLicenseWriteRestricted()) return 0;
   const settings = getAlertSettings();
   if (isSessionTimeLocked(dateStr, classId, settings, 'teacher')) {
     console.warn(`[Tamper Blocked] autoTagUnmarkedPupilsAbsent blocked because session ${dateStr} is time-locked.`);
@@ -803,6 +888,9 @@ export function getTeacherAnalytics(): TeacherAnalytics[] {
 
 // Bulk CSV Import
 export function bulkImportPupilsFromCSV(csvContent: string, classId: string): { added: number; errors: string[] } {
+  if (isLicenseWriteRestricted()) {
+    return { added: 0, errors: [getLicenseRestrictionReason()] };
+  }
   const lines = csvContent.trim().split(/\r?\n/);
   const errors: string[] = [];
   let added = 0;
@@ -886,6 +974,7 @@ export function getSubjectGrades(): SubjectGradeRecord[] {
 }
 
 export function saveSubjectGrades(grades: SubjectGradeRecord[]): void {
+  if (isLicenseWriteRestricted()) return;
   setStored(KEYS.GRADES, grades);
 }
 
@@ -1272,6 +1361,7 @@ export function toggleAdminSessionUnlock(
 // -------------------------------------------------------------
 
 export function saveAttendanceSessions(sessions: AttendanceSession[]): void {
+  if (isLicenseWriteRestricted()) return;
   setStored(KEYS.SESSIONS, sessions);
 }
 
@@ -1287,6 +1377,9 @@ export function createSnapshot(
   reason: string,
   triggerType: 'auto' | 'manual' = 'manual'
 ): SchoolBackupSnapshot {
+  if (isLicenseWriteRestricted() && triggerType === 'manual') {
+    throw new Error(getLicenseRestrictionReason());
+  }
   const students = getStudents();
   const classes = getClasses();
   const teachers = getTeachers();
@@ -1359,6 +1452,9 @@ export function rollbackToSnapshot(snapshotId: string): {
   error?: string;
   snapshot?: SchoolBackupSnapshot;
 } {
+  if (isLicenseWriteRestricted()) {
+    return { success: false, error: getLicenseRestrictionReason() };
+  }
   const snapshots = getSnapshots();
   const target = snapshots.find((s) => s.id === snapshotId);
   if (!target) {
@@ -1405,6 +1501,7 @@ export function rollbackToSnapshot(snapshotId: string): {
 }
 
 export function deleteSnapshot(snapshotId: string): void {
+  if (isLicenseWriteRestricted()) return;
   const existing = getSnapshots().filter((s) => s.id !== snapshotId);
   saveSnapshots(existing);
 }
@@ -1445,6 +1542,9 @@ export function restoreSchoolFromJSON(jsonString: string): {
   error?: string;
   counts?: { students: number; classes: number; teachers: number; sessions: number };
 } {
+  if (isLicenseWriteRestricted()) {
+    return { success: false, error: getLicenseRestrictionReason() };
+  }
   try {
     const parsed = JSON.parse(jsonString);
     if (!parsed || !parsed.data) {
@@ -1530,6 +1630,11 @@ export function issueStaffQuery(queryData: {
   deadlineDays: number;
   issuedBy?: string;
 }): StaffQuery {
+  if (isLicenseWriteRestricted()) {
+    const reason = getLicenseRestrictionReason();
+    if (typeof window !== 'undefined') alert(reason);
+    throw new Error(reason);
+  }
   const existing = getStaffQueries();
   const counter = existing.length + 1;
   const year = new Date().getFullYear();
@@ -1588,6 +1693,9 @@ export function submitStaffQueryReply(
   explanation: string,
   deviceName?: string
 ): { success: boolean; message: string } {
+  if (isLicenseWriteRestricted()) {
+    return { success: false, message: getLicenseRestrictionReason() };
+  }
   const queries = getStaffQueries();
   const targetIdx = queries.findIndex((q) => q.id === queryId);
   if (targetIdx === -1) {
@@ -1637,6 +1745,9 @@ export function resolveStaffQuery(
     decidedBy: string;
   }
 ): { success: boolean; message: string } {
+  if (isLicenseWriteRestricted()) {
+    return { success: false, message: getLicenseRestrictionReason() };
+  }
   const queries = getStaffQueries();
   const targetIdx = queries.findIndex((q) => q.id === queryId);
   if (targetIdx === -1) {
@@ -1665,6 +1776,7 @@ export function resolveStaffQuery(
 }
 
 export function deleteStaffQuery(queryId: string): void {
+  if (isLicenseWriteRestricted()) return;
   const queries = getStaffQueries().filter((q) => q.id !== queryId);
   setStored(KEYS.QUERIES, queries);
   if (typeof window !== 'undefined') {
@@ -1687,6 +1799,11 @@ export function publishStaffAnnouncement(data: {
   content: string;
   publishedBy?: string;
 }): StaffAnnouncement {
+  if (isLicenseWriteRestricted()) {
+    const reason = getLicenseRestrictionReason();
+    if (typeof window !== 'undefined') alert(reason);
+    throw new Error(reason);
+  }
   const existing = getStaffAnnouncements();
   const now = new Date();
 
@@ -1728,6 +1845,7 @@ export function publishStaffAnnouncement(data: {
 }
 
 export function acknowledgeStaffAnnouncement(announcementId: string, teacherId: string): void {
+  if (isLicenseWriteRestricted()) return;
   const announcements = getStaffAnnouncements();
   const targetIdx = announcements.findIndex((a) => a.id === announcementId);
   if (targetIdx === -1) return;
@@ -1745,6 +1863,7 @@ export function acknowledgeStaffAnnouncement(announcementId: string, teacherId: 
 }
 
 export function deleteStaffAnnouncement(announcementId: string): void {
+  if (isLicenseWriteRestricted()) return;
   const announcements = getStaffAnnouncements().filter((a) => a.id !== announcementId);
   setStored(KEYS.ANNOUNCEMENTS, announcements);
   if (typeof window !== 'undefined') {
