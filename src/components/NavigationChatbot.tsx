@@ -186,8 +186,13 @@ export const NavigationChatbot: React.FC<NavigationChatbotProps> = (props) => {
       id: 'teacher-unpair-device',
       title: 'Unpairing a Teacher Device (New Phone / Lost Phone)',
       category: 'staff_security',
-      keywords: ['unpair', 'device lock', 'new phone', 'lost phone', 'hardware bind', 'paired', 'reset device', 'hardware'],
-      patterns: [/unpair/i, /new phone/i, /lost phone/i, /change phone/i, /device lock/i, /phone locked/i],
+      keywords: ['unpair', 'unbind', 'device lock', 'lost phone', 'replace phone', 'hardware bind', 'paired phone', 'reset device', 'hardware signature'],
+      patterns: [
+        /\b(unpair|unbind)\b/i,
+        /(new|lost|broken|change|replace)\s+(phone|device|smartphone|hardware)/i,
+        /device\s+(lock|hardware|bound|unpair)/i,
+        /phone\s+(lock|unpair|replace)/i,
+      ],
       answer: `**How to Unpair a Teacher's Phone:**\n\nEach teacher profile is securely bound to their first smartphone hardware ID to prevent buddy-clocking. If a teacher replaces or loses their phone:\n\n1. Go to the **Principal Console** ➔ **Tab 5 ("Staff PINs & Geofence")**.\n2. Scroll down to the **"Teacher Device Hardware Locks"** table.\n3. Locate the teacher's name and click **"Unpair Phone"** (or click "Clear All Device Locks" to reset everyone).\n4. The teacher can now sign in and bind their new device on their next clock-in.`,
       actionButtons: (p) => [
         {
@@ -289,14 +294,39 @@ export const NavigationChatbot: React.FC<NavigationChatbotProps> = (props) => {
     },
     {
       id: 'pupil-enrollment-database',
-      title: 'Enroll New Pupils & Bulk CSV Import',
+      title: 'How to Register & Enroll New Students',
       category: 'database',
-      keywords: ['pupil', 'student', 'enroll', 'add pupil', 'add student', 'database', 'import', 'csv', 'roster', 'directory', 'admission'],
-      patterns: [/enroll/i, /add pupil/i, /add student/i, /database/i, /import/i, /csv/i, /roster/i, /directory/i],
-      answer: `**Enrolling Pupils & Roster Management:**\n\n* **Single Pupil Enrollment**: Click **"Teacher Database"** in the top header (or Tab 2 in directory) and select **"Enroll New Pupil"**.\n* **Bulk CSV Import**: Select **"Bulk CSV Import"** to upload hundreds of pupils simultaneously. Columns supported: \`Name, AdmissionNo, Class, Gender, ParentPhone\`.\n* **Pupil Search & Dossiers**: Use the search bar in the database modal or Tab 1 to find any pupil and view their 360° academic profile, attendance history, and parent contacts.`,
+      keywords: [
+        'register',
+        'registration',
+        'register student',
+        'register pupil',
+        'register a student',
+        'enroll',
+        'enrollment',
+        'add pupil',
+        'add student',
+        'new student',
+        'new pupil',
+        'admit',
+        'admission',
+        'pupil directory',
+        'student database',
+        'bulk import',
+        'csv import',
+        'roster'
+      ],
+      patterns: [
+        /\b(register|registration|enroll|enrollment|admissions?)\b/i,
+        /(add|new|create|register|enroll)\s+(a\s+)?(new\s+)?(student|pupil|child|learner)/i,
+        /how\s+(can|do)\s+i\s+(register|enroll|add|admit)\b/i,
+        /\b(pupil\s+directory|student\s+database|pupils?\s+database)\b/i,
+        /\b(bulk\s+import|csv\s+import|import\s+pupils|import\s+students)\b/i,
+      ],
+      answer: `**How to Register / Enroll a New Student:**\n\n1. In the top navigation bar, click **"Pupils"** (or click **"Teacher Database"** in the executive header).\n2. In the modal that opens, switch to the **"Enroll New Pupil"** tab.\n3. Enter the student's details:\n   * **Full Name** (e.g. *Chinedu Okafor*)\n   * **Admission Number** (e.g. *AHIC/2026/042*)\n   * **Assigned Class Arm** (e.g. *Primary 4 - Gold*, *JSS 1*, etc.)\n   * **Gender** & **Date of Birth**\n   * **Parent / Guardian WhatsApp Phone Number**\n4. Click **"Save & Enroll Pupil"**.\n\n*Tip: To add an entire class or whole school roster at once, click the **"Bulk CSV Import"** tab and upload your spreadsheet in seconds!*`,
       actionButtons: (p) => [
         {
-          label: 'Open Pupil Database (Enroll Tab)',
+          label: 'Open Student Enrollment Form',
           icon: Users,
           primary: true,
           action: () => p.onOpenDatabaseModal('add_pupil'),
@@ -306,10 +336,16 @@ export const NavigationChatbot: React.FC<NavigationChatbotProps> = (props) => {
           icon: FileSpreadsheet,
           action: () => p.onOpenDatabaseModal('bulk_import'),
         },
+        {
+          label: 'Browse Pupils Directory',
+          icon: Search,
+          action: () => p.onOpenDatabaseModal('pupils'),
+        },
       ],
       followUps: [
+        'How do I bulk import students from Excel or CSV?',
         'How to assign teachers to classrooms?',
-        'How to export attendance to CSV?',
+        'Where do I view a student\'s 360° profile?',
       ],
     },
     {
@@ -504,6 +540,15 @@ export const NavigationChatbot: React.FC<NavigationChatbotProps> = (props) => {
     }
   }, [isOpen]);
 
+  // Filter out conversational stop words so intent matching is precise
+  const STOP_WORDS = useMemo(() => new Set([
+    'how', 'can', 'i', 'a', 'an', 'the', 'to', 'do', 'does', 'did', 'is', 'are', 'was', 'were',
+    'be', 'been', 'being', 'have', 'has', 'had', 'what', 'where', 'when', 'why', 'who', 'which',
+    'there', 'their', 'they', 'we', 'you', 'your', 'my', 'me', 'it', 'its', 'of', 'for', 'in',
+    'on', 'at', 'by', 'with', 'from', 'about', 'into', 'and', 'or', 'so', 'just', 'tell', 'show',
+    'give', 'want', 'need', 'like', 'please', 'help', 'some', 'any', 'could', 'would', 'should'
+  ]), []);
+
   // Intelligent matching engine
   const findBestAnswer = (query: string): KnowledgeArticle => {
     const cleanQuery = query.toLowerCase().trim();
@@ -515,21 +560,36 @@ export const NavigationChatbot: React.FC<NavigationChatbotProps> = (props) => {
       }
     }
 
-    // 2. Score by keywords count
-    const words = cleanQuery.split(/\s+/).filter((w) => w.length > 2);
+    // 2. Tokenize and filter out conversational stop words
+    const tokens = cleanQuery
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
+
     let bestArticle = knowledgeBase[0];
     let highestScore = -1;
 
     for (const article of knowledgeBase) {
       let score = 0;
-      for (const word of words) {
-        if (article.keywords.some((kw) => kw.includes(word) || word.includes(kw))) {
-          score += 2;
+
+      // Match multi-word keywords with high weight
+      for (const kw of article.keywords) {
+        const lowerKw = kw.toLowerCase();
+        if (cleanQuery.includes(lowerKw)) {
+          score += lowerKw.includes(' ') ? 20 : 12;
         }
-        if (article.title.toLowerCase().includes(word)) {
-          score += 3;
+      }
+
+      // Match individual meaningful tokens against title, keywords, and answer
+      for (const token of tokens) {
+        if (article.title.toLowerCase().includes(token)) {
+          score += 10;
         }
-        if (article.answer.toLowerCase().includes(word)) {
+        if (article.keywords.some((kw) => kw.toLowerCase() === token)) {
+          score += 8;
+        } else if (article.keywords.some((kw) => kw.toLowerCase().includes(token))) {
+          score += 4;
+        }
+        if (article.answer.toLowerCase().includes(token)) {
           score += 1;
         }
       }
@@ -947,3 +1007,4 @@ export const NavigationChatbot: React.FC<NavigationChatbotProps> = (props) => {
     </div>
   );
 };
+
