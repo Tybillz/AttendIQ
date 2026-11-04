@@ -1369,14 +1369,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {chronicAbsentees.length > 0 ? (
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider">
                   <tr>
-                    <th className="py-3 px-4 font-semibold">Pupil Information</th>
-                    <th className="py-3 px-4 font-semibold">Class</th>
-                    <th className="py-3 px-4 font-semibold">Total Absences</th>
-                    <th className="py-3 px-4 font-semibold">Parent & Phone</th>
-                    <th className="py-3 px-4 font-semibold">Notification Status</th>
-                    <th className="py-3 px-4 font-semibold text-right">Action</th>
+                    <th className="py-3 px-4 font-bold">Pupil Information</th>
+                    <th className="py-3 px-4 font-bold">Class</th>
+                    <th className="py-3 px-4 font-bold">Total Absences</th>
+                    <th className="py-3 px-4 font-bold">Parent & Phone</th>
+                    <th className="py-3 px-4 font-bold">Notification Status</th>
+                    <th className="py-3 px-4 font-bold text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1540,17 +1540,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider">
                   <tr>
-                    <th className="py-3 px-4 font-semibold">Teacher Name</th>
-                    <th className="py-3 px-4 font-semibold">Class Assigned</th>
-                    <th className="py-3 px-4 font-semibold text-center">Clock-In (Arrival)</th>
-                    <th className="py-3 px-4 font-semibold text-center">Clock-Out (Departure)</th>
-                    <th className="py-3 px-4 font-semibold text-center">Arrival Status</th>
-                    <th className="py-3 px-4 font-semibold text-center">GPS Perimeter</th>
-                    <th className="py-3 px-4 font-semibold text-center">Paired Device (Anti-Cheat)</th>
-                    <th className="py-3 px-4 font-semibold text-right">Hours Worked</th>
-                    <th className="py-3 px-4 font-semibold text-right">Device Control</th>
+                    <th className="py-3 px-4 font-bold">Teacher Name</th>
+                    <th className="py-3 px-4 font-bold">Class Assigned</th>
+                    <th className="py-3 px-4 font-bold text-center">Clock-In (Arrival)</th>
+                    <th className="py-3 px-4 font-bold text-center">Clock-Out (Departure)</th>
+                    <th className="py-3 px-4 font-bold text-center">Arrival Status</th>
+                    <th className="py-3 px-4 font-bold text-center">GPS Perimeter</th>
+                    <th className="py-3 px-4 font-bold text-center">Paired Device (Anti-Cheat)</th>
+                    <th className="py-3 px-4 font-bold text-right">Hours Worked</th>
+                    <th className="py-3 px-4 font-bold text-right">Device Control</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1679,15 +1679,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider">
                   <tr>
-                    <th className="py-3 px-4 font-semibold">Teacher Name</th>
-                    <th className="py-3 px-4 font-semibold">Class Assigned</th>
-                    <th className="py-3 px-4 font-semibold text-center">On-Time Submissions</th>
-                    <th className="py-3 px-4 font-semibold text-center">Late Submissions</th>
-                    <th className="py-3 px-4 font-semibold text-center">Missed</th>
-                    <th className="py-3 px-4 font-semibold">Today&apos;s Status</th>
-                    <th className="py-3 px-4 font-semibold text-right">Compliance Rate</th>
+                    <th className="py-3 px-4 font-bold">Teacher Name</th>
+                    <th className="py-3 px-4 font-bold">Class Assigned</th>
+                    <th className="py-3 px-4 font-bold text-center">On-Time Submissions</th>
+                    <th className="py-3 px-4 font-bold text-center">Late Submissions</th>
+                    <th className="py-3 px-4 font-bold text-center">Missed</th>
+                    <th className="py-3 px-4 font-bold">Today&apos;s Status</th>
+                    <th className="py-3 px-4 font-bold text-right">Compliance Rate</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1967,15 +1967,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ) : (
                 /* ATTENDANCE ONLY BROADSHEET */
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-700">
+                  <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider">
                     <tr>
                       <th className="py-3 px-4 font-bold">Roll No.</th>
-                      <th className="py-3 px-4 font-bold">Pupil Name</th>
+                      <th className="py-3 px-4 font-bold min-w-[170px]">Pupil Name</th>
                       <th className="py-3 px-4 font-bold">Class</th>
                       <th className="py-3 px-4 font-bold text-center">Times Opened</th>
-                      <th className="py-3 px-4 font-bold text-center text-emerald-700">Times Present</th>
-                      <th className="py-3 px-4 font-bold text-center text-rose-700">Times Absent</th>
-                      <th className="py-3 px-4 font-bold text-center">Attendance %</th>
+                      <th className="py-3 px-4 font-bold text-center text-emerald-400">Times Present</th>
+                      <th className="py-3 px-4 font-bold text-center text-rose-400">Times Absent</th>
+                      <th className="py-3 px-4 font-bold text-center text-sky-400">Attendance %</th>
                       <th className="py-3 px-4 font-bold text-center">Punctuality Rating</th>
                       <th className="py-3 px-4 font-bold">Teacher&apos;s Report Remark</th>
                       <th className="py-3 px-4 font-bold text-right no-print">Action</th>
@@ -2495,7 +2495,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div className="overflow-x-auto border border-slate-200 rounded-2xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100/80 text-slate-600 border-b border-slate-200 font-bold uppercase text-[10px]">
+                  <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider font-bold">
                     <tr>
                       <th className="py-2.5 px-4">Staff Member & Contact</th>
                       <th className="py-2.5 px-4">Assigned Section & Subjects</th>
@@ -2690,7 +2690,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             ) : (
               <div className="overflow-x-auto border border-slate-200 rounded-2xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100/80 text-slate-600 border-b border-slate-200 font-bold uppercase text-[10px]">
+                  <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider font-bold">
                     <tr>
                       <th className="py-2.5 px-4">Staff Member</th>
                       <th className="py-2.5 px-4">Bound Smartphone</th>
@@ -2804,7 +2804,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider font-bold">
                   <tr>
                     <th className="py-3 px-4">Pupil</th>
                     <th className="py-3 px-3">Roll #</th>

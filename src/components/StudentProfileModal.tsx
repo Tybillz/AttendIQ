@@ -751,14 +751,14 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               {student.academicRecords && student.academicRecords.length > 0 ? (
                 <div className="border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                    <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider font-bold">
                       <tr>
-                        <th className="py-2.5 px-3 font-semibold">Assessment Title</th>
-                        <th className="py-2.5 px-3 font-semibold">Subject</th>
-                        <th className="py-2.5 px-3 font-semibold">Date</th>
-                        <th className="py-2.5 px-3 font-semibold text-center">Score</th>
-                        <th className="py-2.5 px-3 font-semibold text-center">Grade</th>
-                        <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
+                        <th className="py-2.5 px-3">Assessment Title</th>
+                        <th className="py-2.5 px-3">Subject</th>
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3 text-center">Score</th>
+                        <th className="py-2.5 px-3 text-center">Grade</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">

@@ -551,28 +551,28 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-slate-50/80">
+                <tr className="border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-white bg-slate-900">
                   <th className="py-3 px-4 w-12 text-center">#</th>
                   <th className="py-3 px-4 min-w-[190px]">Pupil Details</th>
                   <th className="py-3 px-2 text-center w-20">
                     CA 1
-                    <span className="block text-[9px] font-normal text-slate-500">Max 15</span>
+                    <span className="block text-[9px] font-normal text-slate-300">Max 15</span>
                   </th>
                   <th className="py-3 px-2 text-center w-20">
                     CA 2
-                    <span className="block text-[9px] font-normal text-slate-500">Max 15</span>
+                    <span className="block text-[9px] font-normal text-slate-300">Max 15</span>
                   </th>
                   <th className="py-3 px-2 text-center w-22">
                     Assignment
-                    <span className="block text-[9px] font-normal text-indigo-700 font-bold">Max 10</span>
+                    <span className="block text-[9px] font-normal text-indigo-300 font-bold">Max 10</span>
                   </th>
                   <th className="py-3 px-2 text-center w-20">
                     Exam
-                    <span className="block text-[9px] font-normal text-slate-500">Max 60</span>
+                    <span className="block text-[9px] font-normal text-slate-300">Max 60</span>
                   </th>
                   <th className="py-3 px-2 text-center w-18">
                     Total
-                    <span className="block text-[9px] font-normal text-slate-500">/ 100</span>
+                    <span className="block text-[9px] font-normal text-slate-300">/ 100</span>
                   </th>
                   <th className="py-3 px-3 text-center w-24">Grade</th>
                   <th className="py-3 px-4 min-w-[200px]">Teacher Vital Remark & Notes</th>

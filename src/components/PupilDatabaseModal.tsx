@@ -370,14 +370,14 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
             <div className="p-4 overflow-y-auto flex-1">
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider font-bold">
                     <tr>
-                      <th className="py-2.5 px-3 font-semibold">Pupil</th>
-                      <th className="py-2.5 px-3 font-semibold">Roll #</th>
-                      <th className="py-2.5 px-3 font-semibold">Class</th>
-                      <th className="py-2.5 px-3 font-semibold">Parent Contact</th>
-                      <th className="py-2.5 px-3 font-semibold text-center">Attendance Rate</th>
-                      <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
+                      <th className="py-2.5 px-3">Pupil</th>
+                      <th className="py-2.5 px-3">Roll #</th>
+                      <th className="py-2.5 px-3">Class</th>
+                      <th className="py-2.5 px-3">Parent Contact</th>
+                      <th className="py-2.5 px-3 text-center">Attendance Rate</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
