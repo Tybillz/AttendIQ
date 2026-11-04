@@ -208,7 +208,10 @@ export type AuditActionType =
   | 'SECURITY_ALERT'
   | 'SYSTEM_SNAPSHOT_CREATED'
   | 'SYSTEM_ROLLBACK_EXECUTED'
-  | 'SYSTEM_BACKUP_RESTORED';
+  | 'SYSTEM_BACKUP_RESTORED'
+  | 'STAFF_QUERY_ISSUED'
+  | 'STAFF_QUERY_RESOLVED'
+  | 'ANNOUNCEMENT_PUBLISHED';
 
 export interface AuditLogEntry {
   id: string;
@@ -218,7 +221,7 @@ export interface AuditLogEntry {
   actorId: string;
   actorName: string;
   action: AuditActionType;
-  targetType: 'attendance' | 'grade' | 'pupil' | 'teacher' | 'session';
+  targetType: 'attendance' | 'grade' | 'pupil' | 'teacher' | 'session' | 'query' | 'announcement';
   targetId: string;
   targetName: string; // Student name, class name, etc.
   classId?: string;
@@ -277,6 +280,47 @@ export interface TeacherDeviceLock {
     cpuCores?: number;
     screenRes?: string;
   };
+}
+
+export interface StaffQuery {
+  id: string;
+  queryNumber: string; // e.g. "QRY-2026-001"
+  teacherId: string;
+  teacherName: string;
+  teacherPhone?: string;
+  teacherEmail?: string;
+  title: string;
+  category: 'lateness' | 'absence' | 'insubordination' | 'academic_records' | 'general';
+  description: string;
+  incidentDate: string; // YYYY-MM-DD
+  deadlineDays: number;
+  replyDeadline: string; // YYYY-MM-DD
+  status: 'pending_reply' | 'replied' | 'resolved' | 'warning_issued';
+  issuedBy: string;
+  issuedAt: string;
+  staffReply?: {
+    repliedAt: string;
+    explanation: string;
+    submittedFromDevice?: string;
+  };
+  adminDecision?: {
+    decidedAt: string;
+    decidedBy: string;
+    decision: 'explanation_accepted' | 'verbal_warning' | 'written_warning' | 'disciplinary_action';
+    notes: string;
+  };
+}
+
+export interface StaffAnnouncement {
+  id: string;
+  title: string;
+  category: 'general' | 'pta' | 'examination' | 'emergency' | 'curriculum';
+  priority: 'normal' | 'important' | 'urgent';
+  content: string;
+  publishedBy: string;
+  publishedAt: string;
+  targetAudience: 'all_staff';
+  acknowledgedByTeacherIds?: string[];
 }
 
 export interface SchoolBackupSnapshot {

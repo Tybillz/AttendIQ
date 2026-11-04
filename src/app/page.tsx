@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, BookOpen, Users, FolderOpen, Lock, ShieldAlert, Sparkles } from 'lucide-react';
+import { Calendar, BookOpen, Users, FolderOpen, Lock, ShieldAlert, Sparkles, FileQuestion, Bell } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { TeacherRollCall } from '@/components/TeacherRollCall';
 import { TeacherClockCard } from '@/components/TeacherClockCard';
 import { SubjectGradebook } from '@/components/SubjectGradebook';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { GateCheckIn } from '@/components/GateCheckIn';
+import { TeacherCommunicationCenter } from '@/components/TeacherCommunicationCenter';
 import { AuthScreen } from '@/components/AuthScreen';
 import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud, initInactivityTracker, loginAsAdmin, saveAuthSession } from '@/lib/auth';
 import { getTeacherRecordForDate, isRemoteAcademicAllowed, getPerimeterConfig } from '@/lib/teacherAttendance';
@@ -26,6 +27,8 @@ import {
   recordAttendanceEntry,
   getAuditLogs,
   syncDataFromCloud,
+  getStaffQueries,
+  getStaffAnnouncements,
 } from '@/lib/storage';
 import { AuditLogModal } from '@/components/AuditLogModal';
 import { DisasterRecoveryModal } from '@/components/DisasterRecoveryModal';
@@ -55,6 +58,8 @@ import {
   TeacherAnalytics,
   AttendanceStatus,
   AuditLogEntry,
+  StaffQuery,
+  StaffAnnouncement,
 } from '@/types/attendance';
 
 export default function Home() {
@@ -79,7 +84,11 @@ export default function Home() {
   const [alerts, setAlerts] = useState<ParentAlert[]>(INITIAL_PARENT_ALERTS);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(INITIAL_ALERT_SETTINGS);
   const [teacherAnalytics, setTeacherAnalytics] = useState<TeacherAnalytics[]>(INITIAL_TEACHER_ANALYTICS);
-  const [teacherActiveTab, setTeacherActiveTab] = useState<'attendance' | 'dossiers' | 'gradebook'>('attendance');
+  const [teacherActiveTab, setTeacherActiveTab] = useState<
+    'attendance' | 'dossiers' | 'gradebook' | 'queries' | 'announcements'
+  >('attendance');
+  const [queries, setQueries] = useState<StaffQuery[]>([]);
+  const [announcements, setAnnouncements] = useState<StaffAnnouncement[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isTeacherClockedIn, setIsTeacherClockedIn] = useState<boolean>(false);
   const [perimeterConfig, setPerimeterConfig] = useState(getPerimeterConfig());
@@ -107,9 +116,13 @@ export default function Home() {
   const isRemoteAllowed = isRemoteAcademicAllowed(currentTeacherId, perimeterConfig);
   const canAccessAcademics = isTeacherClockedIn || isRemoteAllowed;
 
-  // RESTRICTION: If staff is unable to clock in AND remote access is not authorized, restrict to roll call
+  // RESTRICTION: If staff is unable to clock in AND remote access is not authorized, protect dossiers and gradebook only
   useEffect(() => {
-    if (currentRole === 'teacher' && !canAccessAcademics && teacherActiveTab !== 'attendance') {
+    if (
+      currentRole === 'teacher' &&
+      !canAccessAcademics &&
+      (teacherActiveTab === 'dossiers' || teacherActiveTab === 'gradebook')
+    ) {
       setTeacherActiveTab('attendance');
     }
   }, [currentRole, canAccessAcademics, teacherActiveTab]);
@@ -147,6 +160,8 @@ export default function Home() {
       setAlertSettings(getAlertSettings());
       setTeacherAnalytics(getTeacherAnalytics());
       setAuditLogs(getAuditLogs());
+      setQueries(getStaffQueries());
+      setAnnouncements(getStaffAnnouncements());
     } catch (e) {
       console.warn('Storage sync fallback to initial dataset:', e);
     }
@@ -298,6 +313,13 @@ export default function Home() {
     (s) => s.date === selectedDate && s.classId === selectedClassId
   );
   const classStudents = students.filter((s) => s.classId === selectedClassId);
+
+  const teacherPendingQueries = queries.filter(
+    (q) => q.teacherId === activeTeacher?.id && q.status === 'pending_reply'
+  );
+  const teacherUnreadAnnouncements = announcements.filter(
+    (a) => !a.acknowledgedByTeacherIds?.includes(activeTeacher?.id || '')
+  );
 
   // Render AuthScreen if unauthenticated
   if (!authSession) {
@@ -515,10 +537,37 @@ export default function Home() {
               </div>
             )}
 
-            {/* Sub-navigation Tabs: Roll Call vs Dossiers vs Gradebook */}
+            {teacherPendingQueries.length > 0 && (
+              <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-rose-50 to-red-50 border border-rose-300 text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-rose-500/20 text-rose-700 shrink-0">
+                    <FileQuestion className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-rose-950">
+                      Official Disciplinary Notice — Action Required ({teacherPendingQueries.length} Pending Query)
+                    </p>
+                    <p className="text-rose-800 text-[11px] mt-0.5">
+                      School Management has issued an official query requiring your written explanation within the established deadline.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTeacherActiveTab('queries')}
+                  className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+                >
+                  <FileQuestion className="h-3.5 w-3.5" />
+                  <span>Review & Respond Now</span>
+                </button>
+              </div>
+            )}
+
+            {/* Sub-navigation Tabs: Roll Call vs Dossiers vs Gradebook vs Queries vs Announcements */}
             <div className="mb-6 flex items-center justify-between flex-wrap gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200 flex-wrap">
                 <button
+                  type="button"
                   onClick={() => setTeacherActiveTab('attendance')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
                     teacherActiveTab === 'attendance'
@@ -531,6 +580,7 @@ export default function Home() {
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     if (!canAccessAcademics) {
                       alert('🔒 Staff Clock-In Required: You must clock in on campus or have Remote Academic Access authorized by the Principal to access pupil dossiers.');
@@ -561,6 +611,7 @@ export default function Home() {
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     if (!canAccessAcademics) {
                       alert('🔒 Staff Clock-In Required: You must clock in on campus or have Remote Academic Access authorized by the Principal to access the gradebook.');
@@ -586,6 +637,42 @@ export default function Home() {
                   {!canAccessAcademics && (
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
                       Locked
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTeacherActiveTab('queries')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
+                    teacherActiveTab === 'queries'
+                      ? 'bg-white text-rose-900 shadow-xs border border-slate-200/80'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FileQuestion className="h-4 w-4 text-rose-600" />
+                  <span>My Official Queries</span>
+                  {teacherPendingQueries.length > 0 && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-rose-500 text-white animate-pulse">
+                      {teacherPendingQueries.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTeacherActiveTab('announcements')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
+                    teacherActiveTab === 'announcements'
+                      ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Bell className="h-4 w-4 text-indigo-600" />
+                  <span>Announcements</span>
+                  {teacherUnreadAnnouncements.length > 0 && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-indigo-600 text-white">
+                      {teacherUnreadAnnouncements.length}
                     </span>
                   )}
                 </button>
@@ -628,6 +715,17 @@ export default function Home() {
                   currentRole={currentRole}
                 />
               </div>
+            ) : teacherActiveTab === 'queries' || teacherActiveTab === 'announcements' ? (
+              activeTeacher && (
+                <TeacherCommunicationCenter
+                  teacher={activeTeacher}
+                  queries={queries}
+                  announcements={announcements}
+                  activeSubTab={teacherActiveTab === 'announcements' ? 'announcements' : 'queries'}
+                  onSubTabChange={(subTab) => setTeacherActiveTab(subTab)}
+                  onDataUpdated={syncData}
+                />
+              )
             ) : !canAccessAcademics ? (
               <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm text-center max-w-lg mx-auto my-6 space-y-4">
                 <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner">

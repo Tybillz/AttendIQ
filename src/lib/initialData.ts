@@ -1,4 +1,4 @@
-import { Student, ClassSection, Teacher, AttendanceSession, ParentAlert, AlertSettings, TeacherAnalytics, SubjectGradeRecord, AuditLogEntry } from '@/types/attendance';
+import { Student, ClassSection, Teacher, AttendanceSession, ParentAlert, AlertSettings, TeacherAnalytics, SubjectGradeRecord, AuditLogEntry, StaffQuery, StaffAnnouncement } from '@/types/attendance';
 
 export const INITIAL_CLASSES: ClassSection[] = [
   {
@@ -624,5 +624,89 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     severity: 'warning',
     details: 'Status changed from Absent to Late (arrived at school clinic for asthma medication).',
     canRevert: true,
+  },
+];
+
+export const INITIAL_STAFF_QUERIES: StaffQuery[] = [
+  {
+    id: 'qry-101',
+    queryNumber: 'QRY-2026-001',
+    teacherId: 't2',
+    teacherName: 'Mr Joseph Tanaka',
+    teacherPhone: '08994646474',
+    teacherEmail: 'joseph.tanaka@innovative.edu.ng',
+    title: 'Delay in Continuous Assessment (CA 1) Submission for JSS 2 Mathematics',
+    category: 'academic_records',
+    description: 'It has been observed by the Academic Committee that the Continuous Assessment scores for JSS 2 Mathematics have not been uploaded to AttendIQ within the scheduled term deadline. You are hereby requested to provide a written explanation for this delay within 48 hours.',
+    incidentDate: '2026-11-02',
+    deadlineDays: 48,
+    replyDeadline: '2026-11-06',
+    status: 'pending_reply',
+    issuedBy: 'Office of the Principal (Dr. Mrs. Victoria Adebayo)',
+    issuedAt: '2026-11-03T09:30:00Z',
+  },
+  {
+    id: 'qry-102',
+    queryNumber: 'QRY-2026-002',
+    teacherId: 't1',
+    teacherName: 'Mrs Atako Bulus',
+    teacherPhone: '234917565855',
+    teacherEmail: 'atako.bulus@innovative.edu.ng',
+    title: 'Clarification on Late Morning Arrival on 30th October',
+    category: 'lateness',
+    description: 'Attendance records indicate arrival past the 08:00 AM cutoff without prior notification to the Vice Principal Administration.',
+    incidentDate: '2026-10-30',
+    deadlineDays: 24,
+    replyDeadline: '2026-11-01',
+    status: 'resolved',
+    issuedBy: 'Vice Principal Administration',
+    issuedAt: '2026-10-31T08:00:00Z',
+    staffReply: {
+      repliedAt: '2026-10-31T10:15:00Z',
+      explanation: 'I experienced an unexpected vehicular breakdown along the airport expressway. I immediately reached out to Mrs. Okafor to cover the morning registration period.',
+      submittedFromDevice: 'Samsung Galaxy A54',
+    },
+    adminDecision: {
+      decidedAt: '2026-10-31T14:00:00Z',
+      decidedBy: 'Dr. Mrs. Victoria Adebayo (Principal)',
+      decision: 'explanation_accepted',
+      notes: 'Explanation reviewed and verified with colleague coverage. Advised to inform VP office earlier.',
+    },
+  },
+];
+
+export const INITIAL_ANNOUNCEMENTS: StaffAnnouncement[] = [
+  {
+    id: 'anc-001',
+    title: 'Submission of Harmonized First Term Examination Questions & Schemes',
+    category: 'examination',
+    priority: 'urgent',
+    content: 'All form teachers and subject teachers are hereby notified that all First Term examination question drafts, marking schemes, and continuous assessment test scores must be submitted to the Academic Moderation Committee on or before Friday, 13th November 2026. Please ensure compliance with NERDC standard grading matrices.',
+    publishedBy: 'Academic Supervision Committee',
+    publishedAt: '2026-11-03T08:00:00Z',
+    targetAudience: 'all_staff',
+    acknowledgedByTeacherIds: ['t1'],
+  },
+  {
+    id: 'anc-002',
+    title: 'Morning Roll Call Protocol & Daily Entrance Geofence Compliance',
+    category: 'general',
+    priority: 'important',
+    content: 'Staff members are reminded that gate arrival clock-in commences at 07:30 AM and cutoff is strictly 08:00 AM on campus grounds. Daily homeroom roll calls must be marked and locked before 08:30 AM to ensure instant automated Parent SMS dispatch.',
+    publishedBy: 'Office of the Principal',
+    publishedAt: '2026-11-01T07:45:00Z',
+    targetAudience: 'all_staff',
+    acknowledgedByTeacherIds: ['t1', 't2', 't3'],
+  },
+  {
+    id: 'anc-003',
+    title: 'Upcoming PTA General Assembly & Open Day Exhibition',
+    category: 'pta',
+    priority: 'normal',
+    content: 'The Termly Parent-Teacher Association General Assembly and Pupil Academic Exhibition is scheduled for Saturday, 28th November 2026. All teachers are requested to ensure pupil project dossiers and practical arts display materials are updated.',
+    publishedBy: 'PTA Liaison Committee',
+    publishedAt: '2026-10-28T10:00:00Z',
+    targetAudience: 'all_staff',
+    acknowledgedByTeacherIds: ['t1', 't2'],
   },
 ];

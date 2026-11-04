@@ -16,6 +16,8 @@ import {
   AuditActionType,
   ParentExcuse,
   SchoolBackupSnapshot,
+  StaffQuery,
+  StaffAnnouncement,
 } from '@/types/attendance';
 import {
   INITIAL_CLASSES,
@@ -26,6 +28,8 @@ import {
   INITIAL_TEACHER_ANALYTICS,
   INITIAL_SUBJECT_GRADES,
   INITIAL_AUDIT_LOGS,
+  INITIAL_STAFF_QUERIES,
+  INITIAL_ANNOUNCEMENTS,
 } from './initialData';
 
 const KEYS = {
@@ -41,6 +45,8 @@ const KEYS = {
   EXCUSES: 'attend_iq_excuses_v2',
   OFFLINE_QUEUE: 'attend_iq_offline_queue_v2',
   SNAPSHOTS: 'attend_iq_snapshots_v2',
+  QUERIES: 'attend_iq_staff_queries_v1',
+  ANNOUNCEMENTS: 'attend_iq_announcements_v1',
 };
 
 // Safe LocalStorage helpers
@@ -1496,5 +1502,252 @@ export function restoreSchoolFromJSON(jsonString: string): {
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to parse JSON backup.' };
+  }
+}
+
+// ========================================================
+// STAFF QUERIES MANAGEMENT (Admin <-> Staff Disciplinary)
+// ========================================================
+
+export function getStaffQueries(): StaffQuery[] {
+  return getStored<StaffQuery[]>(KEYS.QUERIES, INITIAL_STAFF_QUERIES);
+}
+
+export function getQueriesForTeacher(teacherId: string): StaffQuery[] {
+  const all = getStaffQueries();
+  return all.filter((q) => q.teacherId === teacherId);
+}
+
+export function issueStaffQuery(queryData: {
+  teacherId: string;
+  teacherName: string;
+  teacherPhone?: string;
+  teacherEmail?: string;
+  title: string;
+  category: StaffQuery['category'];
+  description: string;
+  incidentDate: string;
+  deadlineDays: number;
+  issuedBy?: string;
+}): StaffQuery {
+  const existing = getStaffQueries();
+  const counter = existing.length + 1;
+  const year = new Date().getFullYear();
+  const queryNumber = `QRY-${year}-${String(counter).padStart(3, '0')}`;
+  
+  // Calculate reply deadline
+  const now = new Date();
+  const deadlineDate = new Date(now.getTime() + queryData.deadlineDays * 60 * 60 * 1000);
+  const replyDeadline = deadlineDate.toISOString().split('T')[0];
+
+  const newQuery: StaffQuery = {
+    id: `qry-${Date.now()}`,
+    queryNumber,
+    teacherId: queryData.teacherId,
+    teacherName: queryData.teacherName,
+    teacherPhone: queryData.teacherPhone,
+    teacherEmail: queryData.teacherEmail,
+    title: queryData.title,
+    category: queryData.category,
+    description: queryData.description,
+    incidentDate: queryData.incidentDate || now.toISOString().split('T')[0],
+    deadlineDays: queryData.deadlineDays || 48,
+    replyDeadline,
+    status: 'pending_reply',
+    issuedBy: queryData.issuedBy || 'Office of the Principal',
+    issuedAt: now.toISOString(),
+  };
+
+  const updated = [newQuery, ...existing];
+  setStored(KEYS.QUERIES, updated);
+
+  try {
+    addAuditLog({
+      actorId: 'admin',
+      actorName: queryData.issuedBy || 'Administrator',
+      actorRole: 'admin',
+      action: 'STAFF_QUERY_ISSUED',
+      targetType: 'query',
+      targetId: queryData.teacherId,
+      targetName: queryData.teacherName,
+      severity: 'warning',
+      details: `Official Query issued (${queryNumber}): "${queryData.title}" to staff ${queryData.teacherName}. Reply deadline: ${replyDeadline}.`,
+      canRevert: false,
+    });
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('attend-iq-storage-update'));
+  }
+
+  return newQuery;
+}
+
+export function submitStaffQueryReply(
+  queryId: string,
+  explanation: string,
+  deviceName?: string
+): { success: boolean; message: string } {
+  const queries = getStaffQueries();
+  const targetIdx = queries.findIndex((q) => q.id === queryId);
+  if (targetIdx === -1) {
+    return { success: false, message: 'Query record not found.' };
+  }
+
+  const query = queries[targetIdx];
+  const now = new Date();
+
+  query.status = 'replied';
+  query.staffReply = {
+    repliedAt: now.toISOString(),
+    explanation: explanation.trim(),
+    submittedFromDevice: deviceName || 'Authorized Staff Workspace',
+  };
+
+  queries[targetIdx] = query;
+  setStored(KEYS.QUERIES, queries);
+
+  try {
+    addAuditLog({
+      actorId: query.teacherId,
+      actorName: query.teacherName,
+      actorRole: 'teacher',
+      action: 'STAFF_QUERY_RESOLVED',
+      targetType: 'query',
+      targetId: query.teacherId,
+      targetName: query.teacherName,
+      severity: 'info',
+      details: `Staff ${query.teacherName} submitted formal written reply for Query ${query.queryNumber}: "${query.title}".`,
+      canRevert: false,
+    });
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('attend-iq-storage-update'));
+  }
+
+  return { success: true, message: 'Your formal explanation has been submitted to Management.' };
+}
+
+export function resolveStaffQuery(
+  queryId: string,
+  decisionData: {
+    decision: NonNullable<StaffQuery['adminDecision']>['decision'];
+    notes: string;
+    decidedBy: string;
+  }
+): { success: boolean; message: string } {
+  const queries = getStaffQueries();
+  const targetIdx = queries.findIndex((q) => q.id === queryId);
+  if (targetIdx === -1) {
+    return { success: false, message: 'Query record not found.' };
+  }
+
+  const query = queries[targetIdx];
+  const now = new Date();
+
+  query.status = decisionData.decision === 'explanation_accepted' ? 'resolved' : 'warning_issued';
+  query.adminDecision = {
+    decidedAt: now.toISOString(),
+    decidedBy: decisionData.decidedBy || 'School Administrator',
+    decision: decisionData.decision,
+    notes: decisionData.notes.trim(),
+  };
+
+  queries[targetIdx] = query;
+  setStored(KEYS.QUERIES, queries);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('attend-iq-storage-update'));
+  }
+
+  return { success: true, message: 'Query status updated and archived.' };
+}
+
+export function deleteStaffQuery(queryId: string): void {
+  const queries = getStaffQueries().filter((q) => q.id !== queryId);
+  setStored(KEYS.QUERIES, queries);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('attend-iq-storage-update'));
+  }
+}
+
+// ========================================================
+// STAFF ANNOUNCEMENTS & CIRCULARS (Broadcasting to all staff)
+// ========================================================
+
+export function getStaffAnnouncements(): StaffAnnouncement[] {
+  return getStored<StaffAnnouncement[]>(KEYS.ANNOUNCEMENTS, INITIAL_ANNOUNCEMENTS);
+}
+
+export function publishStaffAnnouncement(data: {
+  title: string;
+  category: StaffAnnouncement['category'];
+  priority: StaffAnnouncement['priority'];
+  content: string;
+  publishedBy?: string;
+}): StaffAnnouncement {
+  const existing = getStaffAnnouncements();
+  const now = new Date();
+
+  const created: StaffAnnouncement = {
+    id: `anc-${Date.now()}`,
+    title: data.title.trim(),
+    category: data.category || 'general',
+    priority: data.priority || 'normal',
+    content: data.content.trim(),
+    publishedBy: data.publishedBy || 'Office of the Principal',
+    publishedAt: now.toISOString(),
+    targetAudience: 'all_staff',
+    acknowledgedByTeacherIds: [],
+  };
+
+  const updated = [created, ...existing];
+  setStored(KEYS.ANNOUNCEMENTS, updated);
+
+  try {
+    addAuditLog({
+      actorId: 'admin',
+      actorName: data.publishedBy || 'Administrator',
+      actorRole: 'admin',
+      action: 'ANNOUNCEMENT_PUBLISHED',
+      targetType: 'announcement',
+      targetId: 'all-staff',
+      targetName: 'All Staff Members',
+      severity: data.priority === 'urgent' ? 'warning' : 'info',
+      details: `Broadcasted staff announcement "${data.title}" to all teachers.`,
+      canRevert: false,
+    });
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('attend-iq-storage-update'));
+  }
+
+  return created;
+}
+
+export function acknowledgeStaffAnnouncement(announcementId: string, teacherId: string): void {
+  const announcements = getStaffAnnouncements();
+  const targetIdx = announcements.findIndex((a) => a.id === announcementId);
+  if (targetIdx === -1) return;
+
+  const anc = announcements[targetIdx];
+  const acks = anc.acknowledgedByTeacherIds || [];
+  if (!acks.includes(teacherId)) {
+    anc.acknowledgedByTeacherIds = [...acks, teacherId];
+    announcements[targetIdx] = anc;
+    setStored(KEYS.ANNOUNCEMENTS, announcements);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('attend-iq-storage-update'));
+    }
+  }
+}
+
+export function deleteStaffAnnouncement(announcementId: string): void {
+  const announcements = getStaffAnnouncements().filter((a) => a.id !== announcementId);
+  setStored(KEYS.ANNOUNCEMENTS, announcements);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('attend-iq-storage-update'));
   }
 }

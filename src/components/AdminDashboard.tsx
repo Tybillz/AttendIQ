@@ -47,6 +47,8 @@ import {
   Mail,
   FolderPlus,
   Cake,
+  FileQuestion,
+  Bell,
 } from 'lucide-react';
 import SchoolPerimeterPicker from './SchoolPerimeterPicker';
 import { AdminManualModal } from './AdminManualModal';
@@ -61,6 +63,8 @@ import {
   SubjectGradeRecord,
   TeacherClockRecord,
   SchoolPerimeterConfig,
+  StaffQuery,
+  StaffAnnouncement,
 } from '@/types/attendance';
 import {
   exportAttendanceReportCSV,
@@ -70,6 +74,13 @@ import {
   deleteClass,
   reassignClassTeacher,
   deleteStudent,
+  getStaffQueries,
+  issueStaffQuery,
+  resolveStaffQuery,
+  deleteStaffQuery,
+  getStaffAnnouncements,
+  publishStaffAnnouncement,
+  deleteStaffAnnouncement,
 } from '@/lib/storage';
 import {
   calculateStudentAttendanceMetrics,
@@ -145,9 +156,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     | 'teacher_analytics'
     | 'access_control'
     | 'recovery'
+    | 'staff_queries'
+    | 'announcements'
   >('overview');
   const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState<boolean>(false);
+
+  // Staff Queries State
+  const [queries, setQueries] = useState<StaffQuery[]>(getStaffQueries());
+  const [queryFilterStatus, setQueryFilterStatus] = useState<string>('all');
+  const [isNewQueryModalOpen, setIsNewQueryModalOpen] = useState(false);
+  const [selectedQueryForReview, setSelectedQueryForReview] = useState<StaffQuery | null>(null);
+
+  // New Query Form State
+  const [newQueryTeacherId, setNewQueryTeacherId] = useState(teachers[0]?.id || '');
+  const [newQueryTitle, setNewQueryTitle] = useState('');
+  const [newQueryCategory, setNewQueryCategory] = useState<StaffQuery['category']>('lateness');
+  const [newQueryDescription, setNewQueryDescription] = useState('');
+  const [newQueryIncidentDate, setNewQueryIncidentDate] = useState(selectedDate);
+  const [newQueryDeadlineDays, setNewQueryDeadlineDays] = useState(48);
+
+  // Query Review Form State
+  const [reviewDecision, setReviewDecision] = useState<NonNullable<StaffQuery['adminDecision']>['decision']>('explanation_accepted');
+  const [reviewNotes, setReviewNotes] = useState('');
+
+  // Announcements State
+  const [announcements, setAnnouncements] = useState<StaffAnnouncement[]>(getStaffAnnouncements());
+  const [isNewAncModalOpen, setIsNewAncModalOpen] = useState(false);
+  const [newAncTitle, setNewAncTitle] = useState('');
+  const [newAncCategory, setNewAncCategory] = useState<StaffAnnouncement['category']>('general');
+  const [newAncPriority, setNewAncPriority] = useState<StaffAnnouncement['priority']>('normal');
+  const [newAncContent, setNewAncContent] = useState('');
 
   // Pupils directory state
   const [pupilsSearch, setPupilsSearch] = useState('');
@@ -508,6 +547,90 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (onDataUpdated) onDataUpdated();
   };
 
+  // Staff Queries Handlers
+  const handleCreateQuerySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetTeacher = teachers.find((t) => t.id === newQueryTeacherId);
+    if (!targetTeacher || !newQueryTitle.trim() || !newQueryDescription.trim()) return;
+
+    issueStaffQuery({
+      teacherId: targetTeacher.id,
+      teacherName: targetTeacher.name,
+      teacherPhone: targetTeacher.phone,
+      teacherEmail: targetTeacher.email,
+      title: newQueryTitle.trim(),
+      category: newQueryCategory,
+      description: newQueryDescription.trim(),
+      incidentDate: newQueryIncidentDate || selectedDate,
+      deadlineDays: Number(newQueryDeadlineDays) || 48,
+      issuedBy: branding.principalName ? `Office of the Principal (${branding.principalName})` : 'Office of the Principal',
+    });
+
+    setQueries(getStaffQueries());
+    setIsNewQueryModalOpen(false);
+    setNewQueryTitle('');
+    setNewQueryDescription('');
+    setAccessFeedback(`Official query issued to ${targetTeacher.name}!`);
+    setTimeout(() => setAccessFeedback(null), 3000);
+    if (onDataUpdated) onDataUpdated();
+  };
+
+  const handleReviewQuerySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedQueryForReview || !reviewNotes.trim()) return;
+
+    resolveStaffQuery(selectedQueryForReview.id, {
+      decision: reviewDecision,
+      notes: reviewNotes.trim(),
+      decidedBy: branding.principalName || 'School Administrator',
+    });
+
+    setQueries(getStaffQueries());
+    setSelectedQueryForReview(null);
+    setReviewNotes('');
+    setAccessFeedback('Query resolution recorded!');
+    setTimeout(() => setAccessFeedback(null), 3000);
+    if (onDataUpdated) onDataUpdated();
+  };
+
+  const handleDeleteQuerySubmit = (queryId: string, queryNumber: string) => {
+    if (confirm(`Are you sure you want to delete Query record ${queryNumber}?`)) {
+      deleteStaffQuery(queryId);
+      setQueries(getStaffQueries());
+      if (onDataUpdated) onDataUpdated();
+    }
+  };
+
+  // Staff Announcements Handlers
+  const handlePublishAnnouncementSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAncTitle.trim() || !newAncContent.trim()) return;
+
+    publishStaffAnnouncement({
+      title: newAncTitle.trim(),
+      category: newAncCategory,
+      priority: newAncPriority,
+      content: newAncContent.trim(),
+      publishedBy: branding.schoolName ? `${branding.schoolName} Administration` : 'Office of the Principal',
+    });
+
+    setAnnouncements(getStaffAnnouncements());
+    setIsNewAncModalOpen(false);
+    setNewAncTitle('');
+    setNewAncContent('');
+    setAccessFeedback('Announcement broadcasted to all staff!');
+    setTimeout(() => setAccessFeedback(null), 3000);
+    if (onDataUpdated) onDataUpdated();
+  };
+
+  const handleDeleteAnnouncementSubmit = (ancId: string, title: string) => {
+    if (confirm(`Delete announcement "${title}"?`)) {
+      deleteStaffAnnouncement(ancId);
+      setAnnouncements(getStaffAnnouncements());
+      if (onDataUpdated) onDataUpdated();
+    }
+  };
+
 
   // Whole school today calculations
   const totalStudents = students.length;
@@ -812,6 +935,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab('staff_queries')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'staff_queries' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
+        >
+          <FileQuestion className="h-3.5 w-3.5 text-rose-500" />
+          <span>Queries ({queries.filter(q => q.status === 'pending_reply').length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('announcements')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'announcements' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
+        >
+          <Bell className="h-3.5 w-3.5 text-indigo-500" />
+          <span>Announcements ({announcements.length})</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('recovery')}
           className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'recovery' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
@@ -997,6 +1140,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <KeyRound className="h-4 w-4 text-amber-500" />
                   <span>Perimeter & PINs</span>
                 </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Group 2.5: Staff Directives & Notices */}
+          <div>
+            <span className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+              Staff Directives & Notices
+            </span>
+            <div className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('staff_queries')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'staff_queries'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileQuestion className="h-4 w-4 text-rose-500" />
+                  <span>Official Queries</span>
+                </div>
+                {queries.filter(q => q.status === 'pending_reply').length > 0 ? (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'staff_queries' ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-800'}`}>
+                    {queries.filter(q => q.status === 'pending_reply').length}
+                  </span>
+                ) : (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'staff_queries' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    {queries.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('announcements')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'announcements'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Bell className="h-4 w-4 text-indigo-500" />
+                  <span>Staff Announcements</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'announcements' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'}`}>
+                  {announcements.length}
+                </span>
               </button>
             </div>
           </div>
@@ -3275,8 +3468,739 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* TAB: OFFICIAL STAFF QUERIES */}
+      {activeTab === 'staff_queries' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-6 animate-in fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <FileQuestion className="h-5 w-5 text-rose-600" />
+                <h2 className="text-lg font-black text-slate-900">Official Staff Queries & Disciplinary Records</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-rose-100 text-rose-800">
+                  Staff Directives
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Issue targeted administrative queries to individual teachers, mandate written explanations with deadlines, and record official resolutions.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (teachers.length > 0 && !newQueryTeacherId) {
+                  setNewQueryTeacherId(teachers[0].id);
+                }
+                setIsNewQueryModalOpen(true);
+              }}
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 shrink-0 self-start sm:self-auto"
+            >
+              <FileQuestion className="h-4 w-4" />
+              <span>+ Issue New Official Query</span>
+            </button>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Queries Issued</span>
+              <span className="text-xl font-black text-slate-900">{queries.length}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200">
+              <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">Pending Staff Reply</span>
+              <span className="text-xl font-black text-rose-700">{queries.filter(q => q.status === 'pending_reply').length}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200">
+              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider block">Awaiting Review</span>
+              <span className="text-xl font-black text-sky-700">{queries.filter(q => q.status === 'replied').length}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Resolved & Closed</span>
+              <span className="text-xl font-black text-emerald-700">{queries.filter(q => q.status === 'resolved' || q.status === 'warning_issued').length}</span>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex items-center gap-2 flex-wrap pb-1">
+            <span className="text-xs font-bold text-slate-600 mr-1">Status Filter:</span>
+            {[
+              { id: 'all', label: 'All Queries' },
+              { id: 'pending_reply', label: `Pending Reply (${queries.filter(q => q.status === 'pending_reply').length})` },
+              { id: 'replied', label: `Replied / Awaiting Review (${queries.filter(q => q.status === 'replied').length})` },
+              { id: 'resolved', label: 'Resolved (Accepted)' },
+              { id: 'warning_issued', label: 'Warning Issued' },
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setQueryFilterStatus(f.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  queryFilterStatus === f.id
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Queries Listing */}
+          {queries.filter(q => queryFilterStatus === 'all' || q.status === queryFilterStatus).length === 0 ? (
+            <div className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+              <FileQuestion className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">No queries found for this status</p>
+              <p className="text-xs text-slate-400 mt-1">All staff members are currently in good standing under this filter.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {queries
+                .filter(q => queryFilterStatus === 'all' || q.status === queryFilterStatus)
+                .map((query) => {
+                  const targetTeacher = teachers.find(t => t.id === query.teacherId);
+                  const teacherClass = classes.find(c => c.teacherId === targetTeacher?.id || targetTeacher?.assignedClassIds?.includes(c.id));
+                  const phoneClean = (query.teacherPhone || targetTeacher?.phone || '').replace(/[^0-9]/g, '');
+
+                  return (
+                    <div
+                      key={query.id}
+                      className={`rounded-2xl border transition p-5 space-y-4 ${
+                        query.status === 'pending_reply'
+                          ? 'border-rose-200 bg-rose-50/20'
+                          : query.status === 'replied'
+                          ? 'border-sky-200 bg-sky-50/20'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      {/* Top Row: Ref, Target Teacher, Status */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                            {query.queryNumber}
+                          </span>
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            query.category === 'lateness' ? 'bg-amber-100 text-amber-800' :
+                            query.category === 'absence' ? 'bg-rose-100 text-rose-800' :
+                            query.category === 'insubordination' ? 'bg-purple-100 text-purple-800' :
+                            query.category === 'academic_records' ? 'bg-indigo-100 text-indigo-800' :
+                            'bg-slate-100 text-slate-800'
+                          }`}>
+                            {query.category === 'lateness' ? 'Punctuality & Lateness' :
+                             query.category === 'absence' ? 'Unexcused Absence' :
+                             query.category === 'insubordination' ? 'Conduct & Insubordination' :
+                             query.category === 'academic_records' ? 'Academic Records & Grades' :
+                             'General Administrative'}
+                          </span>
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            query.status === 'pending_reply' ? 'bg-rose-500 text-white animate-pulse' :
+                            query.status === 'replied' ? 'bg-sky-600 text-white' :
+                            query.status === 'resolved' ? 'bg-emerald-600 text-white' :
+                            'bg-amber-600 text-white'
+                          }`}>
+                            {query.status === 'pending_reply' ? '● Awaiting Staff Reply' :
+                             query.status === 'replied' ? '✓ Reply Submitted' :
+                             query.status === 'resolved' ? '✓ Resolved (Accepted)' :
+                             '⚠ Warning Issued'}
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-slate-500 flex items-center gap-3">
+                          <span>Issued: <strong className="text-slate-700">{query.issuedAt.split('T')[0]}</strong></span>
+                          <span>Deadline: <strong className={query.status === 'pending_reply' ? 'text-rose-600 font-bold' : 'text-slate-700'}>{query.replyDeadline}</strong></span>
+                        </div>
+                      </div>
+
+                      {/* Main Details */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="md:col-span-1 p-3 rounded-xl bg-white border border-slate-100 shadow-xs space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Targeted Staff Member</span>
+                          <div className="font-bold text-sm text-slate-900">{query.teacherName}</div>
+                          <div className="text-xs text-slate-500">{teacherClass ? teacherClass.name : 'Staff Member'}</div>
+                          {query.teacherPhone && (
+                            <div className="text-xs font-mono text-slate-600">{query.teacherPhone}</div>
+                          )}
+                        </div>
+
+                        <div className="md:col-span-3 space-y-2">
+                          <h4 className="text-sm font-black text-slate-900">{query.title}</h4>
+                          <div className="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-slate-200/80 leading-relaxed">
+                            {query.description}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Staff Reply (if provided) */}
+                      {query.staffReply?.explanation && (
+                        <div className="p-3.5 rounded-xl bg-sky-50/80 border border-sky-200 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-sky-900 flex items-center gap-1.5">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-sky-600" />
+                              Official Written Explanation by {query.teacherName}:
+                            </span>
+                            <span className="text-[10px] text-sky-700 font-medium">{query.staffReply.repliedAt}</span>
+                          </div>
+                          <p className="text-xs text-sky-950 italic bg-white/70 p-2.5 rounded-lg border border-sky-100 whitespace-pre-wrap">
+                            "{query.staffReply.explanation}"
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Section: Admin Resolution (if decided) */}
+                      {query.adminDecision && (
+                        <div className={`p-3.5 rounded-xl border space-y-1.5 ${
+                          query.adminDecision.decision === 'explanation_accepted'
+                            ? 'bg-emerald-50/80 border-emerald-200'
+                            : 'bg-amber-50/80 border-amber-200'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold flex items-center gap-1.5 text-slate-900">
+                              <Shield className="h-3.5 w-3.5 text-indigo-600" />
+                              Administrative Resolution — {
+                                query.adminDecision.decision === 'explanation_accepted' ? 'Explanation Accepted & Cleared' :
+                                query.adminDecision.decision === 'verbal_warning' ? 'Verbal Warning Administered' :
+                                query.adminDecision.decision === 'written_warning' ? 'Formal Written Warning on Record' :
+                                'Disciplinary Committee Sanction'
+                              }
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium">Decided by: {query.adminDecision.decidedBy} ({query.adminDecision.decidedAt.split('T')[0]})</span>
+                          </div>
+                          <p className="text-xs text-slate-800 bg-white/80 p-2.5 rounded-lg border border-slate-200/60">
+                            {query.adminDecision.notes}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          {query.status === 'pending_reply' && phoneClean && (
+                            <a
+                              href={`https://wa.me/${phoneClean}?text=${encodeURIComponent(
+                                `*${branding.schoolName || 'Innovative International Secondary School'} - OFFICIAL DISCIPLINARY NOTICE*\n\n` +
+                                `Dear ${query.teacherName},\n` +
+                                `You have been issued official administrative query Ref: *${query.queryNumber}* regarding: *${query.title}*.\n\n` +
+                                `Directive: "${query.description}"\n\n` +
+                                `⏰ *Binding Deadline for Written Reply:* ${query.replyDeadline}\n\n` +
+                                `Please log in to the AttendIQ Staff Portal to submit your formal written explanation.\n` +
+                                `Office of the Principal / Administration`
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              <span>WhatsApp Reminder to Staff</span>
+                            </a>
+                          )}
+
+                          {query.status === 'replied' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedQueryForReview(query);
+                                setReviewDecision('explanation_accepted');
+                                setReviewNotes('');
+                              }}
+                              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                            >
+                              <FileSpreadsheet className="h-3.5 w-3.5" />
+                              <span>Review Reply & Record Decision</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteQuerySubmit(query.id, query.queryNumber)}
+                          className="px-2.5 py-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                          title="Delete Query Record"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: STAFF ANNOUNCEMENTS & CIRCULARS */}
+      {activeTab === 'announcements' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-6 animate-in fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Bell className="h-5 w-5 text-indigo-600" />
+                <h2 className="text-lg font-black text-slate-900">Staff Announcements & Administrative Circulars</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-100 text-indigo-800">
+                  School-Wide Broadcast
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Publish directives, academic deadlines, emergency alerts, and meeting notices delivered immediately to every teacher's dashboard with acknowledgement receipts.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsNewAncModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 shrink-0 self-start sm:self-auto"
+            >
+              <Bell className="h-4 w-4" />
+              <span>+ Broadcast New Circular</span>
+            </button>
+          </div>
+
+          {/* Announcements List */}
+          {announcements.length === 0 ? (
+            <div className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+              <Bell className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">No Announcements Published Yet</p>
+              <p className="text-xs text-slate-400 mt-1">Click the button above to broadcast your first circular or staff directive.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {announcements.map((anc) => {
+                const ackCount = (anc.acknowledgedByTeacherIds || []).length;
+                const ackPercentage = teachers.length > 0 ? Math.round((ackCount / teachers.length) * 100) : 0;
+
+                const whatsappBroadcastText =
+                  `*📢 ${branding.schoolName || 'Innovative International Secondary School'} — OFFICIAL STAFF CIRCULAR*\n\n` +
+                  `*${anc.title.toUpperCase()}*\n` +
+                  `Priority: ${anc.priority.toUpperCase()} | Category: ${anc.category.toUpperCase()}\n` +
+                  `Date: ${anc.publishedAt.split('T')[0]}\n\n` +
+                  `${anc.content}\n\n` +
+                  `_Notice issued by ${anc.publishedBy}. All teaching and non-teaching staff are required to log into AttendIQ and acknowledge this directive._`;
+
+                return (
+                  <div
+                    key={anc.id}
+                    className={`rounded-2xl border p-5 space-y-4 transition ${
+                      anc.priority === 'urgent'
+                        ? 'border-rose-300 bg-rose-50/30'
+                        : anc.priority === 'important'
+                        ? 'border-amber-300 bg-amber-50/30'
+                        : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    {/* Header Strip */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          anc.priority === 'urgent' ? 'bg-rose-600 text-white animate-pulse' :
+                          anc.priority === 'important' ? 'bg-amber-500 text-slate-950 font-black' :
+                          'bg-slate-100 text-slate-700'
+                        }`}>
+                          {anc.priority === 'urgent' ? '⚠ Urgent Directive' :
+                           anc.priority === 'important' ? '★ Important Notice' :
+                           'General Circular'}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase">
+                          {anc.category}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {anc.publishedAt.split('T')[0]} • Published by: <strong className="text-slate-700">{anc.publishedBy}</strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`https://api.whatsapp.com/send?text=${encodeURIComponent(whatsappBroadcastText)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          <span>Broadcast to WhatsApp Group</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAnnouncementSubmit(anc.id, anc.title)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                          title="Delete Circular"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Announcement Content */}
+                    <div className="space-y-1.5">
+                      <h3 className="text-base font-black text-slate-900">{anc.title}</h3>
+                      <div className="text-xs text-slate-700 bg-white p-4 rounded-xl border border-slate-200/80 leading-relaxed whitespace-pre-wrap">
+                        {anc.content}
+                      </div>
+                    </div>
+
+                    {/* Staff Acknowledgement Tracker */}
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          Staff Read & Acknowledgement Tracker:
+                        </span>
+                        <span className="font-mono font-bold text-indigo-600">
+                          {ackCount} of {teachers.length} Teachers ({ackPercentage}%)
+                        </span>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${ackPercentage}%` }}
+                        />
+                      </div>
+
+                      {/* Teacher Read Badges */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {teachers.map((teacher) => {
+                          const hasAck = (anc.acknowledgedByTeacherIds || []).includes(teacher.id);
+                          return (
+                            <span
+                              key={teacher.id}
+                              className={`text-[10px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 border ${
+                                hasAck
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-slate-100 text-slate-400 border-slate-200'
+                              }`}
+                            >
+                              {hasAck ? '✓' : '○'} {teacher.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
         </main>
       </div>
+
+      {/* MODAL 1: ISSUE OFFICIAL STAFF QUERY */}
+      {isNewQueryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <FileQuestion className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Issue Official Query to Staff</h3>
+                  <p className="text-xs text-slate-500">Formal administrative notice requiring written explanation</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewQueryModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateQuerySubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Target Staff Member *</label>
+                  <select
+                    value={newQueryTeacherId}
+                    onChange={(e) => setNewQueryTeacherId(e.target.value)}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                    required
+                  >
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({classes.find(c => c.teacherId === t.id || t.assignedClassIds?.includes(c.id))?.name || 'Teacher'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Query Category *</label>
+                  <select
+                    value={newQueryCategory}
+                    onChange={(e) => setNewQueryCategory(e.target.value as StaffQuery['category'])}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                  >
+                    <option value="lateness">Punctuality / Chronic Lateness</option>
+                    <option value="absence">Unexcused Absence</option>
+                    <option value="insubordination">Staff Conduct / Insubordination</option>
+                    <option value="academic_records">Academic Records & Grade Submission</option>
+                    <option value="general">General Administrative</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Date of Incident *</label>
+                  <input
+                    type="date"
+                    value={newQueryIncidentDate}
+                    onChange={(e) => setNewQueryIncidentDate(e.target.value)}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Reply Deadline *</label>
+                  <select
+                    value={newQueryDeadlineDays}
+                    onChange={(e) => setNewQueryDeadlineDays(Number(e.target.value))}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                  >
+                    <option value={24}>24 Hours (Urgent)</option>
+                    <option value={48}>48 Hours (Standard)</option>
+                    <option value={72}>72 Hours (Extended)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Query Subject / Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Query Concerning Repeated Lateness and Failure to Resume Duty at 08:00 AM"
+                  value={newQueryTitle}
+                  onChange={(e) => setNewQueryTitle(e.target.value)}
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Detailed Charge & Explanation Directive *</label>
+                <textarea
+                  rows={4}
+                  placeholder="Explain the specific facts of the infraction and state clearly what explanation is required within the deadline..."
+                  value={newQueryDescription}
+                  onChange={(e) => setNewQueryDescription(e.target.value)}
+                  className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-indigo-600 leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsNewQueryModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition cursor-pointer active:scale-95"
+                >
+                  Issue Formal Query & Notify
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: REVIEW STAFF QUERY & RECORD ADMINISTRATIVE RESOLUTION */}
+      {selectedQueryForReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                  <FileSpreadsheet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Review Staff Explanation & Decide</h3>
+                  <p className="text-xs text-slate-500">Query Ref: {selectedQueryForReview.queryNumber} • {selectedQueryForReview.teacherName}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedQueryForReview(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Original Directive</span>
+                <div className="font-bold text-xs text-slate-900">{selectedQueryForReview.title}</div>
+                <div className="text-xs text-slate-600">{selectedQueryForReview.description}</div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-sky-800 uppercase tracking-wider block">
+                    Staff Written Explanation (Submitted {selectedQueryForReview.staffReply?.repliedAt || 'Recently'})
+                  </span>
+                </div>
+                <div className="text-xs text-sky-950 italic whitespace-pre-wrap leading-relaxed">
+                  "{selectedQueryForReview.staffReply?.explanation || 'No written explanation provided.'}"
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleReviewQuerySubmit} className="space-y-4 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Administrative Decision *</label>
+                <select
+                  value={reviewDecision}
+                  onChange={(e) => setReviewDecision(e.target.value as NonNullable<StaffQuery['adminDecision']>['decision'])}
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                >
+                  <option value="explanation_accepted">Explanation Accepted (Exonerated / Good Standing)</option>
+                  <option value="verbal_warning">Verbal Warning Administered</option>
+                  <option value="written_warning">Formal Written Warning Issued to File</option>
+                  <option value="disciplinary_action">Formal Disciplinary Sanction / Penalty</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Management Finding / Remarks *</label>
+                <textarea
+                  rows={3}
+                  placeholder="Record school management's official remarks and corrective directives..."
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-indigo-600 leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedQueryForReview(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition cursor-pointer active:scale-95"
+                >
+                  Save Official Resolution
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: BROADCAST STAFF CIRCULAR / ANNOUNCEMENT */}
+      {isNewAncModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Broadcast Staff Announcement</h3>
+                  <p className="text-xs text-slate-500">School circular dispatched to all teachers with read tracking</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewAncModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handlePublishAnnouncementSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Category *</label>
+                  <select
+                    value={newAncCategory}
+                    onChange={(e) => setNewAncCategory(e.target.value as StaffAnnouncement['category'])}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                  >
+                    <option value="general">General Circular</option>
+                    <option value="meeting">Staff Meeting Notice</option>
+                    <option value="policy">School Policy & Guidelines</option>
+                    <option value="academic">Academic & Exam Directive</option>
+                    <option value="holiday">Holiday / Term Schedule</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Priority Level *</label>
+                  <select
+                    value={newAncPriority}
+                    onChange={(e) => setNewAncPriority(e.target.value as StaffAnnouncement['priority'])}
+                    className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                  >
+                    <option value="normal">Normal Circular</option>
+                    <option value="important">Important (Highlighted)</option>
+                    <option value="urgent">Urgent / Emergency Directive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Circular Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Mandatory Staff Meeting on Continuous Assessment Uploads"
+                  value={newAncTitle}
+                  onChange={(e) => setNewAncTitle(e.target.value)}
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-indigo-600"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Announcement Body *</label>
+                <textarea
+                  rows={5}
+                  placeholder="Enter the full text of the memo or directive for all teachers..."
+                  value={newAncContent}
+                  onChange={(e) => setNewAncContent(e.target.value)}
+                  className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-indigo-600 leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsNewAncModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition cursor-pointer active:scale-95"
+                >
+                  Broadcast Circular to All Staff
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Administrator Navigation & Operations Manual Modal */}
       <AdminManualModal
