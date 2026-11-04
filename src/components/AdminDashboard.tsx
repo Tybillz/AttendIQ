@@ -166,6 +166,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
 
+  // Listen for direct tab navigation events (e.g. from Navigation Chatbot or Quick Links)
+  React.useEffect(() => {
+    const handleSwitchTab = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab: any }>;
+      if (customEvent.detail?.tab) {
+        setActiveTab(customEvent.detail.tab);
+      }
+    };
+    window.addEventListener('attend-iq-switch-admin-tab', handleSwitchTab);
+    return () => window.removeEventListener('attend-iq-switch-admin-tab', handleSwitchTab);
+  }, []);
+
   // Staff Queries State
   const [queries, setQueries] = useState<StaffQuery[]>(getStaffQueries());
   const [queryFilterStatus, setQueryFilterStatus] = useState<string>('all');

@@ -41,6 +41,7 @@ import {
   INITIAL_TEACHER_ANALYTICS,
 } from '@/lib/initialData';
 import { WhitelabelModal } from '@/components/WhitelabelModal';
+import { NavigationChatbot } from '@/components/NavigationChatbot';
 import {
   getSchoolBranding,
   getLicenseStatus,
@@ -251,6 +252,18 @@ export default function Home() {
   const handleLogout = () => {
     performLogout();
     setAuthSession(null);
+  };
+
+  const handleNavigateAdminTab = (tab: any) => {
+    setCurrentRole('admin');
+    window.dispatchEvent(new CustomEvent('attend-iq-switch-admin-tab', { detail: { tab } }));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleNavigateTeacherTab = (tab: any) => {
+    setCurrentRole('teacher');
+    setTeacherActiveTab(tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Administrator authorized switch to Staff Console (Teacher View)
@@ -951,6 +964,31 @@ export default function Home() {
         isOpen={isRecoveryModalOpen}
         onClose={() => setIsRecoveryModalOpen(false)}
         onDataRestored={syncData}
+      />
+
+      {/* AttendIQ Interactive Navigation Chatbot */}
+      <NavigationChatbot
+        currentRole={currentRole}
+        onSwitchRole={(role) => {
+          setCurrentRole(role);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onNavigateAdminTab={handleNavigateAdminTab}
+        onNavigateTeacherTab={handleNavigateTeacherTab}
+        onOpenDatabaseModal={(tab) => {
+          if (tab) setDatabaseModalTab(tab as any);
+          setIsDatabaseModalOpen(true);
+        }}
+        onOpenAlertSettingsModal={() => setIsSettingsModalOpen(true)}
+        onOpenAlertsModal={() => setIsAlertsModalOpen(true)}
+        onOpenWhitelabelModal={(tab) => {
+          if (tab) setWhitelabelModalTab(tab);
+          setIsWhitelabelModalOpen(true);
+        }}
+        onOpenAuditModal={() => setIsAuditModalOpen(true)}
+        onOpenRecoveryModal={() => setIsRecoveryModalOpen(true)}
+        schoolName={schoolBranding.schoolName}
+        isTeacherClockedIn={isTeacherClockedIn}
       />
     </div>
   );
