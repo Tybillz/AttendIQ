@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Default calibrated coordinates for Apex Crest Academy (Abuja, Nigeria)
 const FALLBACK_PERIMETER = {
   schoolName: 'Innovative International Secondary School',
@@ -26,8 +29,9 @@ async function fetchFromSupabase() {
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'User-Agent': 'AttendIQ-Server',
       },
-      next: { revalidate: 10 },
+      cache: 'no-store',
     });
     if (res.ok) {
       const data = await res.json();
@@ -45,7 +49,13 @@ async function fetchFromSupabase() {
 
 export async function GET() {
   await fetchFromSupabase();
-  return NextResponse.json(currentServerConfig);
+  return NextResponse.json(currentServerConfig, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'CDN-Cache-Control': 'no-store',
+      'Vercel-CDN-Cache-Control': 'no-store',
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -59,12 +69,14 @@ export async function POST(request: Request) {
 
       // Persist to Supabase so it survives across serverless cold starts
       try {
-        await fetch(`${SUPABASE_URL}/rest/v1/branches?id=eq.c0000000-0000-0000-0000-000000000001`, {
+        const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/branches?id=eq.c0000000-0000-0000-0000-000000000001`, {
           method: 'PATCH',
           headers: {
             'apikey': SUPABASE_KEY,
             'Authorization': `Bearer ${SUPABASE_KEY}`,
             'Content-Type': 'application/json',
+            'User-Agent': 'AttendIQ-Server',
+            'Prefer': 'return=representation',
           },
           body: JSON.stringify({
             name: body.schoolName || currentServerConfig.schoolName,
@@ -72,12 +84,27 @@ export async function POST(request: Request) {
             longitude: body.schoolLng,
             geofence_radius_meters: body.radiusMeters || 250,
           }),
+          cache: 'no-store',
         });
+        if (patchRes.ok) {
+          const patched = await patchRes.json();
+          if (Array.isArray(patched) && patched.length > 0) {
+            currentServerConfig.schoolLat = patched[0].latitude;
+            currentServerConfig.schoolLng = patched[0].longitude;
+            currentServerConfig.radiusMeters = patched[0].geofence_radius_meters;
+          }
+        }
       } catch (e) {
         console.error('Failed to sync perimeter update to Supabase:', e);
       }
 
-      return NextResponse.json({ success: true, config: currentServerConfig });
+      return NextResponse.json({ success: true, config: currentServerConfig }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
+        },
+      });
     }
     return NextResponse.json({ success: false, error: 'Invalid coordinates' }, { status: 400 });
   } catch (error) {

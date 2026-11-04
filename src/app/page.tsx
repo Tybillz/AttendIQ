@@ -11,7 +11,7 @@ import { GateCheckIn } from '@/components/GateCheckIn';
 import { TeacherCommunicationCenter } from '@/components/TeacherCommunicationCenter';
 import { AuthScreen } from '@/components/AuthScreen';
 import { getAuthSession, logout as performLogout, AuthSession, syncCredentialsFromCloud, initInactivityTracker, loginAsAdmin, saveAuthSession } from '@/lib/auth';
-import { getTeacherRecordForDate, isRemoteAcademicAllowed, getPerimeterConfig } from '@/lib/teacherAttendance';
+import { getTeacherRecordForDate, isRemoteAcademicAllowed, getPerimeterConfig, syncPerimeterConfigFromCloud } from '@/lib/teacherAttendance';
 import { StudentProfileModal } from '@/components/StudentProfileModal';
 import { AlertSettingsModal } from '@/components/AlertSettingsModal';
 import { ParentAlertsModal } from '@/components/ParentAlertsModal';
@@ -187,6 +187,7 @@ export default function Home() {
       syncData();
     });
     syncCredentialsFromCloud();
+    syncPerimeterConfigFromCloud();
 
     const handleBranding = () => {
       setSchoolBranding(getSchoolBranding());

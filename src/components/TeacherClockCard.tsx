@@ -27,7 +27,7 @@ import {
   checkSchoolPerimeter,
 } from '@/lib/teacherAttendance';
 import { getHardwareDeviceProfile, HardwareProfile } from '@/lib/hardwareFingerprint';
-import { Teacher, ClassSection, TeacherClockRecord, TeacherDeviceLock } from '@/types/attendance';
+import { Teacher, ClassSection, TeacherClockRecord, TeacherDeviceLock, SchoolPerimeterConfig } from '@/types/attendance';
 
 interface TeacherClockCardProps {
   teacher: Teacher;
@@ -63,16 +63,28 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
   // Refresh record, perimeter config, and device lock when teacher or date changes
   useEffect(() => {
     loadRecord();
-    setPerimeterConfig(getPerimeterConfig());
+    const currentLocal = getPerimeterConfig();
+    setPerimeterConfig(currentLocal);
     setDeviceLock(getTeacherDeviceLock(teacher.id));
 
     syncPerimeterConfigFromCloud().then((conf) => {
       setPerimeterConfig(conf);
+      detectLocation(conf);
     });
 
     getHardwareDeviceProfile().then((profile) => {
       setHardwareProfile(profile);
     });
+
+    const handlePerimeterUpdate = () => {
+      const fresh = getPerimeterConfig();
+      setPerimeterConfig(fresh);
+      detectLocation(fresh);
+    };
+    window.addEventListener('attend-iq-perimeter-update', handlePerimeterUpdate);
+    return () => {
+      window.removeEventListener('attend-iq-perimeter-update', handlePerimeterUpdate);
+    };
   }, [teacher.id, selectedDate]);
 
   const loadRecord = () => {
@@ -81,7 +93,7 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
   };
 
   // Request browser GPS position
-  const detectLocation = () => {
+  const detectLocation = (configToUse?: SchoolPerimeterConfig) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setGpsError('Geolocation is not supported by your browser.');
       return;
@@ -102,10 +114,11 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
         setCoords(userCoords);
         setAccuracy(pos.coords.accuracy);
 
+        const activeConf = configToUse || getPerimeterConfig();
         const check = checkSchoolPerimeter(
           userCoords.lat,
           userCoords.lng,
-          perimeterConfig,
+          activeConf,
           pos.coords.accuracy
         );
 
@@ -121,7 +134,7 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
             : 'Could not acquire precise GPS signal. Please try again.'
         );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
   };
 
@@ -326,7 +339,8 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
             </div>
 
             <button
-              onClick={detectLocation}
+              type="button"
+              onClick={() => detectLocation()}
               disabled={gpsLoading}
               className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
               title="Refresh GPS location"
@@ -343,9 +357,40 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
           )}
 
           {isInsidePerimeter === false && (
-            <p className="text-[10px] text-slate-400">
-              ℹ️ Note: School perimeter coordinates can only be configured by the School Administrator.
-            </p>
+            <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5 text-[11px] text-slate-300">
+              <div className="flex items-center justify-between text-slate-400 font-mono">
+                <span>School Landmark:</span>
+                <span className="text-indigo-300 font-bold">
+                  {perimeterConfig.schoolLat.toFixed(5)}, {perimeterConfig.schoolLng.toFixed(5)} ({perimeterConfig.radiusMeters}m radius)
+                </span>
+              </div>
+              {coords && (
+                <div className="flex items-center justify-between text-slate-400 font-mono">
+                  <span>Your GPS Position:</span>
+                  <span className="text-amber-300 font-bold">
+                    {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} {accuracy ? `(±${Math.round(accuracy)}m)` : ''}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px]">
+                <span className="text-rose-400 font-bold">
+                  Proximity: {distanceMeters !== null ? `${distanceMeters}m away` : 'Calculating...'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    syncPerimeterConfigFromCloud().then((conf) => {
+                      setPerimeterConfig(conf);
+                      detectLocation(conf);
+                    });
+                  }}
+                  className="text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Re-sync Cloud Geofence</span>
+                </button>
+              </div>
+            </div>
           )}
         </div>
 

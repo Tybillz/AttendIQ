@@ -72,6 +72,12 @@ export function savePerimeterConfig(config: SchoolPerimeterConfig): void {
     }).catch(() => {
       // Offline fallback silent catch
     });
+    // Secondary dual-cloud store backup
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ perimeterConfig: config }),
+    }).catch(() => {});
   } catch (e) {
     console.error('Failed to save perimeter config', e);
   }
@@ -80,7 +86,10 @@ export function savePerimeterConfig(config: SchoolPerimeterConfig): void {
 export async function syncPerimeterConfigFromCloud(): Promise<SchoolPerimeterConfig> {
   if (typeof window === 'undefined') return DEFAULT_PERIMETER_CONFIG;
   try {
-    const res = await fetch('/api/perimeter');
+    const res = await fetch(`/api/perimeter?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
     if (res.ok) {
       const cloudConfig = await res.json();
       if (cloudConfig && typeof cloudConfig.schoolLat === 'number') {
