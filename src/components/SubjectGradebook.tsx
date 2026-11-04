@@ -385,29 +385,6 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
                 </button>
               );
             })}
-
-            {/* If teacher wants to select any other subject in school */}
-            <select
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="bg-slate-50 text-slate-800 border border-slate-300 text-xs rounded-2xl px-3 py-2 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
-              title="Or choose other subject"
-            >
-              <option value={selectedSubject}>Custom / Other: {selectedSubject}</option>
-              <option value="Mathematics">Mathematics</option>
-              <option value="English Language">English Language</option>
-              <option value="Basic Science">Basic Science</option>
-              <option value="Civic Education">Civic Education</option>
-              <option value="Computer Studies / ICT">Computer Studies / ICT</option>
-              <option value="Agricultural Science">Agricultural Science</option>
-              <option value="Social Studies">Social Studies</option>
-              <option value="Cultural & Creative Arts (CCA)">Cultural & Creative Arts (CCA)</option>
-              <option value="Verbal Reasoning">Verbal Reasoning</option>
-              <option value="Quantitative Reasoning">Quantitative Reasoning</option>
-              <option value="Chemistry">Chemistry</option>
-              <option value="Physics">Physics</option>
-              <option value="Biology">Biology</option>
-            </select>
           </div>
         </div>
 
