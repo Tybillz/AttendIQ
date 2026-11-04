@@ -157,9 +157,9 @@ Manage confidential administrative passwords and individual 4-digit teacher logi
 **Location**: Header button — *Teacher Database* or Navbar — *School Database*
 
 ### Features:
-1. **Pupil Directory**: Search enrolled learners by Admission Number, full name, or class arm. View guardian details and attendance rates.
+1. **Pupil Directory**: Search enrolled learners by Class Roll Number, full name, or class arm. View guardian details and attendance rates.
 2. **Enroll New Pupil**: Add single pupils with biodata, date of birth, emergency contact phone, and assigned classroom arm.
-3. **Bulk CSV Import**: Import an entire school roster (hundreds of pupils) in seconds using standard CSV column headers (`Name, AdmissionNo, Class, Gender, ParentPhone`).
+3. **Bulk CSV Import**: Import an entire school roster (hundreds of pupils) in seconds using standard CSV column headers (`Name, RollNumber, Gender, ParentName, ParentPhone`).
 4. **Staff Roster & Assignments**: Map form teachers to designated class sections.
 
 ---

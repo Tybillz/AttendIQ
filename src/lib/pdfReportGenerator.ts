@@ -77,7 +77,7 @@ export async function downloadStudentReportCardPDF(
   doc.setFontSize(9);
   doc.setTextColor(...primaryColor);
   doc.text(`PUPIL NAME: ${report.student.name.toUpperCase()}`, 16, 48);
-  doc.text(`ADMISSION / ROLL NO: ${report.student.rollNumber}`, 16, 55);
+  doc.text(`CLASS ROLL NO: ${report.student.rollNumber}`, 16, 55);
   doc.text(`CLASS: ${report.className}`, 16, 62);
 
   doc.text(`GENDER: ${report.student.gender || 'Not Specified'}`, 110, 48);

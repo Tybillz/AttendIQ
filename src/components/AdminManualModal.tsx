@@ -264,14 +264,14 @@ export const AdminManualModal: React.FC<AdminManualModalProps> = ({
           whereToFind: 'Header button: "Teacher Database" or Navbar: "School Database"',
           stepByStep: [
             'Click "Teacher Database" in the header or select Database in settings.',
-            'Tab 1 (Pupil Roster): Search any pupil by name, admission number, or class arm. View guardian phone numbers and attendance history.',
-            'Tab 2 (Enroll New Pupil): Fill out single-pupil biodata, assign an admission ID, select class, and save immediately.',
+            'Tab 1 (Pupil Roster): Search any pupil by name, roll number, or class arm. View guardian phone numbers and attendance history.',
+            'Tab 2 (Enroll New Pupil): Fill out single-pupil biodata, assign roll number, select class, and save immediately.',
             'Tab 3 (Bulk CSV Import): Upload an Excel/CSV spreadsheet with hundreds of students in one click using the built-in template.',
             'Tab 4 (Class Arms): View class section populations and capacity.',
             'Tab 5 (Staff Directory): Assign form teachers to specific classrooms.',
           ],
           proTips: [
-            'Download the CSV Sample Template before importing to ensure column headers match (Name, AdmissionNo, Class, Gender, ParentPhone).',
+            'Download the CSV Sample Template before importing to ensure column headers match (Name, RollNumber, Gender, ParentName, ParentPhone).',
             'Deleting or promoting a student updates all broadsheets and roll calls automatically.',
           ],
           quickAction: {

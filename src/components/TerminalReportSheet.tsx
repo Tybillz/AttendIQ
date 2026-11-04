@@ -565,7 +565,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
             <span className="font-black text-slate-950 text-xs">{student.name}</span>
           </div>
           <div>
-            <span className="text-slate-500 block text-[9px] uppercase font-bold">Admission / Roll No.</span>
+            <span className="text-slate-500 block text-[9px] uppercase font-bold">Class Roll No.</span>
             <span className="font-mono font-bold text-slate-950">{student.rollNumber}</span>
           </div>
           <div>
