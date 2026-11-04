@@ -38,6 +38,14 @@ import {
   Shield,
   History,
   RotateCcw,
+  Plus,
+  Search,
+  Trash2,
+  ExternalLink,
+  Lock,
+  Unlock,
+  Mail,
+  FolderPlus,
 } from 'lucide-react';
 import SchoolPerimeterPicker from './SchoolPerimeterPicker';
 import { AdminManualModal } from './AdminManualModal';
@@ -53,7 +61,15 @@ import {
   TeacherClockRecord,
   SchoolPerimeterConfig,
 } from '@/types/attendance';
-import { exportAttendanceReportCSV, downloadCSVFile, getSubjectGrades } from '@/lib/storage';
+import {
+  exportAttendanceReportCSV,
+  downloadCSVFile,
+  getSubjectGrades,
+  addClass,
+  deleteClass,
+  reassignClassTeacher,
+  deleteStudent,
+} from '@/lib/storage';
 import { calculateStudentAttendanceMetrics, getUnifiedAcademicReport } from '@/lib/academicCalculations';
 import {
   getPerimeterConfig,
@@ -90,7 +106,7 @@ interface AdminDashboardProps {
   onDateChange: (date: string) => void;
   alertSettings: AlertSettings;
   teacherAnalytics: TeacherAnalytics[];
-  onOpenDatabaseModal: (tab?: 'pupils' | 'teachers' | 'classes') => void;
+  onOpenDatabaseModal: (tab?: 'pupils' | 'teachers' | 'classes' | 'add_pupil' | 'bulk_import') => void;
   onOpenSettingsModal: () => void;
   onSelectStudentProfile: (student: Student) => void;
   onDataUpdated?: () => void;
@@ -113,9 +129,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDataUpdated,
 }) => {
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
-  const [activeTab, setActiveTab] = useState<'overview' | 'chronic_absentees' | 'teacher_analytics' | 'reports' | 'access_control'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    | 'overview'
+    | 'pupils'
+    | 'classes'
+    | 'staff'
+    | 'reports'
+    | 'chronic_absentees'
+    | 'teacher_analytics'
+    | 'access_control'
+    | 'recovery'
+  >('overview');
   const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState<boolean>(false);
+
+  // Pupils directory state
+  const [pupilsSearch, setPupilsSearch] = useState('');
+  const [pupilsClassFilter, setPupilsClassFilter] = useState('all');
+
+  // Classes & Sections state
+  const [newClassName, setNewClassName] = useState('');
+  const [newGrade, setNewGrade] = useState('Grade 4');
+  const [newRoom, setNewRoom] = useState('Room 201');
+  const [newTeacherId, setNewTeacherId] = useState(teachers[0]?.id || '');
   const [selectedBroadsheetClass, setSelectedBroadsheetClass] = useState<string>('all');
   const [selectedTerm, setSelectedTerm] = useState<string>('First Term (2026/2027 Session)');
   const [broadsheetMode, setBroadsheetMode] = useState<'comprehensive' | 'attendance_only'>('comprehensive');
@@ -414,6 +450,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleCreateClassSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClassName.trim()) return;
+    const teacher = teachers.find((t) => t.id === newTeacherId);
+    addClass({
+      name: newClassName.trim(),
+      grade: newGrade,
+      room: newRoom,
+      teacherId: newTeacherId,
+      teacherName: teacher ? teacher.name : 'Class Teacher',
+      scheduleTime: '08:15 AM - 02:45 PM',
+    });
+    setNewClassName('');
+    setAccessFeedback(`Class section "${newClassName}" created successfully!`);
+    setTimeout(() => setAccessFeedback(null), 4000);
+    if (onDataUpdated) onDataUpdated();
+  };
+
+  const handleDeleteClassSubmit = (classId: string, className: string) => {
+    const pupilCount = students.filter((s) => s.classId === classId).length;
+    const msg =
+      pupilCount > 0
+        ? `Are you sure you want to delete class "${className}"?\n\n${pupilCount} enrolled pupils will be safely moved to "Unassigned" in the school directory so their records are preserved.`
+        : `Are you sure you want to delete class "${className}"?`;
+    if (confirm(msg)) {
+      deleteClass(classId);
+      setAccessFeedback(`Class "${className}" deleted. Pupils safely reallocated.`);
+      setTimeout(() => setAccessFeedback(null), 4000);
+      if (onDataUpdated) onDataUpdated();
+    }
+  };
+
+  const handleDeletePupilSubmit = (studentId: string, studentName: string) => {
+    if (
+      confirm(
+        `Are you sure you want to delete pupil "${studentName}"? A safety recovery snapshot is automatically created so you can undo this anytime.`
+      )
+    ) {
+      deleteStudent(studentId);
+      setAccessFeedback(`Pupil "${studentName}" deleted. Safety snapshot created.`);
+      setTimeout(() => setAccessFeedback(null), 4000);
+      if (onDataUpdated) onDataUpdated();
+    }
+  };
+
+  const handleReassignTeacherSubmit = (classId: string, teacherId: string) => {
+    reassignClassTeacher(classId, teacherId);
+    setAccessFeedback('Class teacher assignment updated!');
+    setTimeout(() => setAccessFeedback(null), 3000);
+    if (onDataUpdated) onDataUpdated();
+  };
+
 
   // Whole school today calculations
   const totalStudents = students.length;
@@ -445,6 +533,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const chronicAbsentees = students.filter(
     (s) => s.totalAbsent >= alertSettings.chronicAbsenceThreshold
   );
+
+  // Filtered pupils for directory view
+  const filteredPupils = students.filter((s) => {
+    if (pupilsClassFilter !== 'all' && s.classId !== pupilsClassFilter) return false;
+    if (pupilsSearch.trim()) {
+      const q = pupilsSearch.toLowerCase();
+      return (
+        s.name.toLowerCase().includes(q) ||
+        s.rollNumber.toLowerCase().includes(q) ||
+        s.parentName.toLowerCase().includes(q) ||
+        s.parentPhone.includes(q)
+      );
+    }
+    return true;
+  });
 
   // Class stats
   const classStats = classes.map((cls) => {
@@ -616,178 +719,429 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
 
-      {/* Lost User Navigation Beacon */}
-      <div className="bg-gradient-to-r from-indigo-50 via-sky-50 to-indigo-50 border border-indigo-200/90 rounded-2xl p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-            <Compass className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-indigo-950">New to the Administrator Console or looking for where to find a feature?</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-200/80 text-indigo-900">
-                Operator Help
-              </span>
-            </div>
-            <p className="text-indigo-800/90 text-[11px] mt-0.5">
-              Open the interactive guide for step-by-step instructions on daily roll calls, parent alerts, teacher GPS geofencing, NERDC broadsheets, and PIN management.
-            </p>
-          </div>
-        </div>
+      {/* Klickit-Style Mobile Category Scroll Strip (visible on mobile / tablet) */}
+      <div className="lg:hidden flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
         <button
-          onClick={() => setIsManualModalOpen(true)}
-          className="self-start sm:self-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm active:scale-95 transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+          type="button"
+          onClick={() => setActiveTab('overview')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          <span>Dashboard</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('pupils')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'pupils' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
+        >
+          <Users className="h-3.5 w-3.5" />
+          <span>Pupils ({students.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('classes')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'classes' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
         >
           <BookOpen className="h-3.5 w-3.5" />
-          <span>Open Navigation Manual</span>
-          <ArrowRight className="h-3.5 w-3.5" />
+          <span>Classes ({classes.length})</span>
         </button>
-      </div>
-
-      {/* KPI Highlight Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Whole School Attendance Rate */}
-        <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Overall School Rate</span>
-            <span className="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4" />
-            </span>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900">{overallRate}%</span>
-              <span className="text-xs font-bold text-emerald-600">+1.4% vs last week</span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">Target benchmark: 92.0%</p>
-          </div>
-        </div>
-
-        {/* Total Enrolled & Present */}
-        <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Present Across School</span>
-            <span className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="h-4 w-4" />
-            </span>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-emerald-600">
-                {totalPresentToday > 0 ? totalPresentToday : totalStudents - 2}
-              </span>
-              <span className="text-xs text-slate-500">of {totalStudents} enrolled pupils</span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">Across {classes.length} active class sections</p>
-          </div>
-        </div>
-
-        {/* Frequent Absences Watchlist */}
-        <div className="bg-white rounded-3xl p-5 border border-rose-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-rose-700">
-              Frequent Absences ({alertSettings.chronicAbsenceThreshold}+ Days)
-            </span>
-            <span className="h-8 w-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-              <AlertTriangle className="h-4 w-4" />
-            </span>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-rose-600">{chronicAbsentees.length}</span>
-              <span className="text-xs font-bold text-rose-700">Needs Follow-Up</span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">Parents notified via WhatsApp/SMS</p>
-          </div>
-        </div>
-
-        {/* Teacher Roll Call Compliance */}
-        <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Teacher On-Time Rate</span>
-            <span className="h-8 w-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
-              <Clock className="h-4 w-4" />
-            </span>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-sky-600">94.4%</span>
-              <span className="text-xs font-semibold text-slate-500">Submitted on schedule</span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">3 of 3 morning sessions logged</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Sub-Tabs */}
-      <div className="flex border-b border-slate-200 bg-white rounded-2xl px-4 shadow-2xs">
         <button
-          onClick={() => setActiveTab('overview')}
-          className={`py-3.5 px-4 font-bold text-xs border-b-2 transition flex items-center gap-1.5 ${
-            activeTab === 'overview'
-              ? 'border-indigo-600 text-indigo-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+          type="button"
+          onClick={() => setActiveTab('staff')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'staff' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
           }`}
         >
-          <BarChart3 className="h-4 w-4" /> Class-by-Class Overview & Trends
+          <GraduationCap className="h-3.5 w-3.5" />
+          <span>Staff ({teachers.length})</span>
         </button>
         <button
-          onClick={() => setActiveTab('chronic_absentees')}
-          className={`py-3.5 px-4 font-bold text-xs border-b-2 transition flex items-center gap-1.5 ${
-            activeTab === 'chronic_absentees'
-              ? 'border-indigo-600 text-indigo-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <AlertTriangle className="h-4 w-4 text-rose-500" /> Frequent Absences & Follow-up ({chronicAbsentees.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('teacher_analytics')}
-          className={`py-3.5 px-4 font-bold text-xs border-b-2 transition flex items-center gap-1.5 ${
-            activeTab === 'teacher_analytics'
-              ? 'border-indigo-600 text-indigo-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Clock className="h-4 w-4" /> Teacher Submission Performance
-        </button>
-        <button
+          type="button"
           onClick={() => setActiveTab('reports')}
-          className={`py-3.5 px-4 font-bold text-xs border-b-2 transition flex items-center gap-1.5 ${
-            activeTab === 'reports'
-              ? 'border-indigo-600 text-indigo-700'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'reports' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
           }`}
         >
-          <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Nigerian Term Report Card Sheet
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          <span>Broadsheet</span>
         </button>
         <button
+          type="button"
+          onClick={() => setActiveTab('chronic_absentees')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'chronic_absentees' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
+        >
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+          <span>Absentees ({chronicAbsentees.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('teacher_analytics')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'teacher_analytics' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5" />
+          <span>Arrivals</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('access_control')}
-          className={`py-3.5 px-4 font-bold text-xs border-b-2 transition flex items-center gap-1.5 ${
-            activeTab === 'access_control'
-              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-xl'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'access_control' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
           }`}
         >
-          <KeyRound className="h-4 w-4 text-amber-600" /> Staff PINs, Passwords & Geofence
+          <KeyRound className="h-3.5 w-3.5" />
+          <span>Perimeter & PINs</span>
         </button>
         <button
-          onClick={() => setIsRecoveryModalOpen(true)}
-          className="py-3.5 px-4 font-bold text-xs border-b-2 border-transparent text-amber-700 hover:text-amber-900 hover:bg-amber-50/50 rounded-t-xl transition flex items-center gap-1.5 cursor-pointer"
+          type="button"
+          onClick={() => setActiveTab('recovery')}
+          className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'recovery' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-700'
+          }`}
         >
-          <Shield className="h-4 w-4 text-amber-600" /> 🛡️ Snapshots & Rollback
-        </button>
-        <button
-          onClick={() => onOpenDatabaseModal('teachers')}
-          className="py-3.5 px-4 font-bold text-xs border-b-2 border-transparent text-indigo-600 hover:text-indigo-900 hover:border-indigo-300 transition flex items-center gap-1.5 sm:ml-auto"
-        >
-          <GraduationCap className="h-4 w-4" /> Teachers Roster ({teachers.length}) &rarr;
+          <Shield className="h-3.5 w-3.5 text-emerald-500" />
+          <span>Backups & Rollback</span>
         </button>
       </div>
 
-      {/* TAB 1: OVERVIEW & CLASS TRENDS */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
+      {/* Main 2-Column Responsive Framework (Left Sidebar + Main Stage) */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Left Navigation Sidebar */}
+        <aside className="hidden lg:block w-72 shrink-0 bg-white rounded-3xl border border-slate-200/90 shadow-xs p-3.5 space-y-4 sticky top-24">
+          {/* Institutional Header Badge */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-xl shrink-0">
+                {branding.crestEmoji || '🎓'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-xs text-white truncate">{branding.schoolName}</div>
+                <div className="text-[10px] text-slate-300 truncate">{branding.branchLocation || 'Abuja FCT'}</div>
+              </div>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[10px]">
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-400/30">
+                Admin Console
+              </span>
+              <span className="text-slate-400 font-mono">{selectedDate}</span>
+            </div>
+          </div>
+
+          {/* Group 1: Academic Operations */}
+          <div>
+            <span className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+              Academic Operations
+            </span>
+            <div className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('overview')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'overview'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Dashboard Pulse</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'overview' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  Today
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('pupils')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'pupils'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Users className="h-4 w-4" />
+                  <span>Pupils Directory</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'pupils' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'}`}>
+                  {students.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('classes')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'classes'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <BookOpen className="h-4 w-4" />
+                  <span>Classes & Rooms</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'classes' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'}`}>
+                  {classes.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('staff')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'staff'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <GraduationCap className="h-4 w-4" />
+                  <span>Teachers & Staff</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'staff' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'}`}>
+                  {teachers.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('reports')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'reports'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <span>Term Broadsheet</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'reports' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700'}`}>
+                  NERDC
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Group 2: Attendance & Timing */}
+          <div>
+            <span className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+              Attendance & Timing
+            </span>
+            <div className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('chronic_absentees')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'chronic_absentees'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <span>Frequent Absentees</span>
+                </div>
+                {chronicAbsentees.length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'chronic_absentees' ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-800'}`}>
+                    {chronicAbsentees.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('teacher_analytics')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'teacher_analytics'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Clock className="h-4 w-4 text-sky-500" />
+                  <span>Teacher Arrivals</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('access_control')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'access_control'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <KeyRound className="h-4 w-4 text-amber-500" />
+                  <span>Perimeter & PINs</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Group 3: Zero Data Loss */}
+          <div>
+            <span className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+              Zero Data Loss
+            </span>
+            <div className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('recovery')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                  activeTab === 'recovery'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Shield className="h-4 w-4 text-emerald-500" />
+                  <span>Backups & Rollback</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === 'recovery' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-800'}`}>
+                  Safe
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Group 4: Operator Manual */}
+          <div className="pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsManualModalOpen(true)}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 font-bold text-xs transition cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 text-slate-400" />
+                <span>Operator Manual</span>
+              </div>
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+        </aside>
+
+        {/* Right Main Content Stage */}
+        <main className="flex-1 w-full min-w-0 space-y-6">
+          {/* TAB 1: OVERVIEW & CLASS TRENDS */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Lost User Navigation Beacon */}
+              <div className="bg-gradient-to-r from-indigo-50 via-sky-50 to-indigo-50 border border-indigo-200/90 rounded-2xl p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Compass className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-indigo-950">New to the Administrator Console or looking for where to find a feature?</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-200/80 text-indigo-900">
+                        Operator Help
+                      </span>
+                    </div>
+                    <p className="text-indigo-800/90 text-[11px] mt-0.5">
+                      Open the interactive guide for step-by-step instructions on daily roll calls, parent alerts, teacher GPS geofencing, NERDC broadsheets, and PIN management.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsManualModalOpen(true)}
+                  className="self-start sm:self-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm active:scale-95 transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>Open Navigation Manual</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* KPI Highlight Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Whole School Attendance Rate */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider">Overall School Rate</span>
+                    <span className="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                      <TrendingUp className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-slate-900">{overallRate}%</span>
+                      <span className="text-xs font-bold text-emerald-600">+1.4% vs last week</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Target benchmark: 92.0%</p>
+                  </div>
+                </div>
+
+                {/* Total Enrolled & Present */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider">Present Across School</span>
+                    <span className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <CheckCircle2 className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-emerald-600">
+                        {totalPresentToday > 0 ? totalPresentToday : totalStudents - 2}
+                      </span>
+                      <span className="text-xs text-slate-500">of {totalStudents} enrolled pupils</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Across {classes.length} active class sections</p>
+                  </div>
+                </div>
+
+                {/* Frequent Absences Watchlist */}
+                <div className="bg-white rounded-3xl p-5 border border-rose-200 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-rose-700">
+                      Frequent Absences ({alertSettings.chronicAbsenceThreshold}+ Days)
+                    </span>
+                    <span className="h-8 w-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                      <AlertTriangle className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-rose-600">{chronicAbsentees.length}</span>
+                      <span className="text-xs font-bold text-rose-700">Needs Follow-Up</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Parents notified via WhatsApp/SMS</p>
+                  </div>
+                </div>
+
+                {/* Teacher Roll Call Compliance */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider">Teacher On-Time Rate</span>
+                    <span className="h-8 w-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+                      <Clock className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-sky-600">94.4%</span>
+                      <span className="text-xs font-semibold text-slate-500">Submitted on schedule</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">3 of 3 morning sessions logged</p>
+                  </div>
+                </div>
+              </div>
           {/* Class-by-Class Attendance Grid */}
           <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
@@ -2324,6 +2678,547 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* TAB: PUPILS DIRECTORY */}
+      {activeTab === 'pupils' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-5 animate-in fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-lg font-black text-slate-900">Pupils Directory & Dossiers</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
+                  {students.length} Enrolled
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Central student registry, emergency parent WhatsApp contacts, and academic profiles.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenDatabaseModal('add_pupil')}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Enroll New Pupil</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenDatabaseModal('bulk_import')}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="h-4 w-4" />
+                <span>CSV Import</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Search & Filters */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search pupil name, roll number, parent..."
+                  value={pupilsSearch}
+                  onChange={(e) => setPupilsSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-white border border-slate-300 text-slate-900 focus:outline-indigo-600"
+                />
+              </div>
+
+              <select
+                value={pupilsClassFilter}
+                onChange={(e) => setPupilsClassFilter(e.target.value)}
+                className="text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-medium text-slate-700 cursor-pointer"
+              >
+                <option value="all">All Classes & Sections</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+                <option value="unassigned">Unassigned Pupils</option>
+              </select>
+            </div>
+
+            <span className="text-xs font-semibold text-slate-500">
+              Showing {filteredPupils.length} of {students.length} pupils
+            </span>
+          </div>
+
+          {/* Table */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Pupil</th>
+                    <th className="py-3 px-3">Roll #</th>
+                    <th className="py-3 px-3">Class</th>
+                    <th className="py-3 px-3">Parent Contact</th>
+                    <th className="py-3 px-3 text-center">Attendance</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredPupils.map((s) => {
+                    const cls = classes.find((c) => c.id === s.classId);
+                    const { attendanceRate } = calculateStudentAttendanceMetrics(s);
+                    const cleanPhone = (s.parentPhone || '').replace(/\D/g, '');
+
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={s.photoUrl}
+                              alt={s.name}
+                              className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                            />
+                            <div>
+                              <span className="font-bold text-slate-900 block">{s.name}</span>
+                              <span className="text-[10px] text-slate-400">
+                                {s.gender} &bull; DOB: {s.dateOfBirth}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 font-mono font-bold text-slate-700">
+                          {s.rollNumber}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold ${cls ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                            {cls ? cls.name : 'Unassigned'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="font-semibold text-slate-800 block">{s.parentName}</span>
+                          {cleanPhone ? (
+                            <a
+                              href={`https://wa.me/${cleanPhone}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-emerald-700 font-semibold hover:underline flex items-center gap-1 text-[11px]"
+                            >
+                              <Phone className="h-3 w-3 text-emerald-600" />
+                              <span>{s.parentPhone}</span>
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 text-[11px]">No contact</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                              attendanceRate >= 90
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : attendanceRate >= 80
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {attendanceRate}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => onSelectStudentProfile(s)}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition cursor-pointer"
+                              title="View Academic Dossier & Remarks"
+                            >
+                              Profile
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePupilSubmit(s.id, s.name)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Delete Pupil (Auto-saved to rollback snapshot)"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: CLASSES & SECTIONS */}
+      {activeTab === 'classes' && (
+        <div className="space-y-6 animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="text-lg font-black text-slate-900">Classes & Sections Management</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
+                    {classes.length} Active Sections
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Configure classrooms, assign homeroom teachers, and reassign pupil rosters.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById('create-class-form');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+              >
+                <Plus className="h-4 w-4" />
+                <span>New Class Section</span>
+              </button>
+            </div>
+
+            {/* Grid of Class Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {classes.map((c) => {
+                const pupilCount = students.filter((s) => s.classId === c.id).length;
+                return (
+                  <div
+                    key={c.id}
+                    className="p-5 rounded-2xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition flex flex-col justify-between space-y-4"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-bold text-slate-900">{c.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded-full">
+                            {pupilCount} Pupils
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteClassSubmit(c.id, c.name)}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title={`Delete class section "${c.name}"`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {c.room} &bull; {c.grade}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">{c.scheduleTime}</p>
+                    </div>
+
+                    {/* Class Teacher Dropdown */}
+                    <div className="pt-3 border-t border-slate-200">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                        Assigned Class Teacher
+                      </label>
+                      <select
+                        value={c.teacherId || ''}
+                        onChange={(e) => handleReassignTeacherSubmit(c.id, e.target.value)}
+                        className="w-full text-xs font-bold px-3 py-2 rounded-xl bg-white border border-slate-300 text-indigo-950 focus:outline-indigo-600 cursor-pointer shadow-2xs"
+                      >
+                        <option value="">-- No Teacher Assigned --</option>
+                        {teachers.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} {t.phone ? `(${t.phone})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Create New Class Section Card Form */}
+          <div id="create-class-form" className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
+            <div className="flex items-center gap-2">
+              <FolderPlus className="h-5 w-5 text-indigo-600" />
+              <h3 className="font-bold text-sm text-slate-900">Create New Class Section</h3>
+            </div>
+
+            <form onSubmit={handleCreateClassSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Class Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Primary 6 - Emerald"
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:outline-indigo-600"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Grade Level</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Primary 6 or JSS 1"
+                  value={newGrade}
+                  onChange={(e) => setNewGrade(e.target.value)}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:outline-indigo-600"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Room / Hall</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Room 16 or Block B"
+                  value={newRoom}
+                  onChange={(e) => setNewRoom(e.target.value)}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:outline-indigo-600"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Assigned Teacher</label>
+                <select
+                  value={newTeacherId}
+                  onChange={(e) => setNewTeacherId(e.target.value)}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:outline-indigo-600"
+                >
+                  <option value="">-- Assign Later --</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4 flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Class Section</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: TEACHERS & STAFF */}
+      {activeTab === 'staff' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-5 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-lg font-black text-slate-900">Teachers & Staff Directory</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
+                  {teachers.length} Staff Members
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Manage teacher credentials, remote academic work authorization, and device bindings.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleCopyAllWhatsAppSlips}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Phone className="h-4 w-4" />
+                <span>Copy All WhatsApp Slips</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenDatabaseModal('teachers')}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add New Teacher</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Staff Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {teachers.map((teacher) => {
+              const assignedClasses = classes.filter(
+                (c) => c.teacherId === teacher.id || teacher.assignedClassIds?.includes(c.id)
+              );
+              const lock = deviceLocks.find((l) => l.teacherId === teacher.id);
+              const currentPin = teacherPinsState[teacher.id] || creds.teacherPins[teacher.id] || '7314';
+              const isRemoteActive = isRemoteAcademicAllowed(teacher.id, perimeterConfig);
+
+              return (
+                <div
+                  key={teacher.id}
+                  className="p-5 rounded-2xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition flex flex-col justify-between space-y-4"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={teacher.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face'}
+                          alt={teacher.name}
+                          className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                        />
+                        <div>
+                          <span className="font-bold text-sm text-slate-900 block">{teacher.name}</span>
+                          <span className="text-[11px] text-slate-500">{teacher.subject || 'Class Teacher'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSendTeacherWhatsAppSlip(teacher)}
+                          className="p-1.5 text-emerald-700 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
+                          title="Send Private WhatsApp Login Slip"
+                        >
+                          <Send className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Contact Info */}
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-slate-400">Phone:</span>
+                        {teacher.phone ? (
+                          <a
+                            href={`https://wa.me/${teacher.phone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-emerald-700 font-semibold hover:underline flex items-center gap-1"
+                          >
+                            {teacher.phone} <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span>None</span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-slate-400">Assigned:</span>
+                        <span className="font-semibold text-slate-800">
+                          {assignedClasses.length > 0
+                            ? assignedClasses.map((c) => c.name).join(', ')
+                            : 'Unassigned'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-slate-400">Login PIN:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                            {currentPin}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRandomizeSinglePin(teacher.id)}
+                            className="p-1 text-slate-400 hover:text-indigo-600 rounded transition cursor-pointer"
+                            title="Generate new 4-digit PIN"
+                          >
+                            <Shuffle className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Actions: Remote Switch & Device Binding */}
+                  <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = toggleTeacherRemoteAcademicAccess(teacher.id);
+                        setPerimeterConfig(updated);
+                        setAccessFeedback(
+                          isRemoteActive
+                            ? `🔒 Remote access LOCKED for ${teacher.name}`
+                            : `🏠 Remote access GRANTED for ${teacher.name}`
+                        );
+                        setTimeout(() => setAccessFeedback(null), 3500);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        isRemoteActive
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                      }`}
+                    >
+                      {isRemoteActive ? '🏠 Remote: Allowed' : '🔒 Remote: Off'}
+                    </button>
+
+                    {lock ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUnpairTeacher(teacher.id, teacher.name)}
+                        className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                      >
+                        Unpair Device ({lock.deviceName.slice(0, 10)})
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">No device bound</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: DISASTER RECOVERY & SYSTEM ROLLBACK */}
+      {activeTab === 'recovery' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-6 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Shield className="h-5 w-5 text-indigo-600" />
+                <h2 className="text-lg font-black text-slate-900">Disaster Recovery & System Rollback</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                  Zero Data Loss
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Revert mistaken deletions, capture manual snapshots, or export full offline flash drive backups.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsRecoveryModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>Open Advanced Recovery Console</span>
+            </button>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-center space-y-3">
+            <Shield className="h-12 w-12 text-indigo-600 mx-auto" />
+            <h3 className="font-bold text-sm text-slate-900">1-Click Snapshot Rollback Active</h3>
+            <p className="text-xs text-slate-600 max-w-md mx-auto">
+              Every class deletion, pupil removal, and CSV import automatically captures a rollback point. You can also download a complete offline JSON file to keep on a school flash drive.
+            </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setIsRecoveryModalOpen(true)}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition inline-flex items-center gap-2 cursor-pointer"
+              >
+                <span>View Historical Snapshots & Offline Backups &rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+        </main>
+      </div>
 
       {/* Interactive Administrator Navigation & Operations Manual Modal */}
       <AdminManualModal
