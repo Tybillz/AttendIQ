@@ -309,9 +309,9 @@ export function checkSchoolPerimeter(
     activeConfig.schoolLng
   );
 
-  // Add small accuracy tolerance margin for indoor Wi-Fi / cell bounce
+  // Add realistic accuracy tolerance margin for indoor Wi-Fi / cell bounce (up to 200m)
   const accuracyMargin = accuracyMeters !== undefined && !isNaN(accuracyMeters)
-    ? Math.min(Math.max(accuracyMeters, 0), 40)
+    ? Math.min(Math.max(accuracyMeters, 0), 200)
     : 0;
 
   const effectiveRadius = activeConfig.radiusMeters + accuracyMargin;

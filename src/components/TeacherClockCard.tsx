@@ -14,10 +14,12 @@ import {
   Info,
   Lock,
   Calendar,
+  Crosshair,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
   getPerimeterConfig,
+  savePerimeterConfig,
   syncPerimeterConfigFromCloud,
   getDailyEntranceCode,
   getTeacherRecordForDate,
@@ -27,6 +29,7 @@ import {
   checkSchoolPerimeter,
 } from '@/lib/teacherAttendance';
 import { getHardwareDeviceProfile, HardwareProfile } from '@/lib/hardwareFingerprint';
+import { getPortalCredentials } from '@/lib/auth';
 import { Teacher, ClassSection, TeacherClockRecord, TeacherDeviceLock, SchoolPerimeterConfig } from '@/types/attendance';
 
 interface TeacherClockCardProps {
@@ -134,8 +137,33 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
             : 'Could not acquire precise GPS signal. Please try again.'
         );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
+  };
+
+  // 1-Click Calibration of school center landmark directly to current device
+  const handleCalibrateLandmarkToCurrent = () => {
+    if (!coords) {
+      alert('Cannot calibrate: Live GPS coordinates have not yet been acquired by this device.');
+      return;
+    }
+    const passcode = prompt('Enter Administrator Passcode (Default: 1234) to lock school perimeter to this device\'s current location:');
+    if (!passcode) return;
+    const creds = getPortalCredentials();
+    if (passcode.trim() !== creds.adminPasscode) {
+      alert('Incorrect Administrator Passcode.');
+      return;
+    }
+
+    const updated: SchoolPerimeterConfig = {
+      ...perimeterConfig,
+      schoolLat: parseFloat(coords.lat.toFixed(6)),
+      schoolLng: parseFloat(coords.lng.toFixed(6)),
+    };
+    savePerimeterConfig(updated);
+    setPerimeterConfig(updated);
+    detectLocation(updated);
+    alert(`✅ School geofence landmark successfully calibrated to (${updated.schoolLat}, ${updated.schoolLng})!`);
   };
 
   // Run location check once on mount
@@ -356,26 +384,44 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
             </p>
           )}
 
-          {isInsidePerimeter === false && (
-            <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5 text-[11px] text-slate-300">
+          {isInsidePerimeter !== true && (
+            <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-700/80 space-y-2 text-[11px] text-slate-300">
               <div className="flex items-center justify-between text-slate-400 font-mono">
                 <span>School Landmark:</span>
                 <span className="text-indigo-300 font-bold">
                   {perimeterConfig.schoolLat.toFixed(5)}, {perimeterConfig.schoolLng.toFixed(5)} ({perimeterConfig.radiusMeters}m radius)
                 </span>
               </div>
-              {coords && (
-                <div className="flex items-center justify-between text-slate-400 font-mono">
-                  <span>Your GPS Position:</span>
-                  <span className="text-amber-300 font-bold">
-                    {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} {accuracy ? `(±${Math.round(accuracy)}m)` : ''}
-                  </span>
+              {coords ? (
+                <>
+                  <div className="flex items-center justify-between text-slate-400 font-mono">
+                    <span>This Device GPS:</span>
+                    <span className="text-amber-300 font-bold">
+                      {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} {accuracy ? `(±${Math.round(accuracy)}m)` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px]">
+                    <span className={isInsidePerimeter ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                      Proximity: {distanceMeters !== null ? `${distanceMeters}m away` : 'Calculating...'}
+                    </span>
+                    <span className="text-slate-400 font-medium">
+                      Geofence: {perimeterConfig.radiusMeters}m
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="p-2 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-300 text-[11px] space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    <span>GPS Signal Not Yet Acquired</span>
+                  </div>
+                  <p className="text-[10px] text-amber-200/80">
+                    Please ensure device Location/GPS is toggled ON in your device settings and browser location permission is allowed.
+                  </p>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px]">
-                <span className="text-rose-400 font-bold">
-                  Proximity: {distanceMeters !== null ? `${distanceMeters}m away` : 'Calculating...'}
-                </span>
+
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800 flex-wrap">
                 <button
                   type="button"
                   onClick={() => {
@@ -384,11 +430,23 @@ export const TeacherClockCard: React.FC<TeacherClockCardProps> = ({
                       detectLocation(conf);
                     });
                   }}
-                  className="text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold text-[10px] cursor-pointer flex items-center gap-1 transition"
                 >
                   <RefreshCw className="h-3 w-3" />
                   <span>Re-sync Cloud Geofence</span>
                 </button>
+
+                {coords && (
+                  <button
+                    type="button"
+                    onClick={handleCalibrateLandmarkToCurrent}
+                    className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] cursor-pointer flex items-center gap-1 transition shadow-xs active:scale-95"
+                    title="Lock the school center landmark directly to this phone's current GPS position"
+                  >
+                    <Crosshair className="h-3 w-3" />
+                    <span>Calibrate Landmark to Here</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
