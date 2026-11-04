@@ -239,3 +239,37 @@ export function getUnifiedAcademicReport(
     nextTermResumptionDate,
   };
 }
+
+/**
+ * Checks if today is the student's birthday based on month and day (ignoring birth year).
+ */
+export function isStudentBirthdayToday(dateOfBirth?: string, targetDateStr?: string): boolean {
+  if (!dateOfBirth) return false;
+  const now = targetDateStr ? new Date(targetDateStr) : new Date();
+  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const currentDay = String(now.getDate()).padStart(2, '0');
+
+  const parts = dateOfBirth.split('-');
+  if (parts.length >= 3) {
+    const dobMonth = parts[1].padStart(2, '0');
+    const dobDay = parts[2].padStart(2, '0');
+    return dobMonth === currentMonth && dobDay === currentDay;
+  }
+  return false;
+}
+
+/**
+ * Calculates how old the student is turning on their birthday today.
+ */
+export function getStudentAgeToday(dateOfBirth?: string, targetDateStr?: string): number | null {
+  if (!dateOfBirth) return null;
+  const now = targetDateStr ? new Date(targetDateStr) : new Date();
+  const parts = dateOfBirth.split('-');
+  if (parts.length >= 3) {
+    const birthYear = parseInt(parts[0], 10);
+    if (!isNaN(birthYear) && birthYear > 1900) {
+      return now.getFullYear() - birthYear;
+    }
+  }
+  return null;
+}

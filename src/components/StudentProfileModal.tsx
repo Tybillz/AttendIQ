@@ -23,6 +23,8 @@ import {
   Shield,
   Pencil,
   FileText,
+  Cake,
+  Sparkles,
 } from 'lucide-react';
 import { Student, TestExamRecord, BehavioralNote } from '@/types/attendance';
 import { TerminalReportSheet } from './TerminalReportSheet';
@@ -38,7 +40,12 @@ import {
 } from '@/lib/storage';
 import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
 import { generateWhatsAppUrl } from '@/lib/notifications';
-import { calculateStudentAttendanceMetrics, calculateGradeAndRemark } from '@/lib/academicCalculations';
+import {
+  calculateStudentAttendanceMetrics,
+  calculateGradeAndRemark,
+  isStudentBirthdayToday,
+  getStudentAgeToday,
+} from '@/lib/academicCalculations';
 import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 interface StudentProfileModalProps {
@@ -102,6 +109,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   // Edit pupil state
   const [editName, setEditName] = useState('');
   const [editRoll, setEditRoll] = useState('');
+  const [editDob, setEditDob] = useState('');
+  const [editGender, setEditGender] = useState<'Male' | 'Female' | 'Other'>('Male');
   const [editParentName, setEditParentName] = useState('');
   const [editParentPhone, setEditParentPhone] = useState('');
   const [editParentEmail, setEditParentEmail] = useState('');
@@ -115,6 +124,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       setLocalStudent(student);
       setEditName(student.name);
       setEditRoll(student.rollNumber);
+      setEditDob(student.dateOfBirth || '2016-01-01');
+      setEditGender(student.gender || 'Male');
       setEditParentName(student.parentName);
       setEditParentPhone(student.parentPhone);
       setEditParentEmail(student.parentEmail);
@@ -127,6 +138,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   if (!isOpen || !student) return null;
 
   const activeStudent: Student = localStudent || student;
+  const isBirthday = isStudentBirthdayToday(activeStudent.dateOfBirth);
+  const studentAge = getStudentAgeToday(activeStudent.dateOfBirth);
   const attendanceMetrics = calculateStudentAttendanceMetrics(activeStudent);
   const totalDays = attendanceMetrics.totalDays;
   const attendanceRate = attendanceMetrics.attendanceRate;
@@ -282,6 +295,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       ...student,
       name: editName.trim() || student.name,
       rollNumber: editRoll.trim() || student.rollNumber,
+      dateOfBirth: editDob || student.dateOfBirth,
+      gender: editGender || student.gender,
       parentName: editParentName.trim() || student.parentName,
       parentPhone: editParentPhone.trim() || student.parentPhone,
       parentEmail: editParentEmail.trim() || student.parentEmail,
@@ -289,6 +304,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     };
 
     updateStudent(updated);
+    setLocalStudent(updated);
     setActiveTab('academics');
     onStudentUpdated();
   };
@@ -367,18 +383,24 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             <div className="flex-1 text-center sm:text-left">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1.5">
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white">
-                  Roll #{student.rollNumber}
+                  Roll #{activeStudent.rollNumber}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
                   {classNameTitle}
                 </span>
-                {student.totalAbsent >= 3 ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/80 text-white flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> {student.totalAbsent} Days Absent
+                {isBirthday && (
+                  <span className="px-3 py-0.5 rounded-full text-xs font-black bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white shadow-lg animate-pulse flex items-center gap-1.5 border border-pink-300/50">
+                    <Cake className="h-3.5 w-3.5 text-amber-200" />
+                    🎂 Birthday Today! {studentAge ? `(Turning ${studentAge})` : ''} 🎉
                   </span>
-                ) : student.totalAbsent >= 2 ? (
+                )}
+                {activeStudent.totalAbsent >= 3 ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/80 text-white flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" /> {activeStudent.totalAbsent} Days Absent
+                  </span>
+                ) : activeStudent.totalAbsent >= 2 ? (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/80 text-white flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> {student.totalAbsent} Days Absent
+                    <AlertTriangle className="h-3 w-3" /> {activeStudent.totalAbsent} Days Absent
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/40 text-emerald-200 flex items-center gap-1">
@@ -387,23 +409,45 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 )}
               </div>
 
-              <h2 className="text-2xl font-black tracking-tight text-white">{student.name}</h2>
+              <h2 className="text-2xl font-black tracking-tight text-white flex items-center gap-2 justify-center sm:justify-start">
+                <span>{activeStudent.name}</span>
+                {isBirthday && <span className="text-xl">🎂</span>}
+              </h2>
               <p className="text-xs text-slate-300 mt-1 flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1">
-                <span>DOB: {student.dateOfBirth}</span>
-                <span>Gender: {student.gender}</span>
-                <span>Parent: {student.parentName}</span>
+                <span className={isBirthday ? 'text-amber-300 font-bold flex items-center gap-1' : ''}>
+                  {isBirthday && <Sparkles className="h-3 w-3 text-amber-300 animate-spin" />}
+                  DOB: {activeStudent.dateOfBirth || 'Not set'}
+                </span>
+                <span>Gender: {activeStudent.gender}</span>
+                <span>Parent: {activeStudent.parentName}</span>
               </p>
 
               {/* Parent Contact bar with Quick SMS */}
               <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs">
                 <span className="inline-flex items-center gap-1.5 text-slate-200 bg-white/10 px-2.5 py-1 rounded-lg">
                   <Phone className="h-3.5 w-3.5 text-emerald-400" />
-                  {student.parentPhone}
+                  {activeStudent.parentPhone}
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-slate-200 bg-white/10 px-2.5 py-1 rounded-lg">
                   <Mail className="h-3.5 w-3.5 text-sky-400" />
-                  {student.parentEmail}
+                  {activeStudent.parentEmail}
                 </span>
+
+                {isBirthday && activeStudent.parentPhone && (
+                  <a
+                    href={generateWhatsAppUrl(
+                      activeStudent.parentPhone,
+                      `Dear ${activeStudent.parentName},\n\nThe Management, Teachers, and Classmates at ${branding.schoolName} joyfully celebrate ${activeStudent.name} on their birthday today!\n\n🎂 Happy Birthday ${activeStudent.name}! We pray for continuous wisdom, sound health, divine favor, and remarkable success in all academic endeavors. Have a blessed celebration! 🎉🎈`
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-pink-900 bg-gradient-to-r from-pink-300 to-amber-200 hover:from-pink-200 hover:to-amber-100 px-3 py-1 rounded-lg border border-pink-400 shadow-sm transition"
+                  >
+                    <Cake className="h-3.5 w-3.5 text-pink-700" />
+                    Send Birthday Wish (WhatsApp)
+                  </a>
+                )}
+
                 <button
                   onClick={handleSendDirectParentSMS}
                   className="inline-flex items-center gap-1 text-xs font-medium text-amber-200 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg border border-amber-400/30 transition"
@@ -411,11 +455,11 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   <Send className="h-3 w-3" /> Send Parent SMS
                 </button>
 
-                {student.parentPhone && (
+                {activeStudent.parentPhone && (
                   <a
                     href={generateWhatsAppUrl(
-                      student.parentPhone,
-                      `Hello ${student.parentName}, this is a notice from ${branding.schoolName} regarding your child ${student.name} (${classNameTitle}). Current attendance compliance is ${attendanceRate}%.`
+                      activeStudent.parentPhone,
+                      `Hello ${activeStudent.parentName}, this is a notice from ${branding.schoolName} regarding your child ${activeStudent.name} (${classNameTitle}). Current attendance compliance is ${attendanceRate}%.`
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -1108,6 +1152,30 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     required
                     className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-indigo-500"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Date of Birth (D.O.B) <span className="text-pink-600 font-medium">🎂 Birthday alerts</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={editDob}
+                    onChange={(e) => setEditDob(e.target.value)}
+                    required
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Gender</label>
+                  <select
+                    value={editGender}
+                    onChange={(e) => setEditGender(e.target.value as 'Male' | 'Female' | 'Other')}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-indigo-500"
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">Parent / Guardian Name</label>

@@ -26,6 +26,7 @@ import {
   FileText,
   CheckCircle2,
   UserPlus,
+  Cake,
 } from 'lucide-react';
 import { AddPupilToClassModal } from './AddPupilToClassModal';
 import confetti from 'canvas-confetti';
@@ -39,7 +40,11 @@ import {
 } from '@/types/attendance';
 import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 import { INITIAL_ALERT_SETTINGS } from '@/lib/initialData';
-import { calculateStudentAttendanceMetrics } from '@/lib/academicCalculations';
+import {
+  calculateStudentAttendanceMetrics,
+  isStudentBirthdayToday,
+  getStudentAgeToday,
+} from '@/lib/academicCalculations';
 import {
   recordAttendanceEntry,
   autoTagUnmarkedPupilsAbsent,
@@ -759,6 +764,21 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                         >
                           {student.name}
                         </button>
+
+                        {isStudentBirthdayToday(student.dateOfBirth, selectedDate) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectStudentProfile(student);
+                            }}
+                            className="text-[10px] font-black bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white shadow-xs px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-pink-300 animate-pulse hover:scale-105 transition-transform cursor-pointer"
+                            title={`It's ${student.name}'s birthday today! Click to view profile and send wishes.`}
+                          >
+                            <Cake className="h-3 w-3 text-amber-200" />
+                            🎂 Birthday Today! {getStudentAgeToday(student.dateOfBirth, selectedDate) ? `(Turning ${getStudentAgeToday(student.dateOfBirth, selectedDate)})` : ''} 🎉
+                          </button>
+                        )}
 
                         {isLate && (
                           <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">

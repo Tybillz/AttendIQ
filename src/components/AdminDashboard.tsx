@@ -46,6 +46,7 @@ import {
   Unlock,
   Mail,
   FolderPlus,
+  Cake,
 } from 'lucide-react';
 import SchoolPerimeterPicker from './SchoolPerimeterPicker';
 import { AdminManualModal } from './AdminManualModal';
@@ -70,7 +71,12 @@ import {
   reassignClassTeacher,
   deleteStudent,
 } from '@/lib/storage';
-import { calculateStudentAttendanceMetrics, getUnifiedAcademicReport } from '@/lib/academicCalculations';
+import {
+  calculateStudentAttendanceMetrics,
+  getUnifiedAcademicReport,
+  isStudentBirthdayToday,
+  getStudentAgeToday,
+} from '@/lib/academicCalculations';
 import {
   getPerimeterConfig,
   savePerimeterConfig,
@@ -533,6 +539,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const chronicAbsentees = students.filter(
     (s) => s.totalAbsent >= alertSettings.chronicAbsenceThreshold
   );
+
+  // Identify pupils having birthdays today
+  const birthdayPupilsToday = students.filter((s) => isStudentBirthdayToday(s.dateOfBirth, selectedDate));
 
   // Filtered pupils for directory view
   const filteredPupils = students.filter((s) => {
@@ -1067,6 +1076,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               </div>
+
+              {/* Today's Birthday Celebrants Highlight */}
+              {birthdayPupilsToday.length > 0 && (
+                <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 rounded-3xl p-5 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 border border-pink-300/40 animate-in fade-in">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-xs shrink-0">
+                      🎂
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black uppercase tracking-wider bg-white/25 px-2.5 py-0.5 rounded-full border border-white/30">
+                          Today's Celebrants ({birthdayPupilsToday.length})
+                        </span>
+                        <span className="text-xs text-pink-100 font-medium">Annual Milestone 🎉</span>
+                      </div>
+                      <h4 className="text-base font-black mt-1">
+                        Happy Birthday to {birthdayPupilsToday.map((b) => b.name).join(', ')}!
+                      </h4>
+                      <p className="text-xs text-pink-100 mt-0.5">
+                        {birthdayPupilsToday.map((b) => {
+                          const age = getStudentAgeToday(b.dateOfBirth, selectedDate);
+                          return `${b.name} (${age ? `Turning ${age} • ` : ''}${classes.find((c) => c.id === b.classId)?.name || 'Class'})`;
+                        }).join(' | ')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {birthdayPupilsToday.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => onSelectStudentProfile(b)}
+                        className="px-3.5 py-2 rounded-xl bg-white text-pink-700 hover:bg-pink-50 font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        <Cake className="h-3.5 w-3.5 text-pink-600" />
+                        <span>Celebrate {b.name.split(' ')[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* KPI Highlight Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2780,7 +2830,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
                             />
                             <div>
-                              <span className="font-bold text-slate-900 block">{s.name}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-900">{s.name}</span>
+                                {isStudentBirthdayToday(s.dateOfBirth, selectedDate) && (
+                                  <span className="text-[10px] font-black bg-gradient-to-r from-pink-500 to-rose-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1 border border-pink-300 animate-pulse">
+                                    <Cake className="h-2.5 w-2.5 text-amber-200" />
+                                    🎂 Birthday Today! {getStudentAgeToday(s.dateOfBirth, selectedDate) ? `(${getStudentAgeToday(s.dateOfBirth, selectedDate)} yrs)` : ''} 🎉
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] text-slate-400">
                                 {s.gender} &bull; DOB: {s.dateOfBirth}
                               </span>

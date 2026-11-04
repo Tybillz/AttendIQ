@@ -33,7 +33,7 @@ import {
   bulkImportPupilsFromCSV,
   downloadCSVFile,
 } from '@/lib/storage';
-import { calculateStudentAttendanceMetrics } from '@/lib/academicCalculations';
+import { calculateStudentAttendanceMetrics, isStudentBirthdayToday, getStudentAgeToday } from '@/lib/academicCalculations';
 
 interface PupilDatabaseModalProps {
   isOpen: boolean;
@@ -395,7 +395,14 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                                 className="w-8 h-8 rounded-full object-cover border border-slate-200"
                               />
                               <div>
-                                <span className="font-bold text-slate-900 block">{s.name}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-slate-900 block">{s.name}</span>
+                                  {isStudentBirthdayToday(s.dateOfBirth) && (
+                                    <span className="text-[10px] font-black bg-gradient-to-r from-pink-500 to-rose-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1 border border-pink-300 animate-pulse">
+                                      🎂 Birthday Today! {getStudentAgeToday(s.dateOfBirth) ? `(${getStudentAgeToday(s.dateOfBirth)} yrs)` : ''} 🎉
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-[10px] text-slate-400">
                                   {s.gender} • DOB: {s.dateOfBirth}
                                 </span>
