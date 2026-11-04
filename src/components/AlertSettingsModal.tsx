@@ -409,18 +409,10 @@ export const AlertSettingsModal: React.FC<AlertSettingsModalProps> = ({
                 <CheckCircle2 className="h-4 w-4" /> Preferences saved!
               </span>
             ) : (
-              <span className="text-[11px] text-slate-500">Press ESC or click Cancel to exit</span>
+              <div />
             )}
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition cursor-pointer shadow-2xs active:scale-95"
-              >
-                <X className="h-3.5 w-3.5" />
-                <span>Cancel</span>
-              </button>
               <button
                 type="submit"
                 className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer active:scale-95"
