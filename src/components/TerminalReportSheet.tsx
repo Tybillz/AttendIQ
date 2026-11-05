@@ -527,8 +527,16 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
         </form>
       )}
 
-      {/* Printable Sheet Container (Styled for crisp white output on print) */}
-      <div className="print-report-card bg-white text-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-lg text-xs font-sans">
+      {/* Printable Sheet Container (Styled for crisp white output on print with anti-tamper watermark) */}
+      <div className="print-report-card relative bg-white text-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-lg text-xs font-sans overflow-hidden">
+        {/* Anti-Criminality Transparent Security Watermark */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0">
+          <div className="flex flex-col items-center justify-center -rotate-30 opacity-[0.035] text-slate-900 border-8 border-dashed border-indigo-950/40 rounded-full p-20 scale-125">
+            <span className="text-6xl font-black uppercase tracking-widest">{branding.shortName || 'IISS'}</span>
+            <span className="text-xl font-bold tracking-wider mt-2">OFFICIAL SECURE DOSSIER</span>
+            <span className="text-xs font-mono font-bold tracking-widest mt-1">NON-REPUTABLE RECORD • ROLL: {student.rollNumber}</span>
+          </div>
+        </div>
         {/* School Header & Crest */}
         <div className="border-b-2 border-slate-900 pb-4 mb-4 text-center">
           <div className="flex items-center justify-center gap-3 mb-2">
