@@ -382,10 +382,10 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
 
             <div className="flex items-center gap-2">
               {classes.length === 1 ? (
-                <div className="text-base font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-2xl px-4 py-2 flex items-center gap-2">
+                <div className="text-base font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-2xs">
                   <span>{currentClass?.name}</span>
-                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                    Class Teacher
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
+                    Permanent Form Teacher
                   </span>
                 </div>
               ) : (
@@ -406,7 +406,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
 
           <div className="sm:border-l sm:border-slate-200 sm:pl-4">
             <span className="text-xs font-semibold text-slate-700 block">
-              Class Teacher: <strong className="text-slate-900">{currentClass?.teacherName}</strong>
+              Form Teacher: <strong className="text-slate-900">{currentClass?.teacherName}</strong>
             </span>
             <span className="text-[11px] text-slate-500 block" suppressHydrationWarning>
               Schedule: {
@@ -1008,7 +1008,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                     {isAbsent && (
                       <a
                         href={`https://wa.me/${student.parentPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Class Teacher'} from ${branding.schoolName}, ${branding.branchLocation}.\n\nYour child, ${student.name} (${student.rollNumber}), was marked ABSENT at morning roll call today (${selectedDate}, 8:15 AM).\n\nPlease kindly confirm if ${student.name} is safe at home.\n\nThank you,\nSchool Administration`
+                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Form Teacher'} from ${branding.schoolName}, ${branding.branchLocation}.\n\nYour child, ${student.name} (${student.rollNumber}), was marked ABSENT at morning roll call today (${selectedDate}, 8:15 AM).\n\nPlease kindly confirm if ${student.name} is safe at home.\n\nThank you,\nSchool Administration`
                         )}`}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -1024,7 +1024,7 @@ export const TeacherRollCall: React.FC<TeacherRollCallProps> = ({
                     {isLate && (
                       <a
                         href={`https://wa.me/${student.parentPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Class Teacher'} from ${branding.schoolName}, ${branding.branchLocation}.\n\nNotice: Your child, ${student.name} (${student.rollNumber}), arrived LATE to class today (${selectedDate}, ${entry?.markedAt || 'after morning assembly'}).\n\nPlease ensure ${student.name} departs home earlier to avoid missing vital morning instruction.\n\nThank you,\nSchool Administration`
+                          `Good morning ${student.parentName},\n\nThis is ${currentClass?.teacherName || 'the Form Teacher'} from ${branding.schoolName}, ${branding.branchLocation}.\n\nNotice: Your child, ${student.name} (${student.rollNumber}), arrived LATE to class today (${selectedDate}, ${entry?.markedAt || 'after morning assembly'}).\n\nPlease ensure ${student.name} departs home earlier to avoid missing vital morning instruction.\n\nThank you,\nSchool Administration`
                         )}`}
                         target="_blank"
                         rel="noopener noreferrer"

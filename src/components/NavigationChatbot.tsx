@@ -69,7 +69,7 @@ interface ChatMessage {
 interface KnowledgeArticle {
   id: string;
   title: string;
-  category: 'navigation' | 'geofence' | 'attendance' | 'broadsheet' | 'parent_alerts' | 'staff_security' | 'database' | 'licensing' | 'queries_announcements' | 'recovery';
+  category: 'navigation' | 'geofence' | 'attendance' | 'broadsheet' | 'parent_alerts' | 'staff_security' | 'database' | 'licensing' | 'queries_announcements' | 'recovery' | 'teachers';
   keywords: string[];
   patterns: RegExp[];
   answer: string;
@@ -346,6 +346,37 @@ export const NavigationChatbot: React.FC<NavigationChatbotProps> = (props) => {
         'How do I bulk import students from Excel or CSV?',
         'How to assign teachers to classrooms?',
         'Where do I view a student\'s 360° profile?',
+      ],
+    },
+    {
+      id: 'form-teacher-homeroom',
+      title: 'Form Teachers (Homeroom) vs Subject Teachers',
+      category: 'teachers',
+      keywords: ['form teacher', 'homeroom', 'subject teacher', 'permanent class', 'form class', 'class assigned', 'assigned class', 'classes assigned', 'gradebook class'],
+      patterns: [
+        /\b(form\s+teacher|homeroom|permanent\s+class|form\s+class)\b/i,
+        /\b(subject\s+teacher|subject\s+gradebook)\b/i,
+        /how\s+are\s+(classes|form\s+classes)\s+assigned/i,
+        /difference\s+between\s+form\s+teacher\s+and\s+subject/i,
+      ],
+      answer: `**Form Teachers vs Subject Teachers in AttendIQ:**\n\n* **Permanent Form Teacher (Homeroom)**:\n  * Each teacher has **one permanent Form Class** (e.g. *JSS 2 - Sapphire*).\n  * Daily Morning Roll Call and Student Dossiers are strictly locked to the teacher's permanent Form Class to protect register integrity and prevent confusion.\n  * As Form Teacher, you can enroll latecomers or transfer students directly into your homeroom roster!\n\n* **Subject Teacher (Multi-Class)**:\n  * Teachers can teach subjects across multiple classes (e.g. *Mathematics* in JSS 2 and SSS 1).\n  * The **Subject Gradebook** provides multi-class switching across all classes assigned to you, allowing you to grade test scores, assignments, and terminal exams effortlessly.\n\n* **Principal / Management**:\n  * Has complete school-wide access across all classes in the Principal Console.`,
+      actionButtons: (p) => [
+        {
+          label: 'Go to Daily Attendance Roll Call',
+          icon: Users,
+          primary: true,
+          action: () => p.onNavigateTeacherTab('attendance'),
+        },
+        {
+          label: 'Open Subject Gradebook',
+          icon: BookOpen,
+          action: () => p.onNavigateTeacherTab('gradebook'),
+        },
+      ],
+      followUps: [
+        'How do I register a new pupil into my class?',
+        'How do I enter subject grades and generate broadsheets?',
+        'How to assign teachers to classrooms?',
       ],
     },
     {

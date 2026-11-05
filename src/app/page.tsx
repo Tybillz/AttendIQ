@@ -303,30 +303,49 @@ export default function Home() {
     return { success: false, message: res.message || 'Incorrect Management Passcode.' };
   };
 
-  // STRICT CLASS ACCESS RESTRICTION:
-  // When in teacher mode, the teacher can ONLY see and access their assigned classroom section(s).
-  // When in management/admin mode, management has full access to the whole school.
+  // STRICT CLASS ACCESS & FORM TEACHER RESTRICTION:
+  // 1. Permanent Form Class (Homeroom): Every class has a designated permanent Form Teacher.
+  //    Only the Form Teacher takes the Daily Morning Attendance Roll Call & manages the class register/dossier.
+  // 2. Subject Teaching: A teacher can teach subjects across multiple classes. The Subject Gradebook provides
+  //    access to all classes assigned to the teacher.
+  // 3. Admin / Principal: Full school-wide access across all classes.
   const activeTeacher = teachers.find((t) => t.id === currentTeacherId) || teachers[0];
+
+  // Permanent Form Class (where class.teacherId === teacher.id)
+  const formClass = classes.find((c) => c.teacherId === currentTeacherId)
+    || classes.find((c) => activeTeacher?.assignedClassIds?.includes(c.id))
+    || classes[0];
+
+  // All classes where this teacher teaches subjects or serves as form teacher
   const teacherAssignedClasses = classes.filter(
     (c) => c.teacherId === currentTeacherId || activeTeacher?.assignedClassIds?.includes(c.id)
   );
 
+  // Roll call classes: strictly the single permanent form class for teachers; all classes for admin
+  const rollCallClasses = currentRole === 'teacher' ? (formClass ? [formClass] : []) : classes;
   const accessibleClasses = currentRole === 'teacher' ? teacherAssignedClasses : classes;
 
   useEffect(() => {
-    if (currentRole === 'teacher' && teacherAssignedClasses.length > 0) {
-      const exists = teacherAssignedClasses.some((c) => c.id === selectedClassId);
+    if (currentRole === 'teacher' && formClass) {
+      if (selectedClassId !== formClass.id) {
+        setSelectedClassId(formClass.id);
+      }
+    } else if (currentRole === 'admin' && classes.length > 0) {
+      const exists = classes.some((c) => c.id === selectedClassId);
       if (!exists) {
-        setSelectedClassId(teacherAssignedClasses[0].id);
+        setSelectedClassId(classes[0].id);
       }
     }
-  }, [currentRole, currentTeacherId, teacherAssignedClasses, selectedClassId]);
+  }, [currentRole, currentTeacherId, formClass, classes, selectedClassId]);
 
-  const currentClass = accessibleClasses.find((c) => c.id === selectedClassId) || accessibleClasses[0];
+  const activeRollClassId = currentRole === 'teacher' ? (formClass?.id || selectedClassId) : selectedClassId;
+  const currentClass = accessibleClasses.find((c) => c.id === activeRollClassId) || accessibleClasses[0];
   const currentSession = sessions.find(
-    (s) => s.date === selectedDate && s.classId === selectedClassId
+    (s) => s.date === selectedDate && s.classId === activeRollClassId
   );
-  const classStudents = students.filter((s) => s.classId === selectedClassId);
+  const classStudents = students.filter((s) => s.classId === activeRollClassId);
+  const dossierClass = currentRole === 'teacher' ? formClass : currentClass;
+  const dossierStudents = students.filter((s) => s.classId === (dossierClass?.id || activeRollClassId));
 
   const teacherPendingQueries = queries.filter(
     (q) => q.teacherId === activeTeacher?.id && q.status === 'pending_reply'
@@ -728,7 +747,16 @@ export default function Home() {
               <div className="text-xs text-slate-500 px-3 hidden md:flex items-center gap-2">
                 <span className="font-semibold text-slate-700">{activeTeacher?.name}</span>
                 <span>&bull;</span>
-                <span className="text-slate-600">{teacherAssignedClasses.length} {teacherAssignedClasses.length === 1 ? 'Class' : 'Classes'} Assigned</span>
+                {formClass && (
+                  <span className="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                    Form Class: {formClass.name}
+                  </span>
+                )}
+                {teacherAssignedClasses.length > 1 && (
+                  <span className="text-slate-500 text-[11px]">
+                    ({teacherAssignedClasses.length} Teaching Classes)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -737,7 +765,7 @@ export default function Home() {
                 {activeTeacher && (
                   <TeacherClockCard
                     teacher={activeTeacher}
-                    activeClass={accessibleClasses.find((c) => c.id === selectedClassId) || accessibleClasses[0]}
+                    activeClass={formClass || accessibleClasses[0]}
                     selectedDate={selectedDate}
                     onRecordUpdated={syncData}
                     onReturnToToday={() => setSelectedDate(new Date().toISOString().split('T')[0])}
@@ -745,8 +773,8 @@ export default function Home() {
                   />
                 )}
                 <TeacherRollCall
-                  classes={accessibleClasses}
-                  selectedClassId={selectedClassId || accessibleClasses[0]?.id || ''}
+                  classes={rollCallClasses}
+                  selectedClassId={activeRollClassId}
                   onSelectClassId={setSelectedClassId}
                   selectedDate={selectedDate}
                   students={students}
@@ -797,19 +825,19 @@ export default function Home() {
                   <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                       <FolderOpen className="h-5 w-5 text-indigo-600" />
-                      Class Pupils & Academic Dossiers ({currentClass?.name || 'My Class'})
+                      Form Class Pupils & Academic Dossiers ({dossierClass?.name || 'My Class'})
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Tap any pupil card to view full emergency parent phone numbers, medical flags, and term academic records
+                      Official Form Teacher / Homeroom Register & Student Academic Dossiers
                     </p>
                   </div>
                   <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
-                    {classStudents.length} Students Enrolled
+                    {dossierStudents.length} Students Enrolled
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-                  {classStudents.map((s) => (
+                  {dossierStudents.map((s) => (
                     <div
                       key={s.id}
                       onClick={() => setSelectedStudentForProfile(s)}
