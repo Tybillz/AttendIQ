@@ -52,7 +52,7 @@ export const getDefaultEvaluation = (studentName: string): TerminalEvaluation =>
     ict: 5,
     handlingOfTools: 5,
   },
-  teacherRemark: `${studentName} has demonstrated exceptional brilliance, consistency, and discipline this term. Maintains an outstanding track record in both classroom participation and attendance.`,
+  teacherRemark: `${studentName} has demonstrated exceptional brilliance, consistency, and discipline this term. Maintains an outstanding track record in both classroom academic participation and rigorous study habits.`,
   teacherSignature: 'Mrs. Victoria Adebayo',
   principalRecommendation: 'An exemplary scholar of high moral character. Recommended for Academic Honors and Placement in Term Honor Roll.',
   nextTermResumptionDate: 'Monday, 11th January 2027',
@@ -149,7 +149,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
   const teacherRemarkPresets = [
     {
       title: 'Distinction / Outstanding',
-      text: `${student.name} has demonstrated exceptional brilliance, consistency, and discipline this term. Maintains an outstanding track record in both classroom participation and attendance.`,
+      text: `${student.name} has demonstrated exceptional brilliance, consistency, and discipline this term. Maintains an outstanding track record in both classroom participation and academic performance.`,
     },
     {
       title: 'Diligent & Promising',
@@ -382,7 +382,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
                   Form / Class Teacher&apos;s Remark
                 </label>
                 <p className="text-[11px] text-slate-500">
-                  Document terminal attendance, character assessment, and class participation
+                  Document terminal academic progress, character assessment, and class participation
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -562,7 +562,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
             </div>
           </div>
           <div className="inline-block px-4 py-1 rounded-full bg-slate-900 text-white font-bold text-[11px] tracking-wide uppercase mt-1">
-            End of Term Comprehensive Academic & Attendance Report Sheet
+            Official Terminal Academic Transcript & Examination Report Sheet
           </div>
         </div>
 
@@ -586,23 +586,25 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
           </div>
         </div>
 
-        {/* Attendance Summary Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-emerald-50/70 border border-emerald-300 mb-4 text-[11px]">
+        {/* Academic Performance Summary Strip (Replaced Attendance) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-slate-100/90 border border-slate-300 mb-4 text-[11px]">
           <div>
-            <span className="text-emerald-900 block text-[9px] uppercase font-bold">School Days Held</span>
-            <span className="font-bold text-slate-900">{effectiveSessionsHeld} Days</span>
+            <span className="text-slate-600 block text-[9px] uppercase font-bold">Total Marks Obtained</span>
+            <span className="font-bold text-slate-900">{grandTotal} / {maxPossible}</span>
           </div>
           <div>
-            <span className="text-emerald-900 block text-[9px] uppercase font-bold">Days Present</span>
-            <span className="font-bold text-emerald-700">{student.totalPresent} Days</span>
+            <span className="text-slate-600 block text-[9px] uppercase font-bold">Weighted Term Average</span>
+            <span className="font-bold text-indigo-900 text-xs">{termAverage}%</span>
           </div>
           <div>
-            <span className="text-emerald-900 block text-[9px] uppercase font-bold">Days Absent</span>
-            <span className="font-bold text-rose-700">{student.totalAbsent} Days</span>
+            <span className="text-slate-600 block text-[9px] uppercase font-bold">Class Position / Rank</span>
+            <span className="font-bold text-slate-900">{effectiveClassPosition}</span>
           </div>
           <div>
-            <span className="text-emerald-900 block text-[9px] uppercase font-bold">Attendance Rate</span>
-            <span className="font-black text-emerald-800 text-xs">{attendanceRate}%</span>
+            <span className="text-slate-600 block text-[9px] uppercase font-bold">Academic Standing</span>
+            <span className="font-black text-emerald-700 text-xs">
+              {Number(termAverage) >= 75 ? 'Distinction / Honors' : Number(termAverage) >= 60 ? 'Credit / Good Standing' : 'Pass'}
+            </span>
           </div>
         </div>
 

@@ -9,32 +9,50 @@ const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPAB
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Fallback in-memory cache
+// Fallback in-memory cache for ResultIQ model
 let inMemoryStore: {
   teachers?: any[];
   classes?: any[];
+  students?: any[];
+  subjectGrades?: any[];
+  branding?: any;
+  license?: any;
   teacherPins?: Record<string, string>;
   adminPasscode?: string;
-  gatePasscode?: string;
-  parentExcuses?: any[];
+  vendorPasscode?: string;
 } = {
   teachers: [],
   classes: [],
+  students: [],
+  subjectGrades: [],
+  branding: null,
+  license: null,
   teacherPins: {},
-  adminPasscode: '1234',
-  gatePasscode: '1234',
-  parentExcuses: [],
+  adminPasscode: 'admin123',
+  vendorPasscode: 'vendor2026',
 };
 
 async function getCloudStore() {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/broadcasts?title=eq.attend_iq_cloud_store&select=id,attachment_data&limit=1`, {
+    // 1. Try fetching primary result_iq_cloud_store record
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/broadcasts?title=eq.result_iq_cloud_store&select=id,attachment_data&limit=1`, {
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
       },
       cache: 'no-store',
     });
+
+    // 2. Fallback to attend_iq_cloud_store if result_iq record doesn't exist yet
+    if (!res.ok || (res.ok && (await res.clone().json()).length === 0)) {
+      res = await fetch(`${SUPABASE_URL}/rest/v1/broadcasts?title=eq.attend_iq_cloud_store&select=id,attachment_data&limit=1`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+        },
+        cache: 'no-store',
+      });
+    }
 
     if (res.ok) {
       const data = await res.json();
@@ -49,7 +67,7 @@ async function getCloudStore() {
           };
           return inMemoryStore;
         } catch (err) {
-          console.error('Error parsing cloud store JSON:', err);
+          console.error('Error parsing ResultIQ cloud store JSON:', err);
         }
       }
     }
@@ -71,25 +89,55 @@ async function saveCloudStore(updates: Record<string, any>) {
   };
   inMemoryStore = merged;
 
+  const payload = {
+    attachment_data: JSON.stringify(merged),
+    updated_at: new Date().toISOString(),
+  };
+
   try {
-    const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/broadcasts?title=eq.attend_iq_cloud_store`, {
+    // Upsert into result_iq_cloud_store in Supabase
+    const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/broadcasts?title=eq.result_iq_cloud_store`, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        attachment_data: JSON.stringify(merged),
-        updated_at: new Date().toISOString(),
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!patchRes.ok) {
-      console.warn('Supabase patch failed, attempting insert:', patchRes.status);
+      // If not present, create it
+      await fetch(`${SUPABASE_URL}/rest/v1/broadcasts`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          business_id: 'a0000000-0000-0000-0000-000000000001',
+          type: 'announcement',
+          recipient_id: 'all',
+          title: 'result_iq_cloud_store',
+          message: 'Official ResultIQ Cloud Store Record for Terminal Academic Registry',
+          ...payload,
+        }),
+      });
     }
+
+    // Also mirror to attend_iq_cloud_store for seamless backward compatibility
+    await fetch(`${SUPABASE_URL}/rest/v1/broadcasts?title=eq.attend_iq_cloud_store`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
   } catch (err) {
-    console.error('Error persisting to Supabase cloud store:', err);
+    console.error('Error persisting ResultIQ model to Supabase cloud store:', err);
   }
 
   return merged;

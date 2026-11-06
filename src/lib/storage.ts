@@ -387,6 +387,26 @@ export async function syncDataFromCloud(): Promise<{ teachers: Teacher[]; classe
         updatedAny = true;
       }
 
+      if (Array.isArray(data.students) && data.students.length > 0) {
+        const localStudents = getStudents();
+        const studentMap = new Map<string, Student>();
+        localStudents.forEach((s) => studentMap.set(s.id, s));
+        data.students.forEach((s: Student) => studentMap.set(s.id, s));
+        const mergedStudents = Array.from(studentMap.values());
+        setStored(KEYS.STUDENTS, mergedStudents);
+        updatedAny = true;
+      }
+
+      if (Array.isArray(data.subjectGrades) && data.subjectGrades.length > 0) {
+        const localGrades = getSubjectGrades();
+        const gradeMap = new Map<string, SubjectGradeRecord>();
+        localGrades.forEach((g) => gradeMap.set(g.id, g));
+        data.subjectGrades.forEach((g: SubjectGradeRecord) => gradeMap.set(g.id, g));
+        const mergedGrades = Array.from(gradeMap.values());
+        setStored(KEYS.GRADES, mergedGrades);
+        updatedAny = true;
+      }
+
       if (Array.isArray(data.parentExcuses) && data.parentExcuses.length > 0) {
         const localExcuses = getParentExcuses();
         const excuseMap = new Map<string, ParentExcuse>();

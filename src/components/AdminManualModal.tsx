@@ -81,7 +81,7 @@ export const AdminManualModal: React.FC<AdminManualModalProps> = ({
         keywords: ['layout', 'navigation', 'tabs', 'menu', 'sitemap', 'dashboard', 'lost', 'where', 'start'],
         content: {
           purpose:
-            'The Principal Console is the command center of AttendIQ. It gives you 360-degree oversight over daily attendance rates, teacher clock-ins, student risk alerts, exam reports, and institutional credentials without needing technical training.',
+            'The Principal Console is the command center of ResultIQ. It gives you 360-degree oversight over terminal results, subject gradebooks, student risk alerts, exam reports, and institutional credentials without needing technical training.',
           whereToFind: 'Main dashboard view when logged in as "Principal" or switching roles in the top navbar.',
           stepByStep: [
             'Top Executive Header: Displays overall school rate, today’s date, and quick action buttons (WhatsApp Summary, Branding, Teachers Roster, CSV Export, Print).',
@@ -135,7 +135,7 @@ export const AdminManualModal: React.FC<AdminManualModalProps> = ({
         keywords: ['chronic', 'absent', 'watchlist', 'frequent', 'whatsapp', 'alert', 'parents', 'excuse', 'intervention', 'truancy'],
         content: {
           purpose:
-            'Identify at-risk learners before they fall behind academically. AttendIQ automatically calculates cumulative unexcused absences and provides 1-click guardian communication tools.',
+            'Identify at-risk learners before they fall behind academically. ResultIQ automatically calculates cumulative unexcused absences and provides 1-click guardian communication tools.',
           whereToFind: 'Tab 2: "Frequent Absences & Follow-up"',
           stepByStep: [
             'Click "Frequent Absences & Follow-up" on the navigation bar.',
@@ -292,7 +292,7 @@ export const AdminManualModal: React.FC<AdminManualModalProps> = ({
         keywords: ['whitelabel', 'branding', 'logo', 'crest', 'school name', 'license', 'subscription', 'renew', 'termly'],
         content: {
           purpose:
-            'Transform AttendIQ into your institution’s proprietary branded software platform and manage software rental subscriptions.',
+            'Transform ResultIQ into your institution’s proprietary branded software platform and manage software rental subscriptions.',
           whereToFind: 'Header button: "Branding & License" or click the School Crest in the top navbar',
           stepByStep: [
             'Click "Branding & License" in the executive header.',
@@ -300,7 +300,7 @@ export const AdminManualModal: React.FC<AdminManualModalProps> = ({
             'Select your School Crest icon or upload a custom crest image.',
             'Click "Save Institutional Identity": All report cards, headers, and login screens update immediately.',
             'Tab 2 (License & Subscription): View your current commercial subscription status, expiry date, pupil quota, and days remaining.',
-            'To Renew Subscription: Paste the cryptographic license key provided by AttendIQ Sales into the box and click "Verify & Activate License Key".',
+            'To Renew Subscription: Paste the cryptographic license key provided by ResultIQ Sales into the box and click "Verify & Activate License Key".',
           ],
           proTips: [
             'If your subscription expires or is suspended, the system enters read-only audit mode until a valid renewal key is activated.',
@@ -612,7 +612,7 @@ export const AdminManualModal: React.FC<AdminManualModalProps> = ({
         <div className="p-3.5 sm:px-6 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <span>AttendIQ™ Institutional Principal Console • Version 2.0</span>
+            <span>ResultIQ™ Institutional Academic & Result Console • Version 2.0</span>
           </div>
           <button
             type="button"

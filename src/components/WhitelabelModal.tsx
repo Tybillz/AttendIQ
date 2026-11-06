@@ -593,7 +593,7 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                   </h4>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Enter the commercial license key provided by your AttendIQ software representative upon renewal or term subscription payment.
+                  Enter the commercial license key provided by your ResultIQ software representative upon renewal or term subscription payment.
                 </p>
 
                 <form onSubmit={handleActivateLicense} className="space-y-3">
@@ -603,7 +603,7 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                       required
                       value={licenseInput}
                       onChange={(e) => setLicenseInput(e.target.value.toUpperCase())}
-                      placeholder="e.g. ATIQ-TERM-APEX-270215-E1A4-98F2"
+                      placeholder="e.g. RIQ-TERM-APEX-270215-E1A4-98F2"
                       className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-xs font-bold text-slate-900 uppercase focus:outline-none focus:border-indigo-600"
                     />
                     <button

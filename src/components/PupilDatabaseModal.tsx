@@ -400,14 +400,13 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                       <th className="py-2.5 px-3">Roll #</th>
                       <th className="py-2.5 px-3">Class</th>
                       <th className="py-2.5 px-3">Parent Contact</th>
-                      <th className="py-2.5 px-3 text-center">Attendance Rate</th>
+                      <th className="py-2.5 px-3 text-center">Academic Standing</th>
                       <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredStudents.map((s) => {
                       const cName = classes.find((c) => c.id === s.classId)?.name || s.classId;
-                      const { attendanceRate: rate } = calculateStudentAttendanceMetrics(s);
 
                       return (
                         <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
@@ -442,16 +441,8 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                             <span className="text-[10px] text-slate-500">{s.parentPhone}</span>
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] ${
-                                rate >= 90
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : rate >= 80
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-rose-100 text-rose-800'
-                              }`}
-                            >
-                              {rate}% ({s.totalPresent}P / {s.totalAbsent}A)
+                            <span className="inline-block px-2.5 py-0.5 rounded-full font-bold text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Active Scholar
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-right">
@@ -871,7 +862,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                   <UserPlus className="h-4 w-4 text-indigo-600" />
                   Employ / Register New Teacher
                 </h5>
-                <span className="text-[11px] font-medium text-slate-400">Linked to Nigerian Classroom Attendance Portal</span>
+                <span className="text-[11px] font-medium text-slate-400">Linked to Academic Registrar & Result Management Hub</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">

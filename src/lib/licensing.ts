@@ -145,9 +145,9 @@ export function generateSignedLicenseKey(
     .join('')
     .slice(0, 4) || 'SCH';
   
-  // Format: ATIQ-PLAN-ACRONYM-YYYYMMDD-SIGNATURE
+  // Format: RIQ-PLAN-ACRONYM-YYYYMMDD-SIGNATURE (Supports both RIQ and ATIQ)
   const dateTag = validUntil.replace(/-/g, '').slice(2); // e.g. "270115"
-  const licenseKey = `ATIQ-${planType.toUpperCase()}-${schoolAcronym}-${dateTag}-${signature}`;
+  const licenseKey = `RIQ-${planType.toUpperCase()}-${schoolAcronym}-${dateTag}-${signature}`;
   
   const license: SchoolLicense = {
     licenseKey,
@@ -158,9 +158,9 @@ export function generateSignedLicenseKey(
     validUntil,
     maxPupils,
     maxStaff,
-    features: ['daily_roll_call', 'gps_anticheat', 'nerdc_gradebook', 'pdf_terminal_reports', 'whatsapp_safety_alerts'],
+    features: ['result_checking_portal', 'multi_factor_parent_2fa', 'nerdc_subject_gradebook', 'official_watermark_seal', 'pdf_terminal_reports', 'whatsapp_result_dispatch', 'csv_bulk_import'],
     signature,
-    vendorNotes: `Licensed commercially by AttendIQ Platforms for ${durationMonths} month(s).`,
+    vendorNotes: `Licensed commercially by ResultIQ Platforms for ${durationMonths} month(s).`,
   };
   
   return { licenseKey, license };
@@ -291,10 +291,10 @@ export function activateLicenseKey(
 
     const parts = trimmedKey.split('-');
     
-    if (parts.length < 5 || parts[0] !== 'ATIQ') {
+    if (parts.length < 5 || (parts[0] !== 'ATIQ' && parts[0] !== 'RIQ')) {
       return {
         success: false,
-        message: 'Invalid license key format. Authentic AttendIQ keys begin with "ATIQ-" followed by plan and signature.',
+        message: 'Invalid license key format. Authentic ResultIQ keys begin with "RIQ-" or "ATIQ-" followed by plan and signature.',
       };
     }
     

@@ -280,7 +280,7 @@ export async function downloadStudentReportCardPDF(
   doc.setTextColor(...accentColor);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text('OFFICIAL CONTINUOUS ASSESSMENT & ATTENDANCE TERMINAL DOSSIER', pageWidth / 2, 38, { align: 'center' });
+  doc.text('OFFICIAL TERMINAL ACADEMIC ASSESSMENT & EXAMINATION DOSSIER', pageWidth / 2, 38, { align: 'center' });
 
   // 3. Render Anti-Criminality Transparent Watermark Layer
   drawAntiTamperWatermark(doc, pageWidth, pageHeight, branding, report.student.rollNumber, logoBase64);
@@ -303,29 +303,24 @@ export async function downloadStudentReportCardPDF(
   doc.text(`TERM: First Term`, 110, 65);
   doc.text(`PARENT PHONE: ${report.student.parentPhone || 'N/A'}`, 110, 71);
 
-  // 5. Attendance Summary Box
+  // 5. Academic Performance Summary Box (Replaced Attendance)
   doc.setFillColor(248, 250, 252);
   doc.roundedRect(12, 77, pageWidth - 24, 16, 1.5, 1.5, 'FD');
 
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text(`TIMES SCHOOL OPENED: ${report.attendance.totalDays}`, 16, 84);
-  doc.text(`TIMES PRESENT: ${report.attendance.totalPresent}`, 75, 84);
-  doc.text(`TIMES ABSENT: ${report.attendance.totalAbsent}`, 125, 84);
-  doc.text(`ATTENDANCE RATE: ${report.attendance.attendanceRateFormatted}`, 165, 84);
+  doc.text(`TOTAL MARKS: ${report.grandTotal} / ${report.maxPossible}`, 16, 84);
+  doc.text(`WEIGHTED AVERAGE: ${report.termAverage}%`, 75, 84);
+  doc.text(`CLASS POSITION: ${report.classPositionString}`, 125, 84);
+  const academicStanding = report.termAverageNum >= 75 ? 'Distinction / Honors' : report.termAverageNum >= 60 ? 'Credit / Good Standing' : 'Satisfactory Pass';
+  doc.text(`STANDING: ${academicStanding}`, 165, 84);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    `Punctuality Status: ${
-      report.attendance.attendanceRate >= 85
-        ? 'Exemplary Attendance'
-        : report.attendance.attendanceRate >= 70
-        ? 'Moderate Attendance'
-        : 'Requires Administrative Attention'
-    }`,
+    `Official Academic Evaluation: Standard NERDC Secondary/Primary Curriculum Standards`,
     16,
     89
   );

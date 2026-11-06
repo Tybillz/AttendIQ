@@ -404,19 +404,9 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     🎂 Birthday Today! {studentAge ? `(Turning ${studentAge})` : ''} 🎉
                   </span>
                 )}
-                {activeStudent.totalAbsent >= 3 ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/80 text-white flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> {activeStudent.totalAbsent} Days Absent
-                  </span>
-                ) : activeStudent.totalAbsent >= 2 ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/80 text-white flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> {activeStudent.totalAbsent} Days Absent
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/40 text-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Regular Attendance
-                  </span>
-                )}
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/40 text-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3" /> Enrolled Scholar
+                </span>
               </div>
 
               <h2 className="text-2xl font-black tracking-tight text-white flex items-center gap-2 justify-center sm:justify-start">
@@ -488,25 +478,23 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             </div>
           </div>
 
-          {/* Quick Metrics Cards */}
+          {/* Quick Academic Metrics Cards */}
           <div className="grid grid-cols-4 gap-2 mt-5">
             <div className="p-2.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-[11px] text-slate-300 block">Total Present</span>
-              <span className="text-xl font-bold text-emerald-400">{student.totalPresent} Days</span>
+              <span className="text-[11px] text-slate-300 block">Academic Records</span>
+              <span className="text-xl font-bold text-emerald-400">{student.academicRecords?.length || 0} Tests</span>
             </div>
             <div className="p-2.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-[11px] text-slate-300 block">Total Absent</span>
-              <span className="text-xl font-bold text-rose-400">{student.totalAbsent} Days</span>
+              <span className="text-[11px] text-slate-300 block">Class Section</span>
+              <span className="text-sm font-bold text-white truncate block mt-1">{classNameTitle}</span>
             </div>
             <div className="p-2.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-[11px] text-slate-300 block">Attendance Rate</span>
-              <span className="text-xl font-bold text-sky-300">{attendanceRate}%</span>
+              <span className="text-[11px] text-slate-300 block">Student Roll ID</span>
+              <span className="text-base font-mono font-bold text-sky-300 mt-0.5 block">{student.rollNumber}</span>
             </div>
             <div className="p-2.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-[11px] text-slate-300 block">Consecutive Missed</span>
-              <span className="text-xl font-bold text-amber-300">
-                {student.consecutiveAbsences > 0 ? `${student.consecutiveAbsences} Days` : 'None (Active)'}
-              </span>
+              <span className="text-[11px] text-slate-300 block">Academic Standing</span>
+              <span className="text-sm font-bold text-emerald-300 mt-1 block">Active Scholar</span>
             </div>
           </div>
         </div>

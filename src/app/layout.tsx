@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const viewport: Viewport = {
-  themeColor: '#4f46e5',
+  themeColor: '#0f172a',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -21,13 +21,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'AttendIQ | Smart School Attendance & Pupil Management',
-  description: 'Modern, web-based school attendance tracker with instant roll call, automated parent alerts, at-risk chronic absenteeism detection, and administrative performance analytics.',
+  title: 'ResultIQ | Official School Result Portal & Terminal Academic Hub',
+  description: 'Official digital result checking and terminal academic reporting portal for parents, students, and educators. Secure, verified, and tamper-proof.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'AttendIQ',
+    title: 'ResultIQ',
   },
   icons: {
     icon: '/icon-192.png',
