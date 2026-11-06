@@ -122,6 +122,114 @@ export function updateStudent(updated: Student): void {
   saveStudents(students);
 }
 
+export function moveStudentToClass(
+  studentId: string,
+  newClassId: string,
+  actorRole: 'admin' | 'teacher' = 'admin',
+  actorName: string = 'School Administrator'
+): boolean {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return false;
+  }
+  const students = getStudents();
+  const student = students.find((s) => s.id === studentId);
+  if (!student) return false;
+  if (student.classId === newClassId) return true;
+
+  const classes = getClasses();
+  const oldClass = classes.find((c) => c.id === student.classId);
+  const newClass = classes.find((c) => c.id === newClassId);
+  const oldClassName = oldClass ? oldClass.name : (student.classId === 'unassigned' ? 'Unassigned' : student.classId);
+  const newClassName = newClass ? newClass.name : (newClassId === 'unassigned' ? 'Unassigned' : newClassId);
+
+  const updatedStudents = students.map((s) => (s.id === studentId ? { ...s, classId: newClassId } : s));
+  saveStudents(updatedStudents);
+
+  try {
+    addAuditLog({
+      actorRole,
+      actorId: actorRole === 'admin' ? 'admin' : 'teacher',
+      actorName,
+      action: 'PUPIL_TRANSFERRED',
+      targetType: 'pupil',
+      targetId: student.id,
+      targetName: student.name,
+      classId: newClassId,
+      className: newClassName,
+      oldValue: `Class: ${oldClassName}`,
+      newValue: `Class: ${newClassName}`,
+      severity: 'info',
+      details: `Transferred pupil from ${oldClassName} to ${newClassName}`,
+    });
+  } catch (err) {
+    console.error('Audit log error on moveStudentToClass:', err);
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('attendiq:pupil-updated', { detail: { studentId, newClassId } }));
+  }
+
+  return true;
+}
+
+export function bulkMoveStudentsToClass(
+  studentIds: string[],
+  newClassId: string,
+  actorRole: 'admin' | 'teacher' = 'admin',
+  actorName: string = 'School Administrator'
+): { successCount: number; targetClassName: string } {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return { successCount: 0, targetClassName: '' };
+  }
+  const students = getStudents();
+  const classes = getClasses();
+  const targetClass = classes.find((c) => c.id === newClassId);
+  const targetClassName = targetClass ? targetClass.name : (newClassId === 'unassigned' ? 'Unassigned' : newClassId);
+
+  let successCount = 0;
+  const updatedStudents = students.map((s) => {
+    if (studentIds.includes(s.id)) {
+      const prevClass = classes.find((c) => c.id === s.classId);
+      const prevClassName = prevClass ? prevClass.name : (s.classId === 'unassigned' ? 'Unassigned' : s.classId);
+      successCount++;
+
+      try {
+        addAuditLog({
+          actorRole,
+          actorId: actorRole === 'admin' ? 'admin' : 'teacher',
+          actorName,
+          action: 'PUPIL_TRANSFERRED',
+          targetType: 'pupil',
+          targetId: s.id,
+          targetName: s.name,
+          classId: newClassId,
+          className: targetClassName,
+          oldValue: `Class: ${prevClassName}`,
+          newValue: `Class: ${targetClassName}`,
+          severity: 'info',
+          details: `Bulk transfer/promotion to ${targetClassName}`,
+        });
+      } catch (e) {
+        console.error('Audit log error on bulkMoveStudentsToClass:', e);
+      }
+
+      return { ...s, classId: newClassId };
+    }
+    return s;
+  });
+
+  if (successCount > 0) {
+    saveStudents(updatedStudents);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('attendiq:pupil-updated', { detail: { studentIds, newClassId } }));
+    }
+  }
+
+  return { successCount, targetClassName };
+}
+
 export function deleteStudent(studentId: string): void {
   if (isLicenseWriteRestricted()) {
     if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());

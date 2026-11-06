@@ -20,11 +20,14 @@ import {
   UserPlus,
   Check,
   ExternalLink,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Student, ClassSection, Teacher } from '@/types/attendance';
 import {
   addStudent,
   deleteStudent,
+  moveStudentToClass,
+  bulkMoveStudentsToClass,
   addClass,
   deleteClass,
   addTeacher,
@@ -44,7 +47,7 @@ interface PupilDatabaseModalProps {
   teachers: Teacher[];
   onDataUpdated: () => void;
   onSelectStudentProfile: (student: Student) => void;
-  defaultTab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers';
+  defaultTab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer';
   isLicenseLocked?: boolean;
 }
 
@@ -60,9 +63,57 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   isLicenseLocked = false,
 }) => {
   const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
-  const [activeTab, setActiveTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer'>(defaultTab);
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Transfer & Promotion state
+  const [transferSourceClass, setTransferSourceClass] = useState<string>(classes[0]?.id || '');
+  const [transferTargetClass, setTransferTargetClass] = useState<string>(classes[1]?.id || classes[0]?.id || '');
+  const [selectedPupilsForTransfer, setSelectedPupilsForTransfer] = useState<string[]>([]);
+  const [transferNotice, setTransferNotice] = useState<string | null>(null);
+  const [quickNotice, setQuickNotice] = useState<string | null>(null);
+
+  const handleQuickMovePupil = (studentId: string, studentName: string, newClassId: string) => {
+    if (isStrictReadOnly) {
+      alert('Action blocked: System is in read-only mode.');
+      return;
+    }
+    const success = moveStudentToClass(studentId, newClassId, 'admin', 'School Administrator');
+    if (success) {
+      const targetName = classes.find((c) => c.id === newClassId)?.name || 'Unassigned';
+      setQuickNotice(`✅ Moved "${studentName}" to ${targetName} successfully!`);
+      setTimeout(() => setQuickNotice(null), 3500);
+      onDataUpdated();
+    }
+  };
+
+  const handleExecuteBulkTransfer = () => {
+    if (isStrictReadOnly) {
+      alert('Action blocked: System is in read-only mode.');
+      return;
+    }
+    if (!transferTargetClass) {
+      alert('Please select a destination class.');
+      return;
+    }
+    if (selectedPupilsForTransfer.length === 0) {
+      alert('Please select at least one pupil to move.');
+      return;
+    }
+    const result = bulkMoveStudentsToClass(
+      selectedPupilsForTransfer,
+      transferTargetClass,
+      'admin',
+      'School Administrator'
+    );
+    if (result.successCount > 0) {
+      setTransferNotice(`🎉 Successfully moved and promoted ${result.successCount} pupil(s) to ${result.targetClassName}!`);
+      setSelectedPupilsForTransfer([]);
+      setTimeout(() => setTransferNotice(null), 4500);
+      onDataUpdated();
+    }
+  };
 
   useEffect(() => {
     if (isOpen && defaultTab) {
@@ -305,17 +356,27 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
             onClick={() => setActiveTab('pupils')}
             className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'pupils'
-                ? 'border-indigo-600 text-indigo-700 bg-white'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
             <Users className="h-4 w-4" /> All Pupils ({students.length})
           </button>
           <button
+            onClick={() => setActiveTab('transfer')}
+            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'transfer'
+                ? 'border-amber-500 text-amber-700 bg-white font-bold'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ArrowRightLeft className="h-4 w-4 text-amber-600" /> Move & Promote Pupils
+          </button>
+          <button
             onClick={() => setActiveTab('teachers')}
             className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'teachers'
-                ? 'border-indigo-600 text-indigo-700 bg-white'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -325,7 +386,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
             onClick={() => setActiveTab('classes')}
             className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'classes'
-                ? 'border-indigo-600 text-indigo-700 bg-white'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -335,7 +396,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
             onClick={() => setActiveTab('add_pupil')}
             className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'add_pupil'
-                ? 'border-indigo-600 text-indigo-700 bg-white'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -345,7 +406,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
             onClick={() => setActiveTab('bulk_import')}
             className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'bulk_import'
-                ? 'border-indigo-600 text-indigo-700 bg-white'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -356,6 +417,12 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
         {/* TAB 1: ALL PUPILS LIST */}
         {activeTab === 'pupils' && (
           <div className="flex-1 flex flex-col overflow-hidden">
+            {quickNotice && (
+              <div className="mx-4 mt-3 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
+                <span>{quickNotice}</span>
+                <button onClick={() => setQuickNotice(null)} className="text-emerald-700 hover:text-emerald-950 font-mono">✕</button>
+              </div>
+            )}
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -380,15 +447,27 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                       {c.name}
                     </option>
                   ))}
+                  <option value="unassigned">Unassigned</option>
                 </select>
               </div>
 
-              <button
-                onClick={() => setActiveTab('add_pupil')}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs"
-              >
-                <Plus className="h-3.5 w-3.5" /> Enroll Pupil
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('transfer')}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-2xs transition cursor-pointer"
+                  title="Move or promote pupils between classes"
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> Move / Promote Pupils
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('add_pupil')}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs transition cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Enroll Pupil
+                </button>
+              </div>
             </div>
 
             <div className="p-4 overflow-y-auto flex-1">
@@ -398,7 +477,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                     <tr>
                       <th className="py-2.5 px-3">Pupil</th>
                       <th className="py-2.5 px-3">Roll #</th>
-                      <th className="py-2.5 px-3">Class</th>
+                      <th className="py-2.5 px-3">Class (Click to Move)</th>
                       <th className="py-2.5 px-3">Parent Contact</th>
                       <th className="py-2.5 px-3 text-center">Academic Standing</th>
                       <th className="py-2.5 px-3 text-right">Actions</th>
@@ -406,8 +485,6 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredStudents.map((s) => {
-                      const cName = classes.find((c) => c.id === s.classId)?.name || s.classId;
-
                       return (
                         <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-2.5 px-3">
@@ -435,7 +512,22 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                           <td className="py-2.5 px-3 font-mono font-medium text-slate-600">
                             {s.rollNumber}
                           </td>
-                          <td className="py-2.5 px-3 text-slate-700 font-medium">{cName}</td>
+                          <td className="py-2.5 px-3">
+                            <select
+                              value={s.classId}
+                              disabled={isStrictReadOnly}
+                              onChange={(e) => handleQuickMovePupil(s.id, s.name, e.target.value)}
+                              className="text-xs font-bold px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:border-indigo-500 focus:outline-indigo-600 text-slate-800 cursor-pointer shadow-2xs transition"
+                              title="Click to move pupil to another class"
+                            >
+                              {classes.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                              <option value="unassigned">Unassigned</option>
+                            </select>
+                          </td>
                           <td className="py-2.5 px-3 text-slate-600">
                             <span className="block font-medium text-slate-800">{s.parentName}</span>
                             <span className="text-[10px] text-slate-500">{s.parentPhone}</span>
@@ -1086,6 +1178,188 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TAB 6: MOVE & PROMOTE PUPILS */}
+        {activeTab === 'transfer' && (
+          <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
+            {/* Header info */}
+            <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <ArrowRightLeft className="h-4 w-4 text-amber-600" />
+                  <span>Class Transfer & Academic Promotion Engine</span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Move individual or entire groups of pupils from one classroom/grade to another with full audit tracking.
+                </p>
+              </div>
+              <span className="text-[11px] font-mono font-bold px-3 py-1 bg-amber-100 text-amber-900 rounded-full border border-amber-300 self-start sm:self-auto">
+                Total School Pupils: {students.length}
+              </span>
+            </div>
+
+            {transferNotice && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
+                <span>{transferNotice}</span>
+                <button onClick={() => setTransferNotice(null)} className="text-emerald-700 hover:text-emerald-950 font-mono">✕</button>
+              </div>
+            )}
+
+            {/* Selection controls */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                {/* Source Class */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    1. Source Classroom (Moving From):
+                  </label>
+                  <select
+                    value={transferSourceClass}
+                    onChange={(e) => {
+                      setTransferSourceClass(e.target.value);
+                      setSelectedPupilsForTransfer([]);
+                    }}
+                    className="w-full text-xs font-bold px-3 py-2.5 rounded-xl bg-white border border-slate-300 focus:outline-indigo-600 text-slate-900 cursor-pointer shadow-2xs"
+                  >
+                    {classes.map((c) => {
+                      const count = students.filter((s) => s.classId === c.id).length;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({count} pupils enrolled)
+                        </option>
+                      );
+                    })}
+                    <option value="unassigned">
+                      Unassigned Pupils ({students.filter((s) => s.classId === 'unassigned').length} pupils)
+                    </option>
+                  </select>
+                </div>
+
+                {/* Target Class */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    2. Destination Classroom (Moving To):
+                  </label>
+                  <select
+                    value={transferTargetClass}
+                    onChange={(e) => setTransferTargetClass(e.target.value)}
+                    className="w-full text-xs font-bold px-3 py-2.5 rounded-xl bg-white border border-indigo-300 focus:outline-indigo-600 text-slate-900 cursor-pointer shadow-2xs"
+                  >
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id} disabled={c.id === transferSourceClass}>
+                        {c.name} {c.id === transferSourceClass ? '(Current Source)' : ''}
+                      </option>
+                    ))}
+                    <option value="unassigned" disabled={transferSourceClass === 'unassigned'}>
+                      Unassigned Pool
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              {(() => {
+                const sourcePupils = students.filter((s) => s.classId === transferSourceClass);
+                const isAllSelected = sourcePupils.length > 0 && selectedPupilsForTransfer.length === sourcePupils.length;
+                const targetName = classes.find((c) => c.id === transferTargetClass)?.name || 'Target Class';
+
+                return (
+                  <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isAllSelected) {
+                            setSelectedPupilsForTransfer([]);
+                          } else {
+                            setSelectedPupilsForTransfer(sourcePupils.map((s) => s.id));
+                          }
+                        }}
+                        disabled={sourcePupils.length === 0}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition cursor-pointer disabled:opacity-50"
+                      >
+                        {isAllSelected ? 'Deselect All' : `Select All (${sourcePupils.length}) Pupils`}
+                      </button>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {selectedPupilsForTransfer.length} of {sourcePupils.length} selected
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isStrictReadOnly || selectedPupilsForTransfer.length === 0 || transferSourceClass === transferTargetClass}
+                      onClick={handleExecuteBulkTransfer}
+                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-200 disabled:text-slate-400 text-slate-950 font-bold text-xs shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      <ArrowRightLeft className="h-4 w-4" />
+                      <span>Move {selectedPupilsForTransfer.length} Pupil(s) to {targetName}</span>
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Pupils List in Source Class */}
+            {(() => {
+              const sourcePupils = students.filter((s) => s.classId === transferSourceClass);
+              const sourceName = classes.find((c) => c.id === transferSourceClass)?.name || 'Selected Class';
+
+              if (sourcePupils.length === 0) {
+                return (
+                  <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 text-xs font-medium">
+                    No pupils are currently enrolled in {sourceName}. Select another source classroom above.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Select Pupils in {sourceName} to Move:
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {sourcePupils.map((s) => {
+                      const isSelected = selectedPupilsForTransfer.includes(s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedPupilsForTransfer((prev) => prev.filter((id) => id !== s.id));
+                            } else {
+                              setSelectedPupilsForTransfer((prev) => [...prev, s.id]);
+                            }
+                          }}
+                          className={`p-3 rounded-xl border transition cursor-pointer flex items-center gap-3 select-none ${
+                            isSelected
+                              ? 'bg-amber-50/80 border-amber-400 shadow-xs'
+                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer pointer-events-none"
+                          />
+                          <img
+                            src={s.photoUrl}
+                            alt={s.name}
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-bold text-slate-900 block truncate">{s.name}</span>
+                            <span className="text-[10px] font-mono text-slate-500 block">Roll: {s.rollNumber}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

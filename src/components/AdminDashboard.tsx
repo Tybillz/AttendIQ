@@ -49,6 +49,7 @@ import {
   Cake,
   FileQuestion,
   Bell,
+  ArrowRightLeft,
 } from 'lucide-react';
 import SchoolPerimeterPicker from './SchoolPerimeterPicker';
 import { AdminManualModal } from './AdminManualModal';
@@ -74,6 +75,7 @@ import {
   deleteClass,
   reassignClassTeacher,
   deleteStudent,
+  moveStudentToClass,
   getStaffQueries,
   issueStaffQuery,
   resolveStaffQuery,
@@ -123,7 +125,7 @@ interface AdminDashboardProps {
   onDateChange: (date: string) => void;
   alertSettings: AlertSettings;
   teacherAnalytics: TeacherAnalytics[];
-  onOpenDatabaseModal: (tab?: 'pupils' | 'teachers' | 'classes' | 'add_pupil' | 'bulk_import') => void;
+  onOpenDatabaseModal: (tab?: 'pupils' | 'teachers' | 'classes' | 'add_pupil' | 'bulk_import' | 'transfer') => void;
   onOpenSettingsModal: () => void;
   onSelectStudentProfile: (student: Student) => void;
   onDataUpdated?: () => void;
@@ -561,6 +563,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       deleteClass(classId);
       setAccessFeedback(`Class "${className}" deleted. Pupils safely reallocated.`);
       setTimeout(() => setAccessFeedback(null), 4000);
+      if (onDataUpdated) onDataUpdated();
+    }
+  };
+
+  const handleMovePupilClass = (studentId: string, studentName: string, newClassId: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot transfer pupils in strict read-only mode.');
+      return;
+    }
+    const ok = moveStudentToClass(studentId, newClassId, 'admin', 'School Administrator');
+    if (ok) {
+      const target = classes.find((c) => c.id === newClassId)?.name || (newClassId === 'unassigned' ? 'Unassigned' : newClassId);
+      setAccessFeedback(`Moved pupil "${studentName}" to ${target} successfully.`);
+      setTimeout(() => setAccessFeedback(null), 3500);
       if (onDataUpdated) onDataUpdated();
     }
   };
@@ -3057,6 +3073,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => onOpenDatabaseModal('transfer')}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Move or promote pupils between classes"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                <span>Move / Promote Pupils</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => onOpenDatabaseModal('add_pupil')}
                 className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
@@ -3157,9 +3182,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           {s.rollNumber}
                         </td>
                         <td className="py-3 px-3">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold ${cls ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
-                            {cls ? cls.name : 'Unassigned'}
-                          </span>
+                          <select
+                            value={s.classId}
+                            disabled={isStrictReadOnly}
+                            onChange={(e) => handleMovePupilClass(s.id, s.name, e.target.value)}
+                            className="text-xs font-bold px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:border-indigo-500 focus:outline-indigo-600 text-slate-800 cursor-pointer shadow-2xs transition"
+                            title="Click to move pupil to another class"
+                          >
+                            {classes.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                            <option value="unassigned">Unassigned</option>
+                          </select>
                         </td>
                         <td className="py-3 px-3">
                           <span className="font-semibold text-slate-800 block">{s.parentName}</span>

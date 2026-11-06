@@ -37,6 +37,7 @@ import {
   Info,
   Users,
   Building2,
+  ArrowRightLeft,
 } from 'lucide-react';
 import {
   Student,
@@ -160,6 +161,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
   const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'preview'>('gradebook');
   const [isPupilModalOpen, setIsPupilModalOpen] = useState<boolean>(false);
+  const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer'>('pupils');
   const [isBrandingModalOpen, setIsBrandingModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
 
@@ -912,11 +914,27 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   <>
                     <button
                       type="button"
-                      onClick={() => setIsPupilModalOpen(true)}
+                      onClick={() => {
+                        setPupilModalDefaultTab('pupils');
+                        setIsPupilModalOpen(true);
+                      }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
                     >
                       <Users className="w-4 h-4 shrink-0 text-slate-400" />
                       <span className="flex-1">Pupil Database & Directory</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPupilModalDefaultTab('transfer');
+                        setIsPupilModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-amber-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer text-left"
+                      title="Move or promote pupils between classes"
+                    >
+                      <ArrowRightLeft className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span className="flex-1">Move & Promote Pupils</span>
                     </button>
 
                     <button
@@ -1485,6 +1503,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           students={students}
           classes={classes}
           teachers={teachers}
+          defaultTab={pupilModalDefaultTab}
           onDataUpdated={refreshData}
           onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
         />
