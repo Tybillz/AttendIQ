@@ -109,23 +109,22 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     verifiedContact: string;
   } | null>(null);
 
-  // Vendor Licensing Modal & Passcode Authentication
+  // Vendor Licensing Modal State (accessible to administrators)
   const [isVendorModalOpen, setIsVendorModalOpen] = useState<boolean>(false);
-  const [isVendorAuthModalOpen, setIsVendorAuthModalOpen] = useState<boolean>(false);
-  const [vendorPasscodeInput, setVendorPasscodeInput] = useState<string>('');
-  const [vendorAuthError, setVendorAuthError] = useState<string | null>(null);
 
-  // Staff / Admin Management State
+  // Authentication Sessions: Distinct Separated Teacher vs Principal Modals
   const [authSession, setAuthSession] = useState<AuthSession | null>(getAuthSession());
-  const [isStaffLoginModalOpen, setIsStaffLoginModalOpen] = useState<boolean>(false);
-  const [staffRoleInput, setStaffRoleInput] = useState<'teacher' | 'admin'>('teacher');
+  const [isTeacherModalOpen, setIsTeacherModalOpen] = useState<boolean>(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
   const [staffTeacherId, setStaffTeacherId] = useState<string>(initialTeachers[0]?.id || '');
-  const [staffPinInput, setStaffPinInput] = useState<string>('');
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
-  const [staffLoginError, setStaffLoginError] = useState<string | null>(null);
+  const [teacherPinInput, setTeacherPinInput] = useState<string>('');
+  const [adminPasscodeInput, setAdminPasscodeInput] = useState<string>('');
+  const [teacherLoginError, setTeacherLoginError] = useState<string | null>(null);
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
 
   // Staff back-office views
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
   const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'pupils' | 'audit' | 'branding'>('gradebook');
   const [isPupilModalOpen, setIsPupilModalOpen] = useState<boolean>(false);
   const [isBrandingModalOpen, setIsBrandingModalOpen] = useState<boolean>(false);
@@ -278,67 +277,55 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       `• *Class:* ${activeClass.name}\n` +
       `• *Academic Session:* ${selectedSession} • ${selectedTerm}\n` +
       `• *Authenticity Ref:* ${verificationAuditRecord?.serial || 'AUTHENTIC'}\n\n` +
-      `Official verified transcript can be accessed online at: ${window.location.origin}`;
+      `Official verified transcript can be accessed online at: ${typeof window !== 'undefined' ? window.location.origin : 'https://attendiq.vercel.app'}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  // Staff Login Handler
-  const handleStaffLogin = (e: React.FormEvent) => {
+  // 1. DEDICATED TEACHER LOGIN HANDLER
+  const handleTeacherLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setStaffLoginError(null);
-
-    if (staffRoleInput === 'admin') {
-      const trimmed = staffPinInput.trim();
-      if (trimmed === 'admin123' || trimmed === 'attendiq' || trimmed === 'resultiq') {
-        const session: AuthSession = {
-          role: 'admin',
-          loginTime: new Date().toISOString(),
-        };
-        saveAuthSession(session);
-        setAuthSession(session);
-        setIsStaffLoginModalOpen(false);
-        setStaffPinInput('');
-      } else {
-        setStaffLoginError('Invalid Administrator Passcode. (Default demo: admin123)');
-      }
+    setTeacherLoginError(null);
+    const targetTeacher = teachers.find((t) => t.id === staffTeacherId) || teachers[0];
+    const trimmed = teacherPinInput.trim();
+    if (trimmed === '1234' || trimmed === targetTeacher.phone.slice(-4)) {
+      const session: AuthSession = {
+        role: 'teacher',
+        teacherId: targetTeacher.id,
+        teacherName: targetTeacher.name,
+        loginTime: new Date().toISOString(),
+      };
+      saveAuthSession(session);
+      setAuthSession(session);
+      setStaffActiveTab('gradebook'); // Strictly Gradebook only for teachers
+      setIsTeacherModalOpen(false);
+      setTeacherPinInput('');
     } else {
-      const targetTeacher = teachers.find((t) => t.id === staffTeacherId) || teachers[0];
-      const trimmed = staffPinInput.trim();
-      if (trimmed === '1234' || trimmed === targetTeacher.phone.slice(-4)) {
-        const session: AuthSession = {
-          role: 'teacher',
-          teacherId: targetTeacher.id,
-          teacherName: targetTeacher.name,
-          loginTime: new Date().toISOString(),
-        };
-        saveAuthSession(session);
-        setAuthSession(session);
-        setStaffActiveTab('gradebook'); // Teachers are strictly restricted to Gradebook only!
-        setIsStaffLoginModalOpen(false);
-        setStaffPinInput('');
-      } else {
-        setStaffLoginError('Invalid Teacher PIN. (Default demo PIN: 1234)');
-      }
+      setTeacherLoginError('Invalid Teacher PIN. (Default demo PIN: 1234)');
+    }
+  };
+
+  // 2. DEDICATED PRINCIPAL / ADMIN LOGIN HANDLER
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoginError(null);
+    const trimmed = adminPasscodeInput.trim();
+    if (trimmed === 'admin123' || trimmed === 'attendiq' || trimmed === 'resultiq' || trimmed === 'vendor2026') {
+      const session: AuthSession = {
+        role: 'admin',
+        loginTime: new Date().toISOString(),
+      };
+      saveAuthSession(session);
+      setAuthSession(session);
+      setIsAdminModalOpen(false);
+      setAdminPasscodeInput('');
+    } else {
+      setAdminLoginError('Invalid Administrator Passcode. (Default demo: admin123)');
     }
   };
 
   const handleStaffLogout = () => {
     performAuthLogout();
     setAuthSession(null);
-  };
-
-  // Vendor Passcode Verification Handler
-  const handleVendorUnlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    setVendorAuthError(null);
-    const pass = vendorPasscodeInput.trim();
-    if (pass === 'vendor2026' || pass === 'admin123' || pass === 'resultiq2026') {
-      setIsVendorAuthModalOpen(false);
-      setVendorPasscodeInput('');
-      setIsVendorModalOpen(true);
-    } else {
-      setVendorAuthError('Invalid Vendor Authority Passcode. Access denied.');
-    }
   };
 
   return (
@@ -355,14 +342,6 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             <span className="text-slate-400 hidden sm:inline">• Official Terminal Assessment Verification</span>
           </div>
           <div className="flex items-center gap-4 text-slate-300">
-            <button
-              type="button"
-              onClick={() => setIsVendorAuthModalOpen(true)}
-              className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer"
-            >
-              <Key className="w-3 h-3" />
-              <span>Vendor Authority</span>
-            </button>
             <span className="text-slate-400 font-semibold">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>
           </div>
         </div>
@@ -388,8 +367,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             </div>
           </div>
 
-          {/* Right Action: Staff Mode or Login */}
-          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          {/* Right Action: SEPARATED Teacher Login & Principal / Admin Buttons */}
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             {authSession ? (
               <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs">
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-white rounded-lg font-semibold text-slate-800 shadow-2xs">
@@ -397,27 +376,46 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   <span>
                     {authSession.role === 'admin'
                       ? 'Principal Console (Admin)'
-                      : `Teacher: ${authSession.teacherName?.split(' ')[1] || 'Staff'} (Restricted)`}
+                      : `Teacher: ${authSession.teacherName?.split(' ')[1] || 'Staff'}`}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleStaffLogout}
                   className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-white transition cursor-pointer"
-                  title="Sign out of Staff Mode"
+                  title="Sign out"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setIsStaffLoginModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
-              >
-                <Lock className="w-3.5 h-3.5 text-slate-500" />
-                <span>Authorized Staff Login</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* 1. SEPARATE TEACHER PORTAL BUTTON */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTeacherLoginError(null);
+                    setIsTeacherModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Teacher Portal</span>
+                </button>
+
+                {/* 2. SEPARATE PRINCIPAL / ADMIN BUTTON */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminLoginError(null);
+                    setIsAdminModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-300" />
+                  <span>Principal / Admin</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -431,7 +429,9 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           <div className="bg-slate-900 text-white px-4 sm:px-8 py-2 border-t border-slate-800">
             <div className="max-w-7xl mx-auto flex items-center justify-between text-xs overflow-x-auto">
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-400 font-mono text-[11px] mr-2">STAFF CONSOLE:</span>
+                <span className="text-slate-400 font-mono text-[11px] mr-2">
+                  {authSession.role === 'admin' ? 'ADMIN CONSOLE:' : 'TEACHER CONSOLE:'}
+                </span>
 
                 {/* Visible to Teachers & Admin */}
                 <button
@@ -503,7 +503,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   </>
                 ) : (
                   <span className="text-[11px] text-amber-300/80 font-mono italic ml-2">
-                    🔒 Teacher mode: Read/Write marks for assigned classes only
+                    🔒 Teacher gradebook mode: Score entry for assigned classes
                   </span>
                 )}
               </div>
@@ -580,7 +580,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         {(!authSession || staffActiveTab !== 'gradebook') && (
           <div>
             {!verifiedStudent ? (
-              /* ── CHECK RESULT CARD: Result Arena Inspired, Distinct Elevated Security ── */
+              /* ── CHECK RESULT CARD: Elevated Security & Dignity ── */
               <div className="max-w-xl mx-auto space-y-6">
                 {/* Main Card Surface */}
                 <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl overflow-hidden">
@@ -658,7 +658,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                       </div>
                     </div>
 
-                    {/* STEP 2: STUDENT IDENTIFICATION (RED CIRCLE 1 REMOVED - NO PUBLIC ROSTER DROPDOWN) */}
+                    {/* STEP 2: STUDENT IDENTIFICATION (NO PUBLIC ROSTER DROPDOWN) */}
                     <div className="pt-2 border-t border-slate-100 space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -693,13 +693,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                             <Search className="w-4 h-4" />
                           </div>
                         </div>
-                        {/* Red 1 deleted: "Or pick from Primary 4 - Gold roster: Choose Student Roster..." has been completely removed to prevent unauthorized access */}
                       </div>
                     </div>
 
-                    {/* STEP 3: HIGH-SECURITY 2FA ROTATING TOKEN AUTHENTICATOR (RFC 6238 TOTP)
-                        (RED CIRCLE 2 BADGE & BLUE CIRCLE 3 TABS DELETED)
-                    */}
+                    {/* STEP 3: HIGH-SECURITY 2FA ROTATING TOKEN AUTHENTICATOR (RFC 6238 TOTP) */}
                     <div className="pt-2 border-t border-slate-100 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -850,45 +847,37 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                     </div>
                   </form>
 
-                  {/* Card Footer */}
+                  {/* Card Footer: SEPARATED Teacher vs Principal links; Circled Vendor button removed */}
                   <div className="py-4 px-6 sm:px-8 bg-slate-50 border-t border-slate-100 text-center">
                     <p className="text-xs text-slate-500">
-                      Not a student? Log in as a{' '}
+                      Not a student? Sign in to your portal:{' '}
                       <button
                         type="button"
                         onClick={() => {
-                          setStaffRoleInput('teacher');
-                          setIsStaffLoginModalOpen(true);
+                          setTeacherLoginError(null);
+                          setIsTeacherModalOpen(true);
                         }}
                         className="text-slate-900 font-bold hover:underline cursor-pointer"
                       >
-                        Teacher
+                        Teacher Portal
                       </button>{' '}
-                      or{' '}
+                      &bull;{' '}
                       <button
                         type="button"
                         onClick={() => {
-                          setStaffRoleInput('admin');
-                          setIsStaffLoginModalOpen(true);
+                          setAdminLoginError(null);
+                          setIsAdminModalOpen(true);
                         }}
                         className="text-slate-900 font-bold hover:underline cursor-pointer"
                       >
-                        Administrator
+                        Principal / Administrator
                       </button>
                     </p>
 
-                    <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-center text-[11px] text-slate-400">
                       <span className="flex items-center gap-1 font-mono">
-                        <Lock className="w-3 h-3" /> 256-Bit SSL Record Encryption
+                        <Lock className="w-3 h-3" /> 256-Bit SSL Record Encryption &bull; Official Digital Terminal Registry
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsVendorAuthModalOpen(true)}
-                        className="text-slate-600 font-semibold hover:text-slate-900 underline cursor-pointer flex items-center gap-1"
-                      >
-                        <Key className="w-3 h-3 text-amber-600" />
-                        <span>Vendor Licensing Console</span>
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -940,7 +929,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   </div>
                 </div>
 
-                {/* The Pure Academic Terminal Report Sheet (Zero Attendance references) */}
+                {/* Pure Academic Terminal Report Sheet */}
                 <TerminalReportSheet
                   student={verifiedStudent}
                   className={activeClass?.name || 'Primary 4'}
@@ -965,37 +954,30 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             <span>&bull;</span>
             <span>Time-based 2FA Security Architecture</span>
           </div>
-          <div className="flex items-center gap-4 text-[11px] text-slate-400">
-            <span>Powered by ResultIQ Systems</span>
-            <button
-              type="button"
-              onClick={() => setIsVendorAuthModalOpen(true)}
-              className="text-slate-600 hover:text-slate-900 font-semibold underline cursor-pointer"
-            >
-              School Licensing Authority
-            </button>
+          <div className="text-[11px] text-slate-400">
+            Powered by ResultIQ Systems &bull; Official Digital Registrar
           </div>
         </div>
       </footer>
 
       {/* ─────────────────────────────────────────────────────────────
-          4. MODALS & SECURE CONSOLES
+          4. SEPARATED MODALS
           ───────────────────────────────────────────────────────────── */}
 
-      {/* Vendor Passcode Verification Modal */}
-      {isVendorAuthModalOpen && (
+      {/* 1. DEDICATED TEACHER PORTAL MODAL */}
+      {isTeacherModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-sm w-full overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden">
             <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Key className="w-4 h-4 text-amber-400" />
-                <h3 className="font-bold text-sm">Vendor Authority Authorization</h3>
+                <BookOpen className="w-4 h-4 text-amber-400" />
+                <h3 className="font-bold text-sm">Teacher Portal Sign-In</h3>
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  setIsVendorAuthModalOpen(false);
-                  setVendorAuthError(null);
+                  setIsTeacherModalOpen(false);
+                  setTeacherLoginError(null);
                 }}
                 className="text-slate-400 hover:text-white"
               >
@@ -1003,44 +985,125 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleVendorUnlock} className="p-5 space-y-4">
+            <form onSubmit={handleTeacherLogin} className="p-6 space-y-4">
               <p className="text-xs text-slate-600 leading-relaxed">
-                Authorized vendor and proprietor access only. Enter the licensor master passcode to generate signed commercial product keys.
+                Authorized for class & subject teachers to enter continuous assessment scores (CA1, CA2, Exam) and terminal remarks.
               </p>
 
               <div>
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Vendor Master Passcode:
+                  Select Teacher Identity:
+                </label>
+                <select
+                  value={staffTeacherId}
+                  onChange={(e) => setStaffTeacherId(e.target.value)}
+                  className="w-full text-xs font-medium px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                >
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.subject || 'Class Teacher'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                  4-Digit Teacher PIN:
                 </label>
                 <input
                   type="password"
+                  maxLength={4}
                   required
-                  placeholder="Enter vendor passcode (vendor2026)"
-                  value={vendorPasscodeInput}
-                  onChange={(e) => setVendorPasscodeInput(e.target.value)}
+                  placeholder="Enter 4-digit PIN (1234)"
+                  value={teacherPinInput}
+                  onChange={(e) => setTeacherPinInput(e.target.value)}
                   className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
                 />
               </div>
 
-              {vendorAuthError && (
+              {teacherLoginError && (
                 <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
-                  {vendorAuthError}
+                  {teacherLoginError}
                 </div>
               )}
 
-              <button
-                type="submit"
-                className="w-full py-2.5 px-4 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow-xs"
-              >
-                Unlock Vendor Console &rarr;
-              </button>
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Access Teacher Gradebook &rarr;</span>
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Vendor Licensing Authority Modal (Generates Cryptographic Keys) */}
-      {isVendorModalOpen && (
+      {/* 2. DEDICATED PRINCIPAL & ADMINISTRATOR MODAL */}
+      {isAdminModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-bold text-sm">Principal & Administrator Console</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdminModalOpen(false);
+                  setAdminLoginError(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminLogin} className="p-6 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Authorized for School Principal and Chief Academic Administrators. Unlocks pupil database, broadsheet publishing, security audit logs, school whitelabeling, and license management.
+              </p>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                  Administrator Master Passcode:
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter admin passcode (admin123)"
+                  value={adminPasscodeInput}
+                  onChange={(e) => setAdminPasscodeInput(e.target.value)}
+                  className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {adminLoginError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                  {adminLoginError}
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Verify Passcode & Open Admin Console &rarr;</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Licensing Authority Modal (ADMINISTRATOR ACCESS) */}
+      {isVendorModalOpen && authSession?.role === 'admin' && (
         <VendorLicensingModal
           isOpen={isVendorModalOpen}
           onClose={() => {
@@ -1050,134 +1113,6 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           currentSchoolName={branding.schoolName}
           onLicenseActivated={refreshData}
         />
-      )}
-
-      {/* Staff & Administrator Login Modal */}
-      {isStaffLoginModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-amber-400" />
-                <h3 className="font-bold text-sm">Institutional Staff Sign-In</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsStaffLoginModalOpen(false);
-                  setStaffLoginError(null);
-                }}
-                className="text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleStaffLogin} className="p-6 space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Authorized for subject teachers and school administrators to enter terminal marks, edit remarks, and generate terminal broadsheets.
-              </p>
-
-              {/* Role Selector */}
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Access Level:
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStaffRoleInput('teacher');
-                      setStaffLoginError(null);
-                    }}
-                    className={`py-2 px-3 rounded-lg border text-xs font-semibold transition cursor-pointer ${
-                      staffRoleInput === 'teacher'
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Subject / Class Teacher
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStaffRoleInput('admin');
-                      setStaffLoginError(null);
-                    }}
-                    className={`py-2 px-3 rounded-lg border text-xs font-semibold transition cursor-pointer ${
-                      staffRoleInput === 'admin'
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Principal / Admin
-                  </button>
-                </div>
-              </div>
-
-              {staffRoleInput === 'teacher' ? (
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                    Select Teacher Identity:
-                  </label>
-                  <select
-                    value={staffTeacherId}
-                    onChange={(e) => setStaffTeacherId(e.target.value)}
-                    className="w-full text-xs font-medium px-3 py-2 rounded-lg border border-slate-300 bg-white"
-                  >
-                    {teachers.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.subject || 'Class Teacher'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  {staffRoleInput === 'admin' ? 'Administrator Passcode:' : '4-Digit Staff PIN:'}
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder={staffRoleInput === 'admin' ? 'Enter admin passcode (admin123)' : 'Enter 4-digit PIN (1234)'}
-                  value={staffPinInput}
-                  onChange={(e) => setStaffPinInput(e.target.value)}
-                  className="w-full text-xs font-mono font-bold px-3 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              {staffLoginError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
-                  {staffLoginError}
-                </div>
-              )}
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-2.5 px-4 rounded-lg bg-slate-900 text-white font-semibold text-xs hover:bg-slate-800 transition cursor-pointer shadow-xs"
-                >
-                  Verify Credentials & Open Console
-                </button>
-              </div>
-
-              <div className="text-center pt-1 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsStaffLoginModalOpen(false);
-                    setIsVendorAuthModalOpen(true);
-                  }}
-                  className="text-[11px] text-amber-700 hover:text-amber-900 font-semibold cursor-pointer underline"
-                >
-                  🔑 Are you the Software Vendor? Open Key Generator
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
 
       {/* Pupil & Parent Directory Modal (ADMINISTRATOR ONLY) */}
@@ -1196,7 +1131,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         />
       )}
 
-      {/* Student Profile Modal for inspection (ADMINISTRATOR ONLY) */}
+      {/* Student Profile Modal (ADMINISTRATOR ONLY) */}
       {selectedStudentForProfile && authSession?.role === 'admin' && (
         <StudentProfileModal
           isOpen={Boolean(selectedStudentForProfile)}
