@@ -48,6 +48,7 @@ const KEYS = {
   SNAPSHOTS: 'attend_iq_snapshots_v2',
   QUERIES: 'attend_iq_staff_queries_v1',
   ANNOUNCEMENTS: 'attend_iq_announcements_v1',
+  PARENT_PASSWORDS: 'result_iq_parent_passwords_v1',
 };
 
 // Safe LocalStorage helpers
@@ -1889,4 +1890,84 @@ export function deleteStaffAnnouncement(announcementId: string): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('attend-iq-storage-update'));
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// PARENT AUTHENTICATION & PASSWORD MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+
+export function getParentPasswords(): Record<string, string> {
+  return getStored<Record<string, string>>(KEYS.PARENT_PASSWORDS, {});
+}
+
+export function saveParentPassword(email: string, newPassword: string): void {
+  const normalized = email.trim().toLowerCase();
+  const current = getParentPasswords();
+  current[normalized] = newPassword.trim();
+  setStored(KEYS.PARENT_PASSWORDS, current);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('attend-iq-storage-update'));
+  }
+}
+
+export function verifyParentCredentials(
+  email: string,
+  passwordInput: string,
+  allStudents: Student[]
+): { success: boolean; error?: string; students?: Student[] } {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return { success: false, error: 'Please enter your registered parent email address.' };
+  }
+  if (!passwordInput) {
+    return { success: false, error: 'Please enter your password.' };
+  }
+
+  // Find all children linked to this parent email
+  const matchingStudents = allStudents.filter(
+    (s) => s.parentEmail && s.parentEmail.trim().toLowerCase() === normalizedEmail
+  );
+
+  if (matchingStudents.length === 0) {
+    return {
+      success: false,
+      error: `No student records found registered under "${email}". Please enter the exact email address provided to the school during student onboarding.`,
+    };
+  }
+
+  const pass = passwordInput.trim();
+  const savedPasswords = getParentPasswords();
+  const savedPassword = savedPasswords[normalizedEmail];
+
+  // If a custom password was saved by the parent via Reset/Forgot Password
+  if (savedPassword) {
+    if (savedPassword === pass) {
+      return { success: true, students: matchingStudents };
+    }
+    return {
+      success: false,
+      error: 'Incorrect password. Click "Forgot Password?" below to reset your access password.',
+    };
+  }
+
+  // Default initial passwords for first-time login:
+  // 1. 'parent123' or 'password123'
+  // 2. Child's Roll Number (e.g. 'P4-01', 'P401')
+  const isDefaultMatch =
+    pass.toLowerCase() === 'parent123' ||
+    pass.toLowerCase() === 'password123' ||
+    matchingStudents.some((s) => {
+      const rollClean = (s.rollNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const inputClean = pass.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      return rollClean && rollClean === inputClean;
+    });
+
+  if (isDefaultMatch) {
+    return { success: true, students: matchingStudents };
+  }
+
+  return {
+    success: false,
+    error: 'Incorrect password. Default for first-time sign-in is "parent123" or your child\'s Admission Number (e.g. P4-01). You can also click "Forgot Password?" below to set a new password.',
+  };
 }

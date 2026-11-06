@@ -22,3 +22,4 @@ try {
   console.error('Error in commit/push:', error.message);
   process.exit(1);
 }
+

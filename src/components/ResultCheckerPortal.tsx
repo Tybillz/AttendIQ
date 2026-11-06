@@ -26,6 +26,8 @@ import {
   Key,
   Check,
   Eye,
+  EyeOff,
+  Mail,
   ShieldAlert,
   Smartphone,
   Copy,
@@ -47,6 +49,8 @@ import {
   getTeachers,
   addAuditLog,
   getAuditLogs,
+  saveParentPassword,
+  verifyParentCredentials,
 } from '@/lib/storage';
 import {
   getSchoolBranding,
@@ -93,6 +97,22 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [selectedSession, setSelectedSession] = useState<string>('2026/2027');
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClasses[0]?.id || '');
   const [admissionNumberInput, setAdmissionNumberInput] = useState<string>('');
+
+  // Parent Email & Password Authentication State
+  const [parentEmailInput, setParentEmailInput] = useState<string>('emeka.obi@gmail.com');
+  const [parentPasswordInput, setParentPasswordInput] = useState<string>('');
+  const [showParentPassword, setShowParentPassword] = useState<boolean>(false);
+  const [parentFamilyStudents, setParentFamilyStudents] = useState<Student[]>([]);
+
+  // Forgot Password State
+  const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] = useState<boolean>(false);
+  const [forgotEmailInput, setForgotEmailInput] = useState<string>('');
+  const [forgotChildIdInput, setForgotChildIdInput] = useState<string>('');
+  const [forgotNewPassword, setForgotNewPassword] = useState<string>('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState<string>('');
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState<boolean>(false);
 
   // Personalized Google Authenticator 2FA State (Secret unique per student)
   const [totpTokenInput, setTotpTokenInput] = useState<string>('');
@@ -200,7 +220,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     );
   }, [admissionNumberInput, students]);
 
-  // Execute Result Verification via 30s Rotating 2FA Authenticator (RFC 6238 TOTP)
+  // Execute Result Access via Registered Parent Email & Password
   const handleVerifyResult = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setVerificationError(null);
@@ -208,54 +228,98 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
     setTimeout(() => {
       setIsVerifying(false);
-      const student = findTargetStudent();
+      const res = verifyParentCredentials(parentEmailInput, parentPasswordInput, students);
 
-      if (!student) {
-        setVerificationError(
-          `No enrolled student found matching ID "${admissionNumberInput.toUpperCase() || 'EMPTY'}". Please enter a valid Student Admission Number (e.g. P4-01).`
-        );
+      if (!res.success || !res.students || res.students.length === 0) {
+        setVerificationError(res.error || 'Authentication failed. Please check your email and password.');
         return;
       }
 
-      const cleanToken = totpTokenInput.replace(/\s+/g, '');
-      if (!cleanToken || cleanToken.length !== 6) {
-        setVerificationError('Please enter the 6-digit rotating security passcode from your phone Authenticator app.');
-        return;
-      }
+      setParentFamilyStudents(res.students);
+      const primaryChild = res.students[0];
+      setVerifiedStudent(primaryChild);
 
-      // Unique Secret derived exclusively for this individual student
-      const secret = getStudentTotpSecret(student.id, student.rollNumber);
-      const isAuthorized = verifyStudentTotp(cleanToken, secret);
+      const serial = `REQ-${Date.now().toString().slice(-6)}-${primaryChild.rollNumber.replace(/[^A-Za-z0-9]/g, '')}`;
+      setVerificationAuditRecord({
+        timestamp: new Date().toLocaleString(),
+        serial,
+        verifiedContact: `Parent Email: ${parentEmailInput.trim().toLowerCase()}`,
+      });
 
-      if (isAuthorized) {
-        setVerifiedStudent(student);
-        const serial = `REQ-${Date.now().toString().slice(-6)}-${student.rollNumber.replace(/[^A-Za-z0-9]/g, '')}`;
-        setVerificationAuditRecord({
-          timestamp: new Date().toLocaleString(),
-          serial,
-          verifiedContact: `Personal 2FA Authenticator (${cleanToken.slice(0, 3)}***)`,
-        });
-
-        // Record anti-tamper security log
-        addAuditLog({
-          actorRole: 'admin',
-          actorId: 'totp-authenticator',
-          actorName: `Verified Guardian (${student.parentName})`,
-          action: 'SECURITY_ALERT',
-          targetType: 'pupil',
-          targetId: student.id,
-          targetName: student.name,
-          classId: student.classId,
-          className: activeClass?.name,
-          severity: 'info',
-          details: `Guardian successfully verified official terminal result for pupil ${student.name} (${student.rollNumber}) using Google Authenticator 2FA. Ref: ${serial}`,
-        });
-      } else {
-        setVerificationError(
-          'Security Authentication Failed: Invalid or expired 6-digit code. Please check your phone Authenticator app for this student and enter the current rotating code.'
-        );
-      }
+      // Record anti-tamper security log
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'parent-portal',
+        actorName: `Parent (${primaryChild.parentName})`,
+        action: 'SECURITY_ALERT',
+        targetType: 'pupil',
+        targetId: primaryChild.id,
+        targetName: primaryChild.name,
+        classId: primaryChild.classId,
+        className: classes.find((c) => c.id === primaryChild.classId)?.name || 'Class',
+        severity: 'info',
+        details: `Parent (${primaryChild.parentName} <${parentEmailInput.trim()}>) signed in with Email & Password to view terminal report for ${primaryChild.name} (${primaryChild.rollNumber}). Ref: ${serial}`,
+      });
     }, 350);
+  };
+
+  // Reset Parent Password Handler
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    setForgotSuccess(null);
+
+    const email = forgotEmailInput.trim().toLowerCase();
+    const childId = forgotChildIdInput.trim().toUpperCase();
+    const newPass = forgotNewPassword.trim();
+    const confirmPass = forgotConfirmPassword.trim();
+
+    if (!email) {
+      setForgotError('Please enter your registered parent email address.');
+      return;
+    }
+    if (!childId) {
+      setForgotError("Please enter your child's Admission / Roll Number for identity verification.");
+      return;
+    }
+    if (newPass.length < 4) {
+      setForgotError('New password must be at least 4 characters long.');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setForgotError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setIsResettingPassword(true);
+
+    setTimeout(() => {
+      setIsResettingPassword(false);
+      // Validate that this child exists and has this parent email
+      const matchedChild = students.find((s) => {
+        const emailMatch = (s.parentEmail || '').trim().toLowerCase() === email;
+        const rollMatch = (s.rollNumber || '').trim().toUpperCase() === childId;
+        const idMatch = (s.id || '').trim().toUpperCase() === childId;
+        return emailMatch && (rollMatch || idMatch);
+      });
+
+      if (!matchedChild) {
+        setForgotError(
+          `Identity check failed: No student record matching ID "${childId}" is registered with email "${email}". Please verify your email and child's admission number.`
+        );
+        return;
+      }
+
+      saveParentPassword(email, newPass);
+      setForgotSuccess('Password updated successfully! You can now log in.');
+      setParentEmailInput(email);
+      setParentPasswordInput(newPass);
+
+      setTimeout(() => {
+        setIsForgotPasswordModalOpen(false);
+        setForgotSuccess(null);
+      }, 1400);
+    }, 400);
   };
 
   // WhatsApp Share Handler
@@ -352,6 +416,270 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     }
 
     setSetupVerifiedStudent(found);
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // RENDER: PARENT SIGN-IN CARD (EMAIL & PASSWORD + FORGOT PASSWORD)
+  // ─────────────────────────────────────────────────────────────
+  const renderParentSignInCard = () => (
+    <div className="max-w-md mx-auto space-y-6">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl overflow-hidden">
+        {/* Header Ribbon */}
+        <div className="bg-slate-900 text-white p-6 sm:p-7 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg border border-amber-500/30">
+              🎓
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white tracking-tight">
+                Parent &amp; Guardian Portal
+              </h2>
+              <p className="text-xs text-slate-300">
+                Sign in to view your child&apos;s official terminal result
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Sign In Form */}
+        <form onSubmit={handleVerifyResult} className="p-6 sm:p-7 space-y-4">
+          {/* Academic Session & Term Selector */}
+          <div className="space-y-1">
+            <label htmlFor="session-term-select" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+              Academic Term:
+            </label>
+            <div className="relative">
+              <select
+                id="session-term-select"
+                value={`${selectedSession} • ${selectedTerm}`}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.includes('Second Term')) {
+                    setSelectedTerm('Second Term');
+                  } else if (val.includes('Third Term')) {
+                    setSelectedTerm('Third Term');
+                  } else {
+                    setSelectedTerm('First Term');
+                  }
+                }}
+                className="w-full text-xs font-semibold pl-3 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition appearance-none cursor-pointer"
+              >
+                <option value="2026/2027 • Second Term">2026/2027 • Second Term (Lent)</option>
+                <option value="2026/2027 • First Term">2026/2027 • First Term (Harmattan)</option>
+                <option value="2025/2026 • Third Term">2025/2026 • Third Term (Trinity)</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+
+          {/* Registered Parent Email */}
+          <div className="space-y-1">
+            <label htmlFor="parent-email-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+              Registered Parent Email:
+            </label>
+            <div className="relative">
+              <input
+                id="parent-email-input"
+                type="email"
+                required
+                placeholder="e.g. emeka.obi@gmail.com"
+                value={parentEmailInput}
+                onChange={(e) => {
+                  setParentEmailInput(e.target.value);
+                  setVerificationError(null);
+                }}
+                className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition"
+              />
+              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+            </div>
+            <span className="text-[10px] text-slate-400 block">
+              Enter the email address provided to the school during onboarding.
+            </span>
+          </div>
+
+          {/* Password Field with Show/Hide Toggle */}
+          <div className="space-y-1">
+            <label htmlFor="parent-password-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+              Account Password:
+            </label>
+            <div className="relative">
+              <input
+                id="parent-password-input"
+                type={showParentPassword ? 'text' : 'password'}
+                required
+                placeholder="Enter parent password"
+                value={parentPasswordInput}
+                onChange={(e) => {
+                  setParentPasswordInput(e.target.value);
+                  setVerificationError(null);
+                }}
+                className="w-full text-xs font-medium pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition"
+              />
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              <button
+                type="button"
+                onClick={() => setShowParentPassword(!showParentPassword)}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                title={showParentPassword ? 'Hide password' : 'Show password'}
+              >
+                {showParentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {/* Forgot Password Row */}
+            <div className="flex items-center justify-between pt-1.5 text-[11px]">
+              <span className="text-slate-400">
+                Default: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">parent123</code> or Child ID
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmailInput(parentEmailInput);
+                  setForgotChildIdInput('');
+                  setForgotNewPassword('');
+                  setForgotConfirmPassword('');
+                  setForgotError(null);
+                  setForgotSuccess(null);
+                  setIsForgotPasswordModalOpen(true);
+                }}
+                className="text-amber-600 hover:text-amber-700 font-bold transition hover:underline cursor-pointer"
+              >
+                Forgot Password?
+              </button>
+            </div>
+          </div>
+
+          {/* Error Notice */}
+          {verificationError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{verificationError}</span>
+            </div>
+          )}
+
+          {/* Submit Action */}
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={isVerifying}
+              className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs tracking-wide shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isVerifying ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Verifying Credentials...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Sign In &amp; View Official Report Sheet</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // RENDER: PARENT REPORT SHEET (WITH SIBLING / MULTI-CHILD TABS)
+  // ─────────────────────────────────────────────────────────────
+  const renderParentReportSheet = () => {
+    if (!verifiedStudent) return null;
+    const currentClass = classes.find((c) => c.id === verifiedStudent.classId) || activeClass;
+
+    return (
+      <div className="space-y-6">
+        {/* If Parent has multiple enrolled children, show Child Selection tabs */}
+        {parentFamilyStudents.length > 1 && (
+          <div className="bg-slate-900 text-white p-3.5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md no-print">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="text-xs font-semibold text-slate-200">
+                Children Registered to Your Account ({parentFamilyStudents.length}):
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {parentFamilyStudents.map((child) => (
+                <button
+                  key={child.id}
+                  type="button"
+                  onClick={() => setVerifiedStudent(child)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                    verifiedStudent.id === child.id
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                      : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                  }`}
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>{child.name}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({child.rollNumber})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Top Verification Ribbon */}
+        <div className="bg-emerald-900 text-emerald-100 px-5 py-3 rounded-xl border border-emerald-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
+              <Check className="w-5 h-5 stroke-[3]" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white uppercase tracking-wider">
+                Official Academic Record Authenticated
+              </div>
+              <div className="text-[11px] text-emerald-200 font-mono">
+                Ref: {verificationAuditRecord?.serial} &bull; Verified: {verificationAuditRecord?.timestamp}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setVerifiedStudent(null);
+                setParentFamilyStudents([]);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-emerald-800/80 hover:bg-emerald-800 text-xs font-medium text-white transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Sign Out / Switch Parent</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share on WhatsApp</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadStudentReportCardPDF(verifiedStudent, currentClass)}
+              className="px-3.5 py-1.5 rounded-lg bg-white text-emerald-950 hover:bg-emerald-50 text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download Official PDF</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Pure Academic Terminal Report Sheet */}
+        <TerminalReportSheet
+          student={verifiedStudent}
+          className={currentClass?.name || 'Primary 4'}
+          classPupilsCount={currentClass?.pupilCount || 14}
+          onStudentUpdated={refreshData}
+        />
+      </div>
+    );
   };
 
   return (
@@ -678,265 +1006,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                       &larr; Back to Gradebook
                     </button>
                   </div>
-                  {/* Verified Result Sheet or Parent Checker Card */}
-                  {!verifiedStudent ? (
-                    <div className="max-w-xl mx-auto space-y-6">
-                      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl overflow-hidden">
-                        <form onSubmit={handleVerifyResult} className="p-6 sm:p-8 space-y-5">
-                          {/* STEP 1: ACADEMIC PERIOD & CLASS */}
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2">
-                              <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
-                                1
-                              </span>
-                              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                                Academic Period & Class
-                              </h3>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="space-y-1">
-                                <label htmlFor="session-term" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                                  Academic Session & Term:
-                                </label>
-                                <div className="relative">
-                                  <select
-                                    id="session-term"
-                                    value={`${selectedSession} • ${selectedTerm}`}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val.includes('Second Term')) {
-                                        setSelectedTerm('Second Term');
-                                      } else if (val.includes('Third Term')) {
-                                        setSelectedTerm('Third Term');
-                                      } else {
-                                        setSelectedTerm('First Term');
-                                      }
-                                    }}
-                                    className="w-full text-xs font-medium pl-3 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white focus:bg-white focus:border-slate-900 focus:outline-none transition appearance-none cursor-pointer"
-                                  >
-                                    <option value="2026/2027 • Second Term">2026/2027 • Second Term (Lent)</option>
-                                    <option value="2026/2027 • First Term">2026/2027 • First Term (Harmattan)</option>
-                                    <option value="2025/2026 • Third Term">2025/2026 • Third Term (Trinity)</option>
-                                  </select>
-                                  <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
-                                    <ChevronDown className="w-4 h-4" />
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="space-y-1">
-                                <label htmlFor="student-class" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                                  Class / Grade Section:
-                                </label>
-                                <div className="relative">
-                                  <select
-                                    id="student-class"
-                                    value={selectedClassId}
-                                    onChange={(e) => {
-                                      setSelectedClassId(e.target.value);
-                                      setVerificationError(null);
-                                    }}
-                                    className="w-full text-xs font-medium pl-3 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white focus:bg-white focus:border-slate-900 focus:outline-none transition appearance-none cursor-pointer"
-                                  >
-                                    {classes.map((cls) => (
-                                      <option key={cls.id} value={cls.id}>
-                                        {cls.name} ({cls.pupilCount || 0} pupils)
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
-                                    <ChevronDown className="w-4 h-4" />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* STEP 2: STUDENT IDENTIFICATION */}
-                          <div className="pt-2 border-t border-slate-100 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
-                                  2
-                                </span>
-                                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                                  Student Identification
-                                </h3>
-                              </div>
-                              <span className="text-[11px] text-slate-400 font-mono">e.g. P4-01 or Pupil ID</span>
-                            </div>
-
-                            <div className="space-y-1">
-                              <label htmlFor="admission-no" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                                Student Admission / Roll Number:
-                              </label>
-                              <div className="relative">
-                                <input
-                                  id="admission-no"
-                                  type="text"
-                                  required
-                                  placeholder="Enter Student ID / Roll Number (e.g. P4-01)"
-                                  value={admissionNumberInput}
-                                  onChange={(e) => {
-                                    setAdmissionNumberInput(e.target.value);
-                                    setVerificationError(null);
-                                  }}
-                                  className="w-full text-sm font-semibold tracking-wider font-mono pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition uppercase"
-                                />
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                                  <Search className="w-4 h-4" />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* STEP 3: GUARDIAN 2FA PASSCODE */}
-                          <div className="pt-2 border-t border-slate-100 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
-                                  3
-                                </span>
-                                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                                  Guardian 2FA Passcode
-                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                                </h3>
-                              </div>
-                              <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                Google Authenticator
-                              </span>
-                            </div>
-
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between text-[11px]">
-                                <span className="text-slate-600 font-medium">
-                                  Enter the 6-digit code from your phone's Authenticator app:
-                                </span>
-                              </div>
-
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  autoComplete="one-time-code"
-                                  maxLength={6}
-                                  required
-                                  placeholder="• • • • • •"
-                                  value={totpTokenInput}
-                                  onChange={(e) => {
-                                    setTotpTokenInput(e.target.value.replace(/\D/g, ''));
-                                    setVerificationError(null);
-                                  }}
-                                  className="w-full text-center text-xl tracking-[0.4em] font-mono font-bold py-2.5 rounded-xl border border-slate-300 bg-white focus:border-slate-900 focus:outline-none transition shadow-2xs"
-                                />
-                              </div>
-
-                              <div className="pt-1 flex items-center justify-between text-[11px]">
-                                <span className="text-slate-400">Unique secret key per student</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSetupAdmissionInput(admissionNumberInput);
-                                    setSetupParentPhoneInput('');
-                                    setSetupVerifiedStudent(null);
-                                    setSetupError(null);
-                                    setIsTotpSetupModalOpen(true);
-                                  }}
-                                  className="text-slate-900 font-semibold hover:underline cursor-pointer flex items-center gap-1"
-                                >
-                                  <QrCode className="w-3.5 h-3.5 text-amber-600" />
-                                  <span>Setup Google Authenticator Key & QR &rarr;</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Error Notice */}
-                          {verificationError && (
-                            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-                              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                              <span>{verificationError}</span>
-                            </div>
-                          )}
-
-                          {/* Submit Button */}
-                          <div className="pt-2">
-                            <button
-                              type="submit"
-                              disabled={isVerifying}
-                              className="w-full py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm tracking-wide shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
-                            >
-                              {isVerifying ? (
-                                <>
-                                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                  <span>Locating Academic Record...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                                  <span>Verify Identity & View Official Report Sheet</span>
-                                  <ArrowRight className="w-4 h-4" />
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="bg-emerald-900 text-emerald-100 px-5 py-3 rounded-xl border border-emerald-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
-                            <Check className="w-5 h-5 stroke-[3]" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-white uppercase tracking-wider">
-                              Official Academic Record Authenticated
-                            </div>
-                            <div className="text-[11px] text-emerald-200 font-mono">
-                              Ref: {verificationAuditRecord?.serial} &bull; Verified: {verificationAuditRecord?.timestamp}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setVerifiedStudent(null)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-800/80 hover:bg-emerald-800 text-xs font-medium text-white transition flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Check Another Result</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleShareWhatsApp}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                            <span>Share on WhatsApp</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => downloadStudentReportCardPDF(verifiedStudent, activeClass)}
-                            className="px-3.5 py-1.5 rounded-lg bg-white text-emerald-950 hover:bg-emerald-50 text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download Official PDF</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <TerminalReportSheet
-                        student={verifiedStudent}
-                        className={activeClass?.name || 'Primary 4'}
-                        classPupilsCount={activeClass?.pupilCount || 14}
-                        onStudentUpdated={refreshData}
-                      />
-                    </div>
-                  )}
+                  {/* Verified Result Sheet or Parent Sign-In Card */}
+                  {verifiedStudent ? renderParentReportSheet() : renderParentSignInCard()}
                 </div>
               )}
             </div>
@@ -944,264 +1015,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         ) : (
           /* ── PUBLIC VISITOR / PARENT VIEW: CLEAN CENTERED CARD (NO SIDEBAR) ── */
           <div>
-            {!verifiedStudent ? (
-              <div className="max-w-xl mx-auto space-y-6">
-                <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl overflow-hidden">
-                  <form onSubmit={handleVerifyResult} className="p-6 sm:p-8 space-y-5">
-                    {/* STEP 1: ACADEMIC PERIOD & CLASS */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
-                          1
-                        </span>
-                        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                          Academic Period & Class
-                        </h3>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label htmlFor="session-term-parent" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                            Academic Session & Term:
-                          </label>
-                          <div className="relative">
-                            <select
-                              id="session-term-parent"
-                              value={`${selectedSession} • ${selectedTerm}`}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val.includes('Second Term')) {
-                                  setSelectedTerm('Second Term');
-                                } else if (val.includes('Third Term')) {
-                                  setSelectedTerm('Third Term');
-                                } else {
-                                  setSelectedTerm('First Term');
-                                }
-                              }}
-                              className="w-full text-xs font-medium pl-3 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white focus:bg-white focus:border-slate-900 focus:outline-none transition appearance-none cursor-pointer"
-                            >
-                              <option value="2026/2027 • Second Term">2026/2027 • Second Term (Lent)</option>
-                              <option value="2026/2027 • First Term">2026/2027 • First Term (Harmattan)</option>
-                              <option value="2025/2026 • Third Term">2025/2026 • Third Term (Trinity)</option>
-                            </select>
-                            <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
-                              <ChevronDown className="w-4 h-4" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label htmlFor="student-class-parent" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                            Class / Grade Section:
-                          </label>
-                          <div className="relative">
-                            <select
-                              id="student-class-parent"
-                              value={selectedClassId}
-                              onChange={(e) => {
-                                setSelectedClassId(e.target.value);
-                                setVerificationError(null);
-                              }}
-                              className="w-full text-xs font-medium pl-3 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white focus:bg-white focus:border-slate-900 focus:outline-none transition appearance-none cursor-pointer"
-                            >
-                              {classes.map((cls) => (
-                                <option key={cls.id} value={cls.id}>
-                                  {cls.name} ({cls.pupilCount || 0} pupils)
-                                </option>
-                              ))}
-                            </select>
-                            <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
-                              <ChevronDown className="w-4 h-4" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* STEP 2: STUDENT IDENTIFICATION */}
-                    <div className="pt-2 border-t border-slate-100 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
-                            2
-                          </span>
-                          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                            Student Identification
-                          </h3>
-                        </div>
-                        <span className="text-[11px] text-slate-400 font-mono">e.g. P4-01 or Pupil ID</span>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label htmlFor="admission-no-parent" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                          Student Admission / Roll Number:
-                        </label>
-                        <div className="relative">
-                          <input
-                            id="admission-no-parent"
-                            type="text"
-                            required
-                            placeholder="Enter Student ID / Roll Number (e.g. P4-01)"
-                            value={admissionNumberInput}
-                            onChange={(e) => {
-                              setAdmissionNumberInput(e.target.value);
-                              setVerificationError(null);
-                            }}
-                            className="w-full text-sm font-semibold tracking-wider font-mono pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition uppercase"
-                          />
-                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                            <Search className="w-4 h-4" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* STEP 3: GUARDIAN 2FA PASSCODE */}
-                    <div className="pt-2 border-t border-slate-100 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
-                            3
-                          </span>
-                          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                            Guardian 2FA Passcode
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                          </h3>
-                        </div>
-                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                          Google Authenticator
-                        </span>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-slate-600 font-medium">
-                            Enter the 6-digit code from your phone's Authenticator app:
-                          </span>
-                        </div>
-
-                        <div className="relative">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            maxLength={6}
-                            required
-                            placeholder="• • • • • •"
-                            value={totpTokenInput}
-                            onChange={(e) => {
-                              setTotpTokenInput(e.target.value.replace(/\D/g, ''));
-                              setVerificationError(null);
-                            }}
-                            className="w-full text-center text-xl tracking-[0.4em] font-mono font-bold py-2.5 rounded-xl border border-slate-300 bg-white focus:border-slate-900 focus:outline-none transition shadow-2xs"
-                          />
-                        </div>
-
-                        <div className="pt-1 flex items-center justify-between text-[11px]">
-                          <span className="text-slate-400">Unique secret key per student</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSetupAdmissionInput(admissionNumberInput);
-                              setSetupParentPhoneInput('');
-                              setSetupVerifiedStudent(null);
-                              setSetupError(null);
-                              setIsTotpSetupModalOpen(true);
-                            }}
-                            className="text-slate-900 font-semibold hover:underline cursor-pointer flex items-center gap-1"
-                          >
-                            <QrCode className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Setup Google Authenticator Key & QR &rarr;</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Error Notice */}
-                    {verificationError && (
-                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                        <span>{verificationError}</span>
-                      </div>
-                    )}
-
-                    {/* Submit Button */}
-                    <div className="pt-2">
-                      <button
-                        type="submit"
-                        disabled={isVerifying}
-                        className="w-full py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm tracking-wide shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
-                      >
-                        {isVerifying ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            <span>Locating Academic Record...</span>
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                            <span>Verify Identity & View Official Report Sheet</span>
-                            <ArrowRight className="w-4 h-4" />
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="bg-emerald-900 text-emerald-100 px-5 py-3 rounded-xl border border-emerald-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
-                      <Check className="w-5 h-5 stroke-[3]" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white uppercase tracking-wider">
-                        Official Academic Record Authenticated
-                      </div>
-                      <div className="text-[11px] text-emerald-200 font-mono">
-                        Ref: {verificationAuditRecord?.serial} &bull; Verified: {verificationAuditRecord?.timestamp}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setVerifiedStudent(null)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-800/80 hover:bg-emerald-800 text-xs font-medium text-white transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Check Another Result</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleShareWhatsApp}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                      <span>Share on WhatsApp</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => downloadStudentReportCardPDF(verifiedStudent, activeClass)}
-                      className="px-3.5 py-1.5 rounded-lg bg-white text-emerald-950 hover:bg-emerald-50 text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download Official PDF</span>
-                    </button>
-                  </div>
-                </div>
-
-                <TerminalReportSheet
-                  student={verifiedStudent}
-                  className={activeClass?.name || 'Primary 4'}
-                  classPupilsCount={activeClass?.pupilCount || 14}
-                  onStudentUpdated={refreshData}
-                />
-              </div>
-            )}
+            {verifiedStudent ? renderParentReportSheet() : renderParentSignInCard()}
           </div>
         )}
       </main>
@@ -1436,171 +1250,153 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         />
       )}
 
-      {/* 5. PERSONALIZED 2FA AUTHENTICATOR SETUP MODAL FOR PARENTS */}
-      {isTotpSetupModalOpen && (
+      {/* 5. FORGOT PASSWORD / PASSWORD RESET MODAL FOR PARENTS */}
+      {isForgotPasswordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-lg w-full overflow-hidden animate-fadeIn">
-            <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
+          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden animate-fadeIn">
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-emerald-400" />
-                <h3 className="font-bold text-sm">Personalized Authenticator Setup</h3>
+                <KeyRound className="w-4 h-4 text-amber-400" />
+                <h3 className="font-bold text-sm">Reset Parent Password</h3>
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  setIsTotpSetupModalOpen(false);
-                  setSetupVerifiedStudent(null);
-                  setSetupError(null);
+                  setIsForgotPasswordModalOpen(false);
+                  setForgotError(null);
+                  setForgotSuccess(null);
                 }}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white transition cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              {!setupVerifiedStudent ? (
-                /* Step A: Identity Verification to get Secret Key */
-                <form onSubmit={handleVerifyForSetup} className="space-y-4">
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <span>
-                      Each student has a <strong>unique private secret key</strong>. Enter your student details below to reveal your personal setup QR code for Google Authenticator.
-                    </span>
-                  </div>
+            <form onSubmit={handleResetPassword} className="p-6 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Enter your registered parent email address along with your child&apos;s Admission / Roll Number to verify your identity and set a new password.
+              </p>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                      Student Admission / Roll Number:
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. P4-01"
-                      value={setupAdmissionInput}
-                      onChange={(e) => setSetupAdmissionInput(e.target.value)}
-                      className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white uppercase"
-                    />
-                  </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                  Registered Parent Email:
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. emeka.obi@gmail.com"
+                    value={forgotEmailInput}
+                    onChange={(e) => {
+                      setForgotEmailInput(e.target.value);
+                      setForgotError(null);
+                    }}
+                    className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                  />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                </div>
+              </div>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                      Registered Parent Phone Number:
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. +234 803 123 4567"
-                      value={setupParentPhoneInput}
-                      onChange={(e) => setSetupParentPhoneInput(e.target.value)}
-                      className="w-full text-xs font-medium px-3 py-2.5 rounded-lg border border-slate-300 bg-white"
-                    />
-                  </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                  Child&apos;s Admission / Roll Number (Identity Check):
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. P4-01"
+                    value={forgotChildIdInput}
+                    onChange={(e) => {
+                      setForgotChildIdInput(e.target.value);
+                      setForgotError(null);
+                    }}
+                    className="w-full text-xs font-mono font-bold uppercase pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                  />
+                  <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Verifies you are the authorized guardian of an enrolled student.
+                </span>
+              </div>
 
-                  {setupError && (
-                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
-                      {setupError}
-                    </div>
-                  )}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                  New Password:
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    minLength={4}
+                    placeholder="Enter at least 4 characters"
+                    value={forgotNewPassword}
+                    onChange={(e) => {
+                      setForgotNewPassword(e.target.value);
+                      setForgotError(null);
+                    }}
+                    className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                  />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                </div>
+              </div>
 
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
-                  >
-                    Confirm Student &amp; Reveal Secret Key &rarr;
-                  </button>
-                </form>
-              ) : (
-                /* Step B: Display Unique Secret Key & Instructions for Google Authenticator */
-                <div className="space-y-4">
-                  <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-emerald-950">{setupVerifiedStudent.name}</div>
-                      <div className="text-[11px] text-emerald-700 font-mono">Admission: {setupVerifiedStudent.rollNumber}</div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-emerald-800 border border-emerald-200">
-                      Verified Guardian
-                    </span>
-                  </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                  Confirm New Password:
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    required
+                    minLength={4}
+                    placeholder="Re-enter new password"
+                    value={forgotConfirmPassword}
+                    onChange={(e) => {
+                      setForgotConfirmPassword(e.target.value);
+                      setForgotError(null);
+                    }}
+                    className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                  />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                </div>
+              </div>
 
-                  {(() => {
-                    const secret = getStudentTotpSecret(setupVerifiedStudent.id, setupVerifiedStudent.rollNumber);
-                    const uri = getAuthenticatorUri(
-                      setupVerifiedStudent.name,
-                      setupVerifiedStudent.rollNumber,
-                      branding.schoolName,
-                      secret
-                    );
-                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(uri)}`;
-
-                    return (
-                      <div className="space-y-3.5">
-                        <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                          {/* QR Code */}
-                          <div className="w-32 h-32 bg-white p-1.5 rounded-xl border border-slate-300 shadow-xs shrink-0 flex items-center justify-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={qrUrl} alt="Google Authenticator QR Code" className="w-full h-full object-contain" />
-                          </div>
-
-                          {/* Secret Key & Account Details */}
-                          <div className="flex-1 space-y-2 text-xs">
-                            <div>
-                              <span className="text-[10px] uppercase font-mono text-slate-500 block">Account Label:</span>
-                              <span className="font-semibold text-slate-900">
-                                {setupVerifiedStudent.rollNumber} ({setupVerifiedStudent.name})
-                              </span>
-                            </div>
-
-                            <div>
-                              <span className="text-[10px] uppercase font-mono text-slate-500 block">Your Secret Key (Base32):</span>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <code className="bg-white px-2 py-1 rounded border border-slate-300 font-mono font-bold text-slate-900 tracking-wider">
-                                  {secret}
-                                </code>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(secret);
-                                    setSecretCopied(true);
-                                    setTimeout(() => setSecretCopied(false), 2000);
-                                  }}
-                                  className="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold cursor-pointer shrink-0"
-                                >
-                                  {secretCopied ? 'Copied!' : 'Copy'}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Step-by-Step Instructions */}
-                        <div className="p-3 bg-white rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1.5">
-                          <div className="font-bold text-slate-900 text-xs">How to connect on your phone:</div>
-                          <ol className="list-decimal pl-4 space-y-1">
-                            <li>Install <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong> on your phone.</li>
-                            <li>Open the app, tap the <strong>+</strong> button, and choose <strong>Scan a QR code</strong> (or Enter a setup key).</li>
-                            <li>Scan the QR code above or paste the secret key.</li>
-                            <li>Your phone will now generate your student's live 6-digit code every 30 seconds.</li>
-                          </ol>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdmissionNumberInput(setupVerifiedStudent.rollNumber);
-                            setIsTotpSetupModalOpen(false);
-                            setSetupVerifiedStudent(null);
-                          }}
-                          className="w-full py-2.5 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-xs transition cursor-pointer shadow-xs text-center"
-                        >
-                          I have added this to my Authenticator &rarr; Check Result Now
-                        </button>
-                      </div>
-                    );
-                  })()}
+              {forgotError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{forgotError}</span>
                 </div>
               )}
-            </div>
+
+              {forgotSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>{forgotSuccess}</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPasswordModalOpen(false);
+                    setForgotError(null);
+                    setForgotSuccess(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isResettingPassword}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {isResettingPassword ? 'Updating Password...' : 'Save & Update Password'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
