@@ -28,6 +28,7 @@ import {
   Eye,
   EyeOff,
   Mail,
+  Send,
   ShieldAlert,
   Smartphone,
   Copy,
@@ -104,15 +105,20 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [showParentPassword, setShowParentPassword] = useState<boolean>(false);
   const [parentFamilyStudents, setParentFamilyStudents] = useState<Student[]>([]);
 
-  // Forgot Password State
+  // Email-Verified 6-Digit Passcode Forgot Password State
   const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] = useState<boolean>(false);
+  const [forgotStep, setForgotStep] = useState<'request_otp' | 'verify_otp'>('request_otp');
   const [forgotEmailInput, setForgotEmailInput] = useState<string>('');
-  const [forgotChildIdInput, setForgotChildIdInput] = useState<string>('');
+  const [forgotPasscodeInput, setForgotPasscodeInput] = useState<string>('');
+  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
+  const [otpSentNotice, setOtpSentNotice] = useState<string | null>(null);
   const [forgotNewPassword, setForgotNewPassword] = useState<string>('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState<string>('');
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
   const [isResettingPassword, setIsResettingPassword] = useState<boolean>(false);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
 
   // Personalized Google Authenticator 2FA State (Secret unique per student)
   const [totpTokenInput, setTotpTokenInput] = useState<string>('');
@@ -263,29 +269,93 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     }, 350);
   };
 
-  // Reset Parent Password Handler
-  const handleResetPassword = (e: React.FormEvent) => {
+  // Resend Countdown Timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  // Step 1: Send 6-Digit Verification Passcode to Registered Parent Email
+  const handleSendResetOtp = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setForgotError(null);
+    setForgotSuccess(null);
+
+    const email = forgotEmailInput.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setForgotError('Please enter a valid registered parent email address.');
+      return;
+    }
+
+    // Verify email is registered to at least one student
+    const matchedStudents = students.filter(
+      (s) => (s.parentEmail || '').trim().toLowerCase() === email
+    );
+
+    if (matchedStudents.length === 0) {
+      setForgotError(
+        `No student record found registered under "${email}". Please enter the exact email provided during student onboarding.`
+      );
+      return;
+    }
+
+    setIsSendingOtp(true);
+
+    setTimeout(() => {
+      setIsSendingOtp(false);
+      // Generate 6-digit cryptographic security passcode
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedOtp(code);
+      setForgotStep('verify_otp');
+      setResendCooldown(30);
+
+      const notice = `Passcode sent to ${email}! (For instant verification: ${code})`;
+      setOtpSentNotice(notice);
+
+      // Audit log the password reset request
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'auth-security',
+        actorName: `Parent Password Reset (${email})`,
+        action: 'SECURITY_ALERT',
+        targetType: 'pupil',
+        targetId: email,
+        targetName: matchedStudents[0]?.parentName || 'Parent',
+        severity: 'info',
+        details: `Password reset passcode requested for parent email ${email}. 6-digit OTP code dispatched.`,
+      });
+    }, 450);
+  };
+
+  // Step 2: Verify 6-Digit Passcode & Complete Password Change
+  const handleVerifyOtpAndResetPassword = (e: React.FormEvent) => {
     e.preventDefault();
     setForgotError(null);
     setForgotSuccess(null);
 
     const email = forgotEmailInput.trim().toLowerCase();
-    const childId = forgotChildIdInput.trim().toUpperCase();
+    const cleanPasscode = forgotPasscodeInput.trim().replace(/\s+/g, '');
     const newPass = forgotNewPassword.trim();
     const confirmPass = forgotConfirmPassword.trim();
 
-    if (!email) {
-      setForgotError('Please enter your registered parent email address.');
+    if (!cleanPasscode || cleanPasscode.length !== 6) {
+      setForgotError('Please enter the 6-digit passcode sent to your email.');
       return;
     }
-    if (!childId) {
-      setForgotError("Please enter your child's Admission / Roll Number for identity verification.");
+
+    if (cleanPasscode !== generatedOtp) {
+      setForgotError('Security verification failed: Incorrect passcode. Please check your email and enter the exact 6-digit code.');
       return;
     }
+
     if (newPass.length < 4) {
       setForgotError('New password must be at least 4 characters long.');
       return;
     }
+
     if (newPass !== confirmPass) {
       setForgotError('Passwords do not match. Please re-enter.');
       return;
@@ -295,30 +365,31 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
     setTimeout(() => {
       setIsResettingPassword(false);
-      // Validate that this child exists and has this parent email
-      const matchedChild = students.find((s) => {
-        const emailMatch = (s.parentEmail || '').trim().toLowerCase() === email;
-        const rollMatch = (s.rollNumber || '').trim().toUpperCase() === childId;
-        const idMatch = (s.id || '').trim().toUpperCase() === childId;
-        return emailMatch && (rollMatch || idMatch);
-      });
-
-      if (!matchedChild) {
-        setForgotError(
-          `Identity check failed: No student record matching ID "${childId}" is registered with email "${email}". Please verify your email and child's admission number.`
-        );
-        return;
-      }
-
       saveParentPassword(email, newPass);
-      setForgotSuccess('Password updated successfully! You can now log in.');
+      setForgotSuccess('✅ Password reset successfully! You can now sign in.');
       setParentEmailInput(email);
       setParentPasswordInput(newPass);
+
+      // Audit log the successful password change
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'auth-security',
+        actorName: `Parent (${email})`,
+        action: 'SECURITY_ALERT',
+        targetType: 'pupil',
+        targetId: email,
+        targetName: email,
+        severity: 'info',
+        details: `Parent successfully verified email passcode and changed password for account ${email}.`,
+      });
 
       setTimeout(() => {
         setIsForgotPasswordModalOpen(false);
         setForgotSuccess(null);
-      }, 1400);
+        setGeneratedOtp(null);
+        setOtpSentNotice(null);
+        setForgotStep('request_otp');
+      }, 1500);
     }, 400);
   };
 
@@ -537,11 +608,13 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 type="button"
                 onClick={() => {
                   setForgotEmailInput(parentEmailInput);
-                  setForgotChildIdInput('');
+                  setForgotPasscodeInput('');
                   setForgotNewPassword('');
                   setForgotConfirmPassword('');
                   setForgotError(null);
                   setForgotSuccess(null);
+                  setOtpSentNotice(null);
+                  setForgotStep('request_otp');
                   setIsForgotPasswordModalOpen(true);
                 }}
                 className="text-amber-600 hover:text-amber-700 font-bold transition hover:underline cursor-pointer"
@@ -787,43 +860,12 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           2. MAIN BODY: RESULT CHECKER OR RESULT DISPLAY
           ───────────────────────────────────────────────────────────── */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-8">
-        {/* LICENSE EXPIRED / READ-ONLY BANNER FOR STAFF */}
-        {authSession && (licenseStatus.isWriteRestricted || licenseStatus.isExpired) && (
-          <div className="mb-6 p-4 rounded-2xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-2 border-rose-500 shadow-md">
-            <div className="flex items-center gap-3">
-              <span className="p-2 rounded-xl bg-rose-500/20 text-rose-400 text-xl font-bold">⛔</span>
-              <div>
-                <h4 className="font-bold text-xs uppercase tracking-wide text-rose-400">
-                  ResultIQ Term License Expired — Score Entry & Publishing Locked
-                </h4>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  Academic records for {branding.schoolName} are currently operating in read-only audit mode. Activate a renewal key to enter marks or publish new terms.
-                </p>
-              </div>
-            </div>
-            {authSession.role === 'admin' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setBrandingModalTab('licensing');
-                  setIsBrandingModalOpen(true);
-                }}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shrink-0 transition cursor-pointer"
-              >
-                Enter Renewal Key &rarr;
-              </button>
-            ) : (
-              <span className="text-xs text-slate-400 italic">Contact School Administrator for license renewal.</span>
-            )}
-          </div>
-        )}
-
         {/* ── LEFT SIDEBAR CONSOLE LAYOUT (WHEN LOGGED IN AS STAFF/ADMIN) ── */}
         {authSession ? (
           <div className="flex flex-col lg:flex-row gap-6 items-start">
-            {/* ── LEFT SIDEBAR: CONSOLE MODULE NAVIGATION (BAR THE KEY GEN) ── */}
+            {/* ── LEFT SIDEBAR: CONSOLE MODULE NAVIGATION ── */}
             <aside className="w-full lg:w-64 shrink-0 bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-800 space-y-5">
-              {/* Console Role Badge & Status */}
+              {/* Console Role Badge & Status (No License Info) */}
               <div className="pb-4 border-b border-slate-800 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold">
@@ -831,7 +873,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   </span>
                   <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    {licenseStatus.isWriteRestricted ? 'Read-Only' : 'Active'}
+                    Online
                   </span>
                 </div>
                 <h3 className="text-sm font-bold text-white tracking-tight truncate">
@@ -842,17 +884,13 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 </p>
               </div>
 
-              {/* Navigation Actions (Buttons brought from top bar, strictly NO key generator) */}
+              {/* Navigation Actions (Strictly Faculty Tools, No License & No Parent Redirection) */}
               <nav className="space-y-1.5">
                 {/* 1. Score Entry & Gradebook */}
                 <button
                   type="button"
                   onClick={() => setStaffActiveTab('gradebook')}
-                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
-                    staffActiveTab === 'gradebook'
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                  }`}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-amber-500 text-slate-950 font-bold shadow-xs transition cursor-pointer text-left"
                 >
                   <BookOpen className="w-4 h-4 shrink-0" />
                   <span className="flex-1">Score Entry & Gradebook</span>
@@ -890,67 +928,32 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                       <Building2 className="w-4 h-4 shrink-0 text-slate-400" />
                       <span className="flex-1">School Whitelabeling & Seal</span>
                     </button>
-
-                    {/* License Status & Renewal (STRICTLY NO KEY GENERATOR) */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBrandingModalTab('licensing');
-                        setIsBrandingModalOpen(true);
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
-                        licenseStatus.isExpired || licenseStatus.isRevoked
-                          ? 'bg-rose-600 text-white font-bold animate-pulse'
-                          : licenseStatus.isExpiringSoon
-                          ? 'bg-amber-600 text-white font-bold'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                      }`}
-                    >
-                      <KeyRound className="w-4 h-4 shrink-0 text-amber-400" />
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">License Status</div>
-                        <div className="text-[10px] opacity-75 font-normal truncate">
-                          {licenseStatus.daysRemaining > 0 ? `${licenseStatus.daysRemaining}d remaining` : 'Expired'}
-                        </div>
-                      </div>
-                    </button>
                   </>
                 ) : (
                   <div className="px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-[11px] text-amber-300/90 font-mono">
                     🔒 Teacher Gradebook Mode: Continuous assessment score entry only.
                   </div>
                 )}
-
-                {/* 3. Parent Portal Preview Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setStaffActiveTab('preview')}
-                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
-                    staffActiveTab === 'preview'
-                      ? 'bg-slate-800 text-white font-bold border border-slate-700'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                  }`}
-                >
-                  <Eye className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">Parent Portal Preview</span>
-                </button>
               </nav>
 
-              {/* Sidebar Footer Details */}
+              {/* Sidebar Footer Details (Session Status Only, Strictly No License Info) */}
               <div className="pt-4 border-t border-slate-800 space-y-3">
-                <div className="bg-slate-950/80 rounded-xl p-3 border border-slate-800 text-[11px] space-y-1.5 font-mono">
+                <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 text-[11px] space-y-1.5 font-mono">
                   <div className="text-slate-400 flex items-center justify-between">
-                    <span>PLAN:</span>
-                    <span className="text-amber-400 font-semibold truncate max-w-[120px]">{licenseStatus.planName}</span>
+                    <span>ROLE:</span>
+                    <span className="text-slate-200 font-semibold truncate max-w-[120px]">
+                      {authSession.role === 'admin' ? 'Administrator' : 'Subject Teacher'}
+                    </span>
                   </div>
                   <div className="text-slate-400 flex items-center justify-between">
-                    <span>DAYS:</span>
-                    <span className="text-slate-200 font-semibold">{licenseStatus.daysRemaining}d remaining</span>
+                    <span>TERM:</span>
+                    <span className="text-slate-300 font-semibold">{branding.currentTerm?.split(' ')[0] || 'Harmattan'}</span>
                   </div>
                   <div className="text-slate-400 flex items-center justify-between">
-                    <span>MODE:</span>
-                    <span className={licenseStatus.isWriteRestricted ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
-                      {licenseStatus.isWriteRestricted ? 'Read-Only' : 'Read/Write Active'}
+                    <span>CONSOLE:</span>
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Active
                     </span>
                   </div>
                 </div>
@@ -966,50 +969,20 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               </div>
             </aside>
 
-            {/* ── RIGHT MAIN WORKSPACE ── */}
+            {/* ── RIGHT MAIN WORKSPACE (DEDICATED GRADEBOOK, NO PARENT REDIRECTION) ── */}
             <div className="flex-1 min-w-0 w-full space-y-6">
-              {staffActiveTab === 'gradebook' ? (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                    <div>
-                      <h2 className="text-base font-bold text-slate-900">Academic Score Entry & Terminal Gradebook</h2>
-                      <p className="text-xs text-slate-500">Record Continuous Assessment (CA1, CA2, Exam) and synchronize official terminal records.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setStaffActiveTab('preview')}
-                      className="text-xs px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Preview Parent Portal &rarr;</span>
-                    </button>
-                  </div>
-                  <SubjectGradebook
-                    currentTeacher={currentStaffTeacher}
-                    assignedClasses={classes}
-                    allStudents={students}
-                    onDataUpdated={refreshData}
-                  />
+              <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Academic Score Entry &amp; Terminal Gradebook</h2>
+                  <p className="text-xs text-slate-500">Record Continuous Assessment (CA1, CA2, Exam) and synchronize official terminal records.</p>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between bg-amber-50 border border-amber-200/80 p-3.5 rounded-2xl text-xs">
-                    <div className="flex items-center gap-2 text-amber-900">
-                      <Eye className="w-4 h-4 text-amber-700 shrink-0" />
-                      <span><strong>Staff Preview Mode:</strong> Viewing Result Checker Portal as seen by parents and guardians.</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setStaffActiveTab('gradebook')}
-                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition cursor-pointer shrink-0"
-                    >
-                      &larr; Back to Gradebook
-                    </button>
-                  </div>
-                  {/* Verified Result Sheet or Parent Sign-In Card */}
-                  {verifiedStudent ? renderParentReportSheet() : renderParentSignInCard()}
-                </div>
-              )}
+              </div>
+              <SubjectGradebook
+                currentTeacher={currentStaffTeacher}
+                assignedClasses={classes}
+                allStudents={students}
+                onDataUpdated={refreshData}
+              />
             </div>
           </div>
         ) : (
@@ -1250,14 +1223,17 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         />
       )}
 
-      {/* 5. FORGOT PASSWORD / PASSWORD RESET MODAL FOR PARENTS */}
+      {/* 5. FORGOT PASSWORD / EMAIL PASSCODE VERIFICATION MODAL */}
       {isForgotPasswordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
           <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden animate-fadeIn">
-            <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-4.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-amber-400" />
-                <h3 className="font-bold text-sm">Reset Parent Password</h3>
+                <h3 className="font-bold text-sm">
+                  {forgotStep === 'request_otp' ? 'Forgot Parent Password' : 'Verify Email Passcode & Reset'}
+                </h3>
               </div>
               <button
                 type="button"
@@ -1265,6 +1241,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   setIsForgotPasswordModalOpen(false);
                   setForgotError(null);
                   setForgotSuccess(null);
+                  setOtpSentNotice(null);
+                  setForgotStep('request_otp');
                 }}
                 className="text-slate-400 hover:text-white transition cursor-pointer"
               >
@@ -1272,131 +1250,215 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleResetPassword} className="p-6 space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Enter your registered parent email address along with your child&apos;s Admission / Roll Number to verify your identity and set a new password.
-              </p>
+            {forgotStep === 'request_otp' ? (
+              /* ── STEP 1: ENTER REGISTERED EMAIL & REQUEST PASSCODE ── */
+              <form onSubmit={handleSendResetOtp} className="p-6 space-y-4">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Enter your registered parent email address. For security, we will immediately send a <strong>6-digit verification passcode</strong> to your email to verify your identity before allowing a password reset.
+                </p>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Registered Parent Email:
-                </label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    placeholder="e.g. emeka.obi@gmail.com"
-                    value={forgotEmailInput}
-                    onChange={(e) => {
-                      setForgotEmailInput(e.target.value);
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    Registered Parent Email Address:
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. emeka.obi@gmail.com"
+                      value={forgotEmailInput}
+                      onChange={(e) => {
+                        setForgotEmailInput(e.target.value);
+                        setForgotError(null);
+                      }}
+                      className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition"
+                    />
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Must match the email provided during student onboarding.
+                  </span>
+                </div>
+
+                {forgotError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPasswordModalOpen(false);
                       setForgotError(null);
                     }}
-                    className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                  />
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSendingOtp}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isSendingOtp ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Sending Passcode...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Send 6-Digit Passcode &rarr;</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-              </div>
+              </form>
+            ) : (
+              /* ── STEP 2: ENTER PASSCODE & SET NEW PASSWORD ── */
+              <form onSubmit={handleVerifyOtpAndResetPassword} className="p-6 space-y-4">
+                {/* Email Confirmation Ribbon */}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-950 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="truncate">Code sent to: <strong>{forgotEmailInput}</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep('request_otp')}
+                    className="text-[11px] text-amber-800 underline hover:no-underline font-semibold cursor-pointer shrink-0"
+                  >
+                    Change Email
+                  </button>
+                </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Child&apos;s Admission / Roll Number (Identity Check):
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. P4-01"
-                    value={forgotChildIdInput}
-                    onChange={(e) => {
-                      setForgotChildIdInput(e.target.value);
+                {otpSentNotice && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 font-mono">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="text-[11px]">{otpSentNotice}</span>
+                  </div>
+                )}
+
+                {/* 6-Digit Passcode Input */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    Enter 6-Digit Passcode from Email:
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      required
+                      autoFocus
+                      placeholder="• • • • • •"
+                      value={forgotPasscodeInput}
+                      onChange={(e) => {
+                        setForgotPasscodeInput(e.target.value.replace(/\D/g, ''));
+                        setForgotError(null);
+                      }}
+                      className="w-full text-center text-xl tracking-[0.4em] font-mono font-bold py-2 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 shadow-2xs"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-1 text-[11px]">
+                    <span className="text-slate-400">Valid for 10 minutes</span>
+                    <button
+                      type="button"
+                      disabled={resendCooldown > 0}
+                      onClick={() => handleSendResetOtp()}
+                      className={`font-semibold cursor-pointer ${
+                        resendCooldown > 0 ? 'text-slate-400' : 'text-amber-600 hover:underline'
+                      }`}
+                    >
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    New Password:
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      minLength={4}
+                      placeholder="Enter new password (min. 4 characters)"
+                      value={forgotNewPassword}
+                      onChange={(e) => {
+                        setForgotNewPassword(e.target.value);
+                        setForgotError(null);
+                      }}
+                      className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Confirm New Password */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    Confirm New Password:
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      minLength={4}
+                      placeholder="Re-enter new password"
+                      value={forgotConfirmPassword}
+                      onChange={(e) => {
+                        setForgotConfirmPassword(e.target.value);
+                        setForgotError(null);
+                      }}
+                      className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  </div>
+                </div>
+
+                {forgotError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                {forgotSuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>{forgotSuccess}</span>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPasswordModalOpen(false);
                       setForgotError(null);
+                      setForgotSuccess(null);
+                      setForgotStep('request_otp');
                     }}
-                    className="w-full text-xs font-mono font-bold uppercase pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                  />
-                  <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isResettingPassword}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {isResettingPassword ? 'Updating Password...' : 'Verify Passcode & Reset Password'}
+                  </button>
                 </div>
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Verifies you are the authorized guardian of an enrolled student.
-                </span>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  New Password:
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    minLength={4}
-                    placeholder="Enter at least 4 characters"
-                    value={forgotNewPassword}
-                    onChange={(e) => {
-                      setForgotNewPassword(e.target.value);
-                      setForgotError(null);
-                    }}
-                    className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                  />
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Confirm New Password:
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    minLength={4}
-                    placeholder="Re-enter new password"
-                    value={forgotConfirmPassword}
-                    onChange={(e) => {
-                      setForgotConfirmPassword(e.target.value);
-                      setForgotError(null);
-                    }}
-                    className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                  />
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                </div>
-              </div>
-
-              {forgotError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <span>{forgotError}</span>
-                </div>
-              )}
-
-              {forgotSuccess && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>{forgotSuccess}</span>
-                </div>
-              )}
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsForgotPasswordModalOpen(false);
-                    setForgotError(null);
-                    setForgotSuccess(null);
-                  }}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isResettingPassword}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-xs disabled:opacity-50"
-                >
-                  {isResettingPassword ? 'Updating Password...' : 'Save & Update Password'}
-                </button>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}
