@@ -87,7 +87,7 @@ export const DEFAULT_SCHOOL_BRANDING: SchoolBranding = {
   contactPhone: '+234 803 456 7890',
   contactEmail: 'admin@innovative.edu.ng',
   address: 'Abuja (FCT), Nigeria',
-  website: 'https://attendiq.vercel.app',
+  website: 'https://resultiq.vercel.app',
   currentTerm: 'First Term (2026/2027 Session)',
   resumptionDate: 'Monday, 11th January 2027',
   updatedAt: new Date().toISOString(),

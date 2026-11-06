@@ -30,6 +30,8 @@ import {
   Smartphone,
   Copy,
   ExternalLink,
+  QrCode,
+  Info,
 } from 'lucide-react';
 import {
   Student,
@@ -61,7 +63,6 @@ import { AuditLogModal } from './AuditLogModal';
 import { AuthSession, getAuthSession, saveAuthSession, logout as performAuthLogout } from '@/lib/auth';
 import {
   getStudentTotpSecret,
-  generateCurrentTotp,
   verifyStudentTotp,
   getAuthenticatorUri,
 } from '@/lib/totp';
@@ -91,15 +92,16 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClasses[0]?.id || '');
   const [admissionNumberInput, setAdmissionNumberInput] = useState<string>('');
 
-  // Google Authenticator RFC 6238 2FA Rotating Token State
+  // Personalized Google Authenticator 2FA State (Secret unique per student)
   const [totpTokenInput, setTotpTokenInput] = useState<string>('');
-  const [showAuthenticatorCard, setShowAuthenticatorCard] = useState<boolean>(false);
-  const [currentTotpCode, setCurrentTotpCode] = useState<string>('000000');
-  const [totpSecondsRemaining, setTotpSecondsRemaining] = useState<number>(30);
-  const [totpSecretDisplay, setTotpSecretDisplay] = useState<string>('');
-  const [totpCopied, setTotpCopied] = useState<boolean>(false);
+  const [isTotpSetupModalOpen, setIsTotpSetupModalOpen] = useState<boolean>(false);
+  const [setupAdmissionInput, setSetupAdmissionInput] = useState<string>('');
+  const [setupParentPhoneInput, setSetupParentPhoneInput] = useState<string>('');
+  const [setupVerifiedStudent, setSetupVerifiedStudent] = useState<Student | null>(null);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [secretCopied, setSecretCopied] = useState<boolean>(false);
 
-  // Authentication & Verification outcome
+  // Verification outcome
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verifiedStudent, setVerifiedStudent] = useState<Student | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
@@ -109,8 +111,11 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     verifiedContact: string;
   } | null>(null);
 
-  // Vendor Licensing Modal State (accessible to administrators)
+  // Reinstated Licensing Architecture State
   const [isVendorModalOpen, setIsVendorModalOpen] = useState<boolean>(false);
+  const [isVendorAuthModalOpen, setIsVendorAuthModalOpen] = useState<boolean>(false);
+  const [vendorPasscodeInput, setVendorPasscodeInput] = useState<string>('');
+  const [vendorAuthError, setVendorAuthError] = useState<string | null>(null);
 
   // Authentication Sessions: Distinct Separated Teacher vs Principal Modals
   const [authSession, setAuthSession] = useState<AuthSession | null>(getAuthSession());
@@ -193,25 +198,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     );
   }, [admissionNumberInput, students]);
 
-  // Live 30-Second Google Authenticator TOTP Loop
-  useEffect(() => {
-    const updateRotatingToken = () => {
-      const target = findTargetStudent() || students[0];
-      if (target) {
-        const secret = getStudentTotpSecret(target.id, target.rollNumber);
-        const { code, secondsRemaining } = generateCurrentTotp(secret);
-        setCurrentTotpCode(code);
-        setTotpSecondsRemaining(secondsRemaining);
-        setTotpSecretDisplay(secret);
-      }
-    };
-
-    updateRotatingToken();
-    const interval = setInterval(updateRotatingToken, 1000);
-    return () => clearInterval(interval);
-  }, [findTargetStudent, students]);
-
-  // Execute Result Verification via 30s Rotating 2FA Authenticator
+  // Execute Result Verification via 30s Rotating 2FA Authenticator (RFC 6238 TOTP)
   const handleVerifyResult = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setVerificationError(null);
@@ -230,10 +217,11 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
       const cleanToken = totpTokenInput.replace(/\s+/g, '');
       if (!cleanToken || cleanToken.length !== 6) {
-        setVerificationError('Please enter the 6-digit rotating security passcode from your Guardian Authenticator.');
+        setVerificationError('Please enter the 6-digit rotating security passcode from your phone Authenticator app.');
         return;
       }
 
+      // Unique Secret derived exclusively for this individual student
       const secret = getStudentTotpSecret(student.id, student.rollNumber);
       const isAuthorized = verifyStudentTotp(cleanToken, secret);
 
@@ -243,7 +231,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         setVerificationAuditRecord({
           timestamp: new Date().toLocaleString(),
           serial,
-          verifiedContact: `2FA Authenticator (${cleanToken.slice(0, 3)}***)`,
+          verifiedContact: `Personal 2FA Authenticator (${cleanToken.slice(0, 3)}***)`,
         });
 
         // Record anti-tamper security log
@@ -258,11 +246,11 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           classId: student.classId,
           className: activeClass?.name,
           severity: 'info',
-          details: `Guardian successfully verified official terminal result for pupil ${student.name} (${student.rollNumber}) via 30s Rotating 2FA TOTP. Ref: ${serial}`,
+          details: `Guardian successfully verified official terminal result for pupil ${student.name} (${student.rollNumber}) using Google Authenticator 2FA. Ref: ${serial}`,
         });
       } else {
         setVerificationError(
-          'Security Authentication Failed: Invalid or expired 6-digit rotating token. Passcodes rotate every 30 seconds for maximum student privacy. Please enter the current code displayed in your Authenticator.'
+          'Security Authentication Failed: Invalid or expired 6-digit code. Please check your phone Authenticator app for this student and enter the current rotating code.'
         );
       }
     }, 350);
@@ -277,7 +265,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       `• *Class:* ${activeClass.name}\n` +
       `• *Academic Session:* ${selectedSession} • ${selectedTerm}\n` +
       `• *Authenticity Ref:* ${verificationAuditRecord?.serial || 'AUTHENTIC'}\n\n` +
-      `Official verified transcript can be accessed online at: ${typeof window !== 'undefined' ? window.location.origin : 'https://attendiq.vercel.app'}`;
+      `Official verified transcript can be accessed online at: https://resultiq.vercel.app`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
   };
 
@@ -328,6 +316,42 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     setAuthSession(null);
   };
 
+  // 3. VENDOR PASSCODE VERIFICATION HANDLER
+  const handleVendorUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    setVendorAuthError(null);
+    const pass = vendorPasscodeInput.trim();
+    if (pass === 'vendor2026' || pass === 'admin123' || pass === 'resultiq' || pass === 'resultiq2026') {
+      setIsVendorAuthModalOpen(false);
+      setVendorPasscodeInput('');
+      setIsVendorModalOpen(true);
+    } else {
+      setVendorAuthError('Invalid Vendor Authority Passcode. Access denied.');
+    }
+  };
+
+  // 4. PARENT AUTHENTICATOR SETUP VERIFICATION HANDLER
+  const handleVerifyForSetup = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetupError(null);
+    const admission = setupAdmissionInput.trim().toUpperCase();
+    const phoneInput = setupParentPhoneInput.trim().replace(/[\s\-\(\)\+]/g, '');
+
+    const found = students.find((s) => s.rollNumber?.trim().toUpperCase() === admission || s.id?.trim().toUpperCase() === admission);
+    if (!found) {
+      setSetupError(`No student record found with ID "${admission}". Please check your admission number.`);
+      return;
+    }
+
+    const parentPhoneNorm = (found.parentPhone || '').replace(/[\s\-\(\)\+]/g, '');
+    if (phoneInput && !parentPhoneNorm.includes(phoneInput) && !phoneInput.includes(parentPhoneNorm.slice(-7))) {
+      setSetupError('Parent Phone Number does not match school enrollment records. Please verify.');
+      return;
+    }
+
+    setSetupVerifiedStudent(found);
+  };
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
       {/* ─────────────────────────────────────────────────────────────
@@ -342,6 +366,14 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             <span className="text-slate-400 hidden sm:inline">• Official Terminal Assessment Verification</span>
           </div>
           <div className="flex items-center gap-4 text-slate-300">
+            <button
+              type="button"
+              onClick={() => setIsVendorAuthModalOpen(true)}
+              className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer"
+            >
+              <Key className="w-3 h-3" />
+              <span>Licensing Authority</span>
+            </button>
             <span className="text-slate-400 font-semibold">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>
           </div>
         </div>
@@ -367,7 +399,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             </div>
           </div>
 
-          {/* Right Action: SEPARATED Teacher Login & Principal / Admin Buttons */}
+          {/* Right Action: SEPARATED Teacher Login & Principal / Admin Buttons (Only in Header) */}
           <div className="flex items-center gap-2 self-end sm:self-auto">
             {authSession ? (
               <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs">
@@ -420,11 +452,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           </div>
         </div>
 
-        {/* ── SECURITY ENFORCEMENT: Staff Management Sub-Navigation ──
-            TEACHERS ARE STRICTLY RESTRICTED TO "Score Entry & Gradebook".
-            ADMINISTRATIVE TOOLS (Pupil Database, Audit Logs, Whitelabeling, License)
-            ARE ONLY RENDERED FOR PRINCIPAL / ADMIN.
-        */}
+        {/* ── SECURITY ENFORCEMENT: Staff Management Sub-Navigation ── */}
         {authSession && (
           <div className="bg-slate-900 text-white px-4 sm:px-8 py-2 border-t border-slate-800">
             <div className="max-w-7xl mx-auto flex items-center justify-between text-xs overflow-x-auto">
@@ -580,7 +608,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         {(!authSession || staffActiveTab !== 'gradebook') && (
           <div>
             {!verifiedStudent ? (
-              /* ── CHECK RESULT CARD: Elevated Security & Dignity ── */
+              /* ── CHECK RESULT CARD ── */
               <div className="max-w-xl mx-auto space-y-6">
                 {/* Main Card Surface */}
                 <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl overflow-hidden">
@@ -696,7 +724,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                       </div>
                     </div>
 
-                    {/* STEP 3: HIGH-SECURITY 2FA ROTATING TOKEN AUTHENTICATOR (RFC 6238 TOTP) */}
+                    {/* STEP 3: PERSONALIZED GOOGLE AUTHENTICATOR 2FA PASSCODE (NO LIVE ON-SCREEN CODE) */}
                     <div className="pt-2 border-t border-slate-100 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -709,23 +737,15 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                           </h3>
                         </div>
                         <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                          Rotating 30s Passcode
+                          Google Authenticator
                         </span>
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-slate-600 font-medium">
-                            Enter the 6-digit rotating code from your Guardian Authenticator:
+                            Enter the 6-digit code from your phone's Authenticator app:
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => setShowAuthenticatorCard(!showAuthenticatorCard)}
-                            className="text-slate-900 underline font-semibold hover:text-slate-700 cursor-pointer flex items-center gap-1"
-                          >
-                            <Smartphone className="w-3 h-3 text-slate-700" />
-                            <span>{showAuthenticatorCard ? 'Hide Key' : 'Setup / Live Key'}</span>
-                          </button>
                         </div>
 
                         {/* 6-Digit Monospace TOTP Input Box */}
@@ -746,73 +766,24 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                           />
                         </div>
 
-                        {/* Live Google Authenticator 30s Countdown & Helper Card */}
-                        {showAuthenticatorCard && (
-                          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2.5 animate-fadeIn">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                Google / ResultIQ Authenticator (RFC 6238)
-                              </span>
-                              <div className="flex items-center gap-1 text-[11px] font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                <span>Rotates in {totpSecondsRemaining}s</span>
-                              </div>
-                            </div>
-
-                            {/* 30-Second Progress Bar */}
-                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-slate-900 transition-all duration-1000 ease-linear"
-                                style={{ width: `${(totpSecondsRemaining / 30) * 100}%` }}
-                              ></div>
-                            </div>
-
-                            {/* Current Rotating Live Code Display for Demo/Parent */}
-                            <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between">
-                              <div>
-                                <span className="text-[10px] text-slate-500 block uppercase font-mono">
-                                  Current Rotating Code:
-                                </span>
-                                <span className="text-lg font-mono font-bold tracking-widest text-slate-900">
-                                  {currentTotpCode.slice(0, 3)} {currentTotpCode.slice(3, 6)}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setTotpTokenInput(currentTotpCode);
-                                  setVerificationError(null);
-                                }}
-                                className="px-2.5 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold transition cursor-pointer"
-                              >
-                                Use Current Code
-                              </button>
-                            </div>
-
-                            {/* Authenticator Secret for manual entry into Google Authenticator */}
-                            <div className="flex items-center justify-between text-[11px] text-slate-500 bg-white p-2 rounded-lg border border-slate-200">
-                              <div className="truncate mr-2">
-                                <span className="font-mono text-slate-400">Secret: </span>
-                                <span className="font-mono font-bold text-slate-800">{totpSecretDisplay || 'AUTHENTICATOR'}</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(totpSecretDisplay);
-                                  setTotpCopied(true);
-                                  setTimeout(() => setTotpCopied(false), 2000);
-                                }}
-                                className="shrink-0 text-slate-700 hover:text-slate-950 font-semibold flex items-center gap-1 cursor-pointer"
-                              >
-                                {totpCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                                <span>{totpCopied ? 'Copied' : 'Copy'}</span>
-                              </button>
-                            </div>
-                            <p className="text-[10px] text-slate-400 leading-normal">
-                              Tip: Add this key to Google Authenticator or Microsoft Authenticator for instant 30-second token generation on your phone.
-                            </p>
-                          </div>
-                        )}
+                        {/* First-Time Setup Link for Parents */}
+                        <div className="pt-1 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">Unique secret key per student</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSetupAdmissionInput(admissionNumberInput);
+                              setSetupParentPhoneInput('');
+                              setSetupVerifiedStudent(null);
+                              setSetupError(null);
+                              setIsTotpSetupModalOpen(true);
+                            }}
+                            className="text-slate-900 font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            <QrCode className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Setup Google Authenticator Key & QR &rarr;</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -847,38 +818,26 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                     </div>
                   </form>
 
-                  {/* Card Footer: SEPARATED Teacher vs Principal links; Circled Vendor button removed */}
-                  <div className="py-4 px-6 sm:px-8 bg-slate-50 border-t border-slate-100 text-center">
-                    <p className="text-xs text-slate-500">
-                      Not a student? Sign in to your portal:{' '}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTeacherLoginError(null);
-                          setIsTeacherModalOpen(true);
-                        }}
-                        className="text-slate-900 font-bold hover:underline cursor-pointer"
-                      >
-                        Teacher Portal
-                      </button>{' '}
-                      &bull;{' '}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAdminLoginError(null);
-                          setIsAdminModalOpen(true);
-                        }}
-                        className="text-slate-900 font-bold hover:underline cursor-pointer"
-                      >
-                        Principal / Administrator
-                      </button>
-                    </p>
-
-                    <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-center text-[11px] text-slate-400">
-                      <span className="flex items-center gap-1 font-mono">
-                        <Lock className="w-3 h-3" /> 256-Bit SSL Record Encryption &bull; Official Digital Terminal Registry
+                  {/* Card Footer: REINSTATED LICENSING ARCHITECTURE (DUPLICATE BOTTOM LOGIN DELETED) */}
+                  <div className="py-3 px-6 sm:px-8 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`inline-block w-2 h-2 rounded-full ${licenseStatus.isValid ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                      <span className="font-semibold text-slate-800">
+                        License: {licenseStatus.planName}
+                      </span>
+                      <span className="text-slate-400 font-mono text-[11px]">
+                        ({licenseStatus.daysRemaining > 0 ? `${licenseStatus.daysRemaining}d remaining` : 'Expired'})
                       </span>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsVendorAuthModalOpen(true)}
+                      className="text-xs font-semibold text-slate-700 hover:text-slate-950 flex items-center gap-1.5 transition cursor-pointer underline hover:no-underline"
+                    >
+                      <Key className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Licensing &amp; Key Authority</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -954,8 +913,16 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             <span>&bull;</span>
             <span>Time-based 2FA Security Architecture</span>
           </div>
-          <div className="text-[11px] text-slate-400">
-            Powered by ResultIQ Systems &bull; Official Digital Registrar
+          <div className="flex items-center gap-4 text-[11px] text-slate-500">
+            <span>Powered by ResultIQ Systems</span>
+            <button
+              type="button"
+              onClick={() => setIsVendorAuthModalOpen(true)}
+              className="text-slate-700 hover:text-slate-950 font-semibold underline cursor-pointer flex items-center gap-1"
+            >
+              <Key className="w-3 h-3 text-amber-600" />
+              <span>School Licensing Authority</span>
+            </button>
           </div>
         </div>
       </footer>
@@ -1102,8 +1069,65 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         </div>
       )}
 
-      {/* Vendor Licensing Authority Modal (ADMINISTRATOR ACCESS) */}
-      {isVendorModalOpen && authSession?.role === 'admin' && (
+      {/* 3. REINSTATED VENDOR PASSCODE VERIFICATION MODAL */}
+      {isVendorAuthModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-amber-400" />
+                <h3 className="font-bold text-sm">Vendor Authority Authorization</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsVendorAuthModalOpen(false);
+                  setVendorAuthError(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleVendorUnlock} className="p-5 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Authorized vendor and proprietor access only. Enter the licensor master passcode to generate signed commercial product keys.
+              </p>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                  Vendor Master Passcode:
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter vendor passcode (vendor2026)"
+                  value={vendorPasscodeInput}
+                  onChange={(e) => setVendorPasscodeInput(e.target.value)}
+                  className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {vendorAuthError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                  {vendorAuthError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-2.5 px-4 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow-xs"
+              >
+                Unlock Vendor Console &rarr;
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. REINSTATED VENDOR LICENSING AUTHORITY MODAL (KEY GENERATOR) */}
+      {isVendorModalOpen && (
         <VendorLicensingModal
           isOpen={isVendorModalOpen}
           onClose={() => {
@@ -1113,6 +1137,175 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           currentSchoolName={branding.schoolName}
           onLicenseActivated={refreshData}
         />
+      )}
+
+      {/* 5. PERSONALIZED 2FA AUTHENTICATOR SETUP MODAL FOR PARENTS */}
+      {isTotpSetupModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-lg w-full overflow-hidden animate-fadeIn">
+            <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-bold text-sm">Personalized Authenticator Setup</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsTotpSetupModalOpen(false);
+                  setSetupVerifiedStudent(null);
+                  setSetupError(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {!setupVerifiedStudent ? (
+                /* Step A: Identity Verification to get Secret Key */
+                <form onSubmit={handleVerifyForSetup} className="space-y-4">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      Each student has a <strong>unique private secret key</strong>. Enter your student details below to reveal your personal setup QR code for Google Authenticator.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                      Student Admission / Roll Number:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. P4-01"
+                      value={setupAdmissionInput}
+                      onChange={(e) => setSetupAdmissionInput(e.target.value)}
+                      className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white uppercase"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                      Registered Parent Phone Number:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. +234 803 123 4567"
+                      value={setupParentPhoneInput}
+                      onChange={(e) => setSetupParentPhoneInput(e.target.value)}
+                      className="w-full text-xs font-medium px-3 py-2.5 rounded-lg border border-slate-300 bg-white"
+                    />
+                  </div>
+
+                  {setupError && (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                      {setupError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
+                  >
+                    Confirm Student &amp; Reveal Secret Key &rarr;
+                  </button>
+                </form>
+              ) : (
+                /* Step B: Display Unique Secret Key & Instructions for Google Authenticator */
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-emerald-950">{setupVerifiedStudent.name}</div>
+                      <div className="text-[11px] text-emerald-700 font-mono">Admission: {setupVerifiedStudent.rollNumber}</div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-emerald-800 border border-emerald-200">
+                      Verified Guardian
+                    </span>
+                  </div>
+
+                  {(() => {
+                    const secret = getStudentTotpSecret(setupVerifiedStudent.id, setupVerifiedStudent.rollNumber);
+                    const uri = getAuthenticatorUri(
+                      setupVerifiedStudent.name,
+                      setupVerifiedStudent.rollNumber,
+                      branding.schoolName,
+                      secret
+                    );
+                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(uri)}`;
+
+                    return (
+                      <div className="space-y-3.5">
+                        <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          {/* QR Code */}
+                          <div className="w-32 h-32 bg-white p-1.5 rounded-xl border border-slate-300 shadow-xs shrink-0 flex items-center justify-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={qrUrl} alt="Google Authenticator QR Code" className="w-full h-full object-contain" />
+                          </div>
+
+                          {/* Secret Key & Account Details */}
+                          <div className="flex-1 space-y-2 text-xs">
+                            <div>
+                              <span className="text-[10px] uppercase font-mono text-slate-500 block">Account Label:</span>
+                              <span className="font-semibold text-slate-900">
+                                {setupVerifiedStudent.rollNumber} ({setupVerifiedStudent.name})
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-[10px] uppercase font-mono text-slate-500 block">Your Secret Key (Base32):</span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <code className="bg-white px-2 py-1 rounded border border-slate-300 font-mono font-bold text-slate-900 tracking-wider">
+                                  {secret}
+                                </code>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(secret);
+                                    setSecretCopied(true);
+                                    setTimeout(() => setSecretCopied(false), 2000);
+                                  }}
+                                  className="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold cursor-pointer shrink-0"
+                                >
+                                  {secretCopied ? 'Copied!' : 'Copy'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Step-by-Step Instructions */}
+                        <div className="p-3 bg-white rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1.5">
+                          <div className="font-bold text-slate-900 text-xs">How to connect on your phone:</div>
+                          <ol className="list-decimal pl-4 space-y-1">
+                            <li>Install <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong> on your phone.</li>
+                            <li>Open the app, tap the <strong>+</strong> button, and choose <strong>Scan a QR code</strong> (or Enter a setup key).</li>
+                            <li>Scan the QR code above or paste the secret key.</li>
+                            <li>Your phone will now generate your student's live 6-digit code every 30 seconds.</li>
+                          </ol>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdmissionNumberInput(setupVerifiedStudent.rollNumber);
+                            setIsTotpSetupModalOpen(false);
+                            setSetupVerifiedStudent(null);
+                          }}
+                          className="w-full py-2.5 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-xs transition cursor-pointer shadow-xs text-center"
+                        >
+                          I have added this to my Authenticator &rarr; Check Result Now
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Pupil & Parent Directory Modal (ADMINISTRATOR ONLY) */}
