@@ -85,7 +85,8 @@ export interface Teacher {
   name: string;
   email: string;
   phone: string;
-  assignedClassIds: string[];
+  permanentClassId?: string; // Permanent Homeroom Class (Form Master)
+  assignedClassIds: string[]; // Subject / Teaching Classes
   subjects?: string[];
   subject?: string;
   avatarUrl?: string;

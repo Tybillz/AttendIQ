@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import {
+  X,
   ShieldCheck,
   TrendingUp,
   AlertTriangle,
@@ -74,6 +75,9 @@ import {
   addClass,
   deleteClass,
   reassignClassTeacher,
+  setPermanentClassTeacher,
+  assignTeacherToClass,
+  unassignTeacherFromClass,
   deleteStudent,
   moveStudentToClass,
   getStaffQueries,
@@ -603,8 +607,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       alert('⛔ Action Blocked: Cannot reassign class teachers in strict read-only mode.');
       return;
     }
-    reassignClassTeacher(classId, teacherId);
-    setAccessFeedback('Class teacher assignment updated!');
+    setPermanentClassTeacher(classId, teacherId);
+    setAccessFeedback('Permanent class teacher assignment updated!');
+    setTimeout(() => setAccessFeedback(null), 3000);
+    if (onDataUpdated) onDataUpdated();
+  };
+
+  const handleAssignTeachingClass = (teacherId: string, classId: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot assign teaching class in strict read-only mode.');
+      return;
+    }
+    assignTeacherToClass(teacherId, classId);
+    setAccessFeedback('Subject teaching class assigned to teacher without affecting permanent teacher!');
+    setTimeout(() => setAccessFeedback(null), 3000);
+    if (onDataUpdated) onDataUpdated();
+  };
+
+  const handleUnassignTeachingClass = (teacherId: string, classId: string) => {
+    if (isStrictReadOnly) {
+      alert('⛔ Action Blocked: Cannot unassign class in strict read-only mode.');
+      return;
+    }
+    unassignTeacherFromClass(teacherId, classId);
+    setAccessFeedback('Teacher unassigned from class.');
     setTimeout(() => setAccessFeedback(null), 3000);
     if (onDataUpdated) onDataUpdated();
   };
@@ -3318,23 +3344,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <p className="text-[11px] text-slate-400 mt-1">{c.scheduleTime}</p>
                     </div>
 
-                    {/* Class Teacher Dropdown */}
+                    {/* Permanent Class Teacher (Homeroom) */}
                     <div className="pt-3 border-t border-slate-200">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Assigned Class Teacher
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1 mb-1">
+                        <Award className="h-3 w-3 text-amber-600" /> Permanent Class Teacher (Homeroom)
                       </label>
                       <select
                         value={c.teacherId || ''}
                         onChange={(e) => handleReassignTeacherSubmit(c.id, e.target.value)}
-                        className="w-full text-xs font-bold px-3 py-2 rounded-xl bg-white border border-slate-300 text-indigo-950 focus:outline-indigo-600 cursor-pointer shadow-2xs"
+                        className="w-full text-xs font-bold px-3 py-2 rounded-xl bg-amber-50/50 border border-amber-300 text-slate-900 focus:outline-amber-600 cursor-pointer shadow-2xs"
                       >
-                        <option value="">-- No Teacher Assigned --</option>
+                        <option value="">-- No Permanent Teacher Assigned --</option>
                         {teachers.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.name} {t.phone ? `(${t.phone})` : ''}
+                            {t.name} {t.permanentClassId && t.permanentClassId !== c.id ? `(Perm: ${classes.find(cl => cl.id === t.permanentClassId)?.name || 'Other'})` : ''}
                           </option>
                         ))}
                       </select>
+
+                      {/* Subject Teachers taking lessons in this class */}
+                      {(() => {
+                        const subjectTeachers = teachers.filter((t) => t.assignedClassIds?.includes(c.id) && t.id !== c.teacherId);
+                        return (
+                          <div className="mt-2.5 pt-2 border-t border-slate-200/60">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                              Subject Teachers ({subjectTeachers.length}):
+                            </span>
+                            {subjectTeachers.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {subjectTeachers.map((st) => (
+                                  <span key={st.id} className="text-[10px] font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700">
+                                    {st.name} <span className="text-slate-400">({st.subject || 'Subject'})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">No additional subject teachers</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -3505,13 +3554,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span>None</span>
                         )}
                       </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Assigned:</span>
-                        <span className="font-semibold text-slate-800">
-                          {assignedClasses.length > 0
-                            ? assignedClasses.map((c) => c.name).join(', ')
-                            : 'Unassigned'}
-                        </span>
+                      {/* Permanent Homeroom Class */}
+                      <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
+                            <Award className="h-3 w-3 text-amber-600" /> Permanent Homeroom Class:
+                          </span>
+                          {teacher.permanentClassId && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200/70 text-amber-900">
+                              Form Master
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          value={teacher.permanentClassId || ''}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setPermanentClassTeacher(e.target.value, teacher.id);
+                            } else if (teacher.permanentClassId) {
+                              setPermanentClassTeacher(teacher.permanentClassId, '');
+                            }
+                            if (onDataUpdated) onDataUpdated();
+                          }}
+                          className="w-full text-xs font-bold px-2 py-1 rounded-lg bg-white border border-amber-300 text-slate-900 cursor-pointer focus:outline-amber-600 shadow-2xs"
+                        >
+                          <option value="">-- No Permanent Homeroom --</option>
+                          {classes.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} {c.teacherId && c.teacherId !== teacher.id ? `(Current: ${c.teacherName})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Subject Teaching Classes (Non-Interfering) */}
+                      <div className="p-2 rounded-xl bg-indigo-50/50 border border-indigo-200/60 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800 flex items-center gap-1">
+                            <BookOpen className="h-3 w-3 text-indigo-600" /> Subject Teaching Classes:
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            {assignedClasses.length} assigned
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {assignedClasses.length > 0 ? (
+                            assignedClasses.map((ac) => {
+                              const isPermanent = ac.id === teacher.permanentClassId;
+                              return (
+                                <span
+                                  key={ac.id}
+                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                                    isPermanent
+                                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                      : 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                                  }`}
+                                  title={isPermanent ? 'Permanent Homeroom Class' : 'Subject Teaching Class'}
+                                >
+                                  {isPermanent ? `★ ${ac.name}` : ac.name}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUnassignTeachingClass(teacher.id, ac.id)}
+                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition cursor-pointer"
+                                    title={`Unassign from ${ac.name}`}
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </span>
+                              );
+                            })
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">No classes assigned</span>
+                          )}
+                        </div>
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAssignTeachingClass(teacher.id, e.target.value);
+                            }
+                          }}
+                          className="w-full text-xs font-semibold px-2 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 cursor-pointer focus:outline-indigo-500 shadow-2xs"
+                        >
+                          <option value="">+ Assign Subject Teaching Class...</option>
+                          {classes.map((c) => {
+                            const isCurrent = teacher.assignedClassIds?.includes(c.id);
+                            return (
+                              <option key={c.id} value={c.id} disabled={isCurrent}>
+                                {c.name} {isCurrent ? '(Assigned)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
                       </div>
                       <div className="flex items-center justify-between text-slate-600">
                         <span className="text-slate-400">Login PIN:</span>

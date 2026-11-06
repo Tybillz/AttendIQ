@@ -433,21 +433,35 @@ export function deleteClass(classId: string): boolean {
 // Teachers
 export function getTeachers(): Teacher[] {
   const loaded = getStored<Teacher[]>(KEYS.TEACHERS, INITIAL_TEACHERS);
+  const classes = getStored<ClassSection[]>(KEYS.CLASSES, INITIAL_CLASSES);
   if (!Array.isArray(loaded) || loaded.length === 0) {
     return INITIAL_TEACHERS;
   }
-  return loaded.map((t) => ({
-    ...t,
-    name: t.name || 'Staff Member',
-    email: t.email || '',
-    phone: t.phone || '',
-    assignedClassIds: Array.isArray(t.assignedClassIds) ? t.assignedClassIds : [],
-    subjects: Array.isArray(t.subjects) ? t.subjects : t.subject ? [t.subject] : ['Mathematics', 'English Language'],
-    subject: t.subject || 'Class Teacher',
-    avatarUrl:
-      t.avatarUrl ||
-      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face',
-  }));
+  return loaded.map((t) => {
+    let permClass = t.permanentClassId;
+    if (!permClass) {
+      const homeroom = classes.find((c) => c.teacherId === t.id);
+      if (homeroom) permClass = homeroom.id;
+    }
+    const assignedClassIds = Array.isArray(t.assignedClassIds) ? [...t.assignedClassIds] : [];
+    if (permClass && !assignedClassIds.includes(permClass)) {
+      assignedClassIds.push(permClass);
+    }
+
+    return {
+      ...t,
+      name: t.name || 'Staff Member',
+      email: t.email || '',
+      phone: t.phone || '',
+      permanentClassId: permClass,
+      assignedClassIds,
+      subjects: Array.isArray(t.subjects) ? t.subjects : t.subject ? [t.subject] : ['Mathematics', 'English Language'],
+      subject: t.subject || 'Class Teacher',
+      avatarUrl:
+        t.avatarUrl ||
+        'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face',
+    };
+  });
 }
 
 export function saveTeachers(teachers: Teacher[]): void {
@@ -630,7 +644,7 @@ export function deleteTeacher(teacherId: string): void {
   saveClasses(classes);
 }
 
-export function reassignClassTeacher(classId: string, teacherId: string): void {
+export function setPermanentClassTeacher(classId: string, teacherId: string): void {
   if (isLicenseWriteRestricted()) {
     if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
     return;
@@ -643,34 +657,159 @@ export function reassignClassTeacher(classId: string, teacherId: string): void {
 
   const previousTeacherId = cls.teacherId;
 
-  // Remove this class from previous teacher's list
+  // Clear permanentClassId on previous teacher, BUT KEEP them in assignedClassIds so subject teaching is NOT interrupted
   if (previousTeacherId && previousTeacherId !== teacherId) {
     const prevTeacher = teachers.find((t) => t.id === previousTeacherId);
-    if (prevTeacher) {
-      prevTeacher.assignedClassIds = (prevTeacher.assignedClassIds || []).filter((id) => id !== classId);
+    if (prevTeacher && prevTeacher.permanentClassId === classId) {
+      prevTeacher.permanentClassId = undefined;
     }
   }
 
   const teacher = teachers.find((t) => t.id === teacherId);
 
-  // If teacher is selected
   if (teacher) {
     cls.teacherId = teacher.id;
     cls.teacherName = teacher.name;
 
-    // Add classId to teacher's assigned classes if not present
+    // Clear any other class where this teacher might have been permanent
+    classes.forEach((otherCls) => {
+      if (otherCls.id !== classId && otherCls.teacherId === teacher.id) {
+        otherCls.teacherId = '';
+        otherCls.teacherName = 'Unassigned';
+      }
+    });
+
+    teacher.permanentClassId = classId;
+
+    // Ensure classId is in teacher's assigned classes
     if (!teacher.assignedClassIds) teacher.assignedClassIds = [];
     if (!teacher.assignedClassIds.includes(classId)) {
       teacher.assignedClassIds.push(classId);
     }
   } else {
-    // Unassigned
+    // Unassigned permanent class teacher
     cls.teacherId = '';
     cls.teacherName = 'Unassigned';
+    if (previousTeacherId) {
+      const prevTeacher = teachers.find((t) => t.id === previousTeacherId);
+      if (prevTeacher && prevTeacher.permanentClassId === classId) {
+        prevTeacher.permanentClassId = undefined;
+      }
+    }
   }
 
   saveClasses(classes);
   saveTeachers(teachers);
+
+  try {
+    addAuditLog({
+      actorRole: 'admin',
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      action: 'TEACHER_REASSIGNED',
+      targetType: 'teacher',
+      targetId: teacherId || 'unassigned',
+      targetName: teacher ? teacher.name : 'Unassigned',
+      classId,
+      className: cls.name,
+      oldValue: `Permanent Teacher: ${cls.teacherName}`,
+      newValue: `Permanent Teacher: ${teacher ? teacher.name : 'Unassigned'}`,
+      severity: 'info',
+      details: `Permanent homeroom teacher for ${cls.name} set to ${teacher ? teacher.name : 'Unassigned'}`,
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function assignTeacherToClass(teacherId: string, classId: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
+  const teachers = getTeachers();
+  const classes = getClasses();
+
+  const teacher = teachers.find((t) => t.id === teacherId);
+  const cls = classes.find((c) => c.id === classId);
+  if (!teacher || !cls) return;
+
+  if (!teacher.assignedClassIds) teacher.assignedClassIds = [];
+  if (!teacher.assignedClassIds.includes(classId)) {
+    teacher.assignedClassIds.push(classId);
+    saveTeachers(teachers);
+
+    try {
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'admin',
+        actorName: 'School Administrator',
+        action: 'TEACHER_REASSIGNED',
+        targetType: 'teacher',
+        targetId: teacher.id,
+        targetName: teacher.name,
+        classId,
+        className: cls.name,
+        oldValue: 'Not Assigned',
+        newValue: 'Assigned for Subject Teaching',
+        severity: 'info',
+        details: `Assigned ${teacher.name} to teach in ${cls.name} without interfering with permanent class teacher`,
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+}
+
+export function unassignTeacherFromClass(teacherId: string, classId: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
+  const teachers = getTeachers();
+  const classes = getClasses();
+
+  const teacher = teachers.find((t) => t.id === teacherId);
+  const cls = classes.find((c) => c.id === classId);
+  if (!teacher) return;
+
+  teacher.assignedClassIds = (teacher.assignedClassIds || []).filter((id) => id !== classId);
+
+  // If this teacher was the permanent class teacher of this class, clear permanent status
+  if (teacher.permanentClassId === classId) {
+    teacher.permanentClassId = undefined;
+  }
+  if (cls && cls.teacherId === teacherId) {
+    cls.teacherId = '';
+    cls.teacherName = 'Unassigned';
+    saveClasses(classes);
+  }
+
+  saveTeachers(teachers);
+
+  try {
+    addAuditLog({
+      actorRole: 'admin',
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      action: 'TEACHER_REASSIGNED',
+      targetType: 'teacher',
+      targetId: teacher.id,
+      targetName: teacher.name,
+      classId,
+      className: cls ? cls.name : classId,
+      oldValue: 'Assigned',
+      newValue: 'Unassigned',
+      severity: 'info',
+      details: `Unassigned ${teacher.name} from teaching in ${cls ? cls.name : classId}`,
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function reassignClassTeacher(classId: string, teacherId: string): void {
+  setPermanentClassTeacher(classId, teacherId);
 }
 
 // Alert Settings
