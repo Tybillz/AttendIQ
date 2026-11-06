@@ -37,6 +37,12 @@ import {
   assignTeacherToClass,
   unassignTeacherFromClass,
   reassignClassTeacher,
+  getSchoolSubjects,
+  addSchoolSubject,
+  deleteSchoolSubject,
+  assignSubjectToTeacher,
+  unassignSubjectFromTeacher,
+  setTeacherPrimarySubject,
   bulkImportPupilsFromCSV,
   downloadCSVFile,
 } from '@/lib/storage';
@@ -51,7 +57,7 @@ interface PupilDatabaseModalProps {
   teachers: Teacher[];
   onDataUpdated: () => void;
   onSelectStudentProfile: (student: Student) => void;
-  defaultTab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer';
+  defaultTab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer' | 'subjects';
   isLicenseLocked?: boolean;
 }
 
@@ -67,9 +73,60 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   isLicenseLocked = false,
 }) => {
   const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
-  const [activeTab, setActiveTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer' | 'subjects'>(defaultTab);
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Curriculum & Subjects State
+  const [schoolSubjects, setSchoolSubjects] = useState<string[]>(getSchoolSubjects());
+  const [newSubjectInput, setNewSubjectInput] = useState<string>('');
+  const [subjectSuccessMsg, setSubjectSuccessMsg] = useState<string | null>(null);
+
+  const handleAddSubjectSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isStrictReadOnly) return;
+    const name = newSubjectInput.trim();
+    if (!name) return;
+    const ok = addSchoolSubject(name);
+    if (ok) {
+      setSchoolSubjects(getSchoolSubjects());
+      setSubjectSuccessMsg(`Subject "${name}" added to school curriculum!`);
+      setNewSubjectInput('');
+      setTimeout(() => setSubjectSuccessMsg(null), 3500);
+      onDataUpdated();
+    } else {
+      alert(`Subject "${name}" already exists in the curriculum.`);
+    }
+  };
+
+  const handleDeleteSubjectAction = (subjectName: string) => {
+    if (isStrictReadOnly) return;
+    if (confirm(`Remove subject "${subjectName}" from the curriculum? It will also be unassigned from any teachers.`)) {
+      deleteSchoolSubject(subjectName);
+      setSchoolSubjects(getSchoolSubjects());
+      setSubjectSuccessMsg(`Subject "${subjectName}" removed.`);
+      setTimeout(() => setSubjectSuccessMsg(null), 3500);
+      onDataUpdated();
+    }
+  };
+
+  const handleAssignSubjectToTeacherAction = (teacherId: string, subjectName: string) => {
+    if (isStrictReadOnly) return;
+    assignSubjectToTeacher(teacherId, subjectName);
+    onDataUpdated();
+  };
+
+  const handleUnassignSubjectFromTeacherAction = (teacherId: string, subjectName: string) => {
+    if (isStrictReadOnly) return;
+    unassignSubjectFromTeacher(teacherId, subjectName);
+    onDataUpdated();
+  };
+
+  const handleSetPrimarySubjectAction = (teacherId: string, subjectName: string) => {
+    if (isStrictReadOnly) return;
+    setTeacherPrimarySubject(teacherId, subjectName);
+    onDataUpdated();
+  };
 
   // Transfer & Promotion state
   const [transferSourceClass, setTransferSourceClass] = useState<string>(classes[0]?.id || '');
@@ -413,6 +470,16 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
             }`}
           >
             <BookOpen className="h-4 w-4" /> Classes & Sections ({classes.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('subjects')}
+            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'subjects'
+                ? 'border-emerald-600 text-emerald-800 bg-white font-bold'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <BookOpen className="h-4 w-4 text-emerald-600" /> Curriculum & Subjects ({schoolSubjects.length})
           </button>
           <button
             onClick={() => setActiveTab('add_pupil')}
@@ -1258,6 +1325,71 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                           </span>
                         </div>
                       </div>
+
+                      {/* 3. Assigned Curriculum Subjects */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                            <BookOpen className="h-3 w-3 text-emerald-600" /> Assigned Subjects:
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            {teacher.subjects?.length || 0} subject(s)
+                          </span>
+                        </div>
+
+                        {/* Subject badges */}
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {teacher.subjects && teacher.subjects.length > 0 ? (
+                            teacher.subjects.map((subj) => {
+                              const isPrimary = teacher.subject === subj;
+                              return (
+                                <span
+                                  key={subj}
+                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                                    isPrimary
+                                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                      : 'bg-slate-100 text-slate-800 border-slate-200'
+                                  }`}
+                                  title={isPrimary ? 'Primary Teaching Specialization' : 'Assigned Subject'}
+                                >
+                                  {isPrimary ? `★ ${subj}` : subj}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUnassignSubjectFromTeacherAction(teacher.id, subj)}
+                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition cursor-pointer"
+                                    title={`Unassign ${subj}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              );
+                            })
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">No subjects assigned</span>
+                          )}
+                        </div>
+
+                        {/* Dropdown to assign another subject */}
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAssignSubjectToTeacherAction(teacher.id, e.target.value);
+                            }
+                          }}
+                          className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-emerald-50/50 border border-emerald-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                        >
+                          <option value="">+ Assign Subject to this Teacher...</option>
+                          {schoolSubjects.map((s) => {
+                            const isAssigned = teacher.subjects?.includes(s);
+                            return (
+                              <option key={s} value={s} disabled={isAssigned}>
+                                {s} {isAssigned ? '(Assigned)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
                     </div>
                   );
                 })}
@@ -1445,6 +1577,204 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* TAB 7: CURRICULUM & SUBJECTS REGISTRY */}
+        {activeTab === 'subjects' && (
+          <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
+            {/* Header info */}
+            <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-emerald-600" />
+                  <span>Institutional Curriculum & Subjects Registry</span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Add, remove, and manage curriculum subjects taught at the school, and allocate which teachers take each subject.
+                </p>
+              </div>
+              <span className="text-[11px] font-mono font-bold px-3 py-1 bg-emerald-100 text-emerald-900 rounded-full border border-emerald-300 self-start sm:self-auto">
+                Total Subjects: {schoolSubjects.length}
+              </span>
+            </div>
+
+            {subjectSuccessMsg && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
+                <span>{subjectSuccessMsg}</span>
+                <button onClick={() => setSubjectSuccessMsg(null)} className="text-emerald-700 hover:text-emerald-950 font-mono">✕</button>
+              </div>
+            )}
+
+            {/* Form: Add New Subject */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+              <form onSubmit={handleAddSubjectSubmit} className="space-y-3">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                  Add New Subject to Curriculum:
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <input
+                    type="text"
+                    placeholder="Enter subject name (e.g. Further Mathematics, Economics, Chemistry, Physics)..."
+                    value={newSubjectInput}
+                    onChange={(e) => setNewSubjectInput(e.target.value)}
+                    className="flex-1 text-xs font-bold px-3 py-2.5 rounded-xl bg-white border border-slate-300 focus:outline-emerald-600 text-slate-900 shadow-2xs"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isStrictReadOnly || !newSubjectInput.trim()}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add Subject</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Quick preset recommendations */}
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                  1-Click Standard Subject Presets:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Further Mathematics',
+                    'Physics',
+                    'Chemistry',
+                    'Biology',
+                    'Economics',
+                    'Literature in English',
+                    'Government',
+                    'Geography',
+                    'Yoruba Language',
+                    'Hausa Language',
+                    'Igbo Language',
+                    'History',
+                    'Music & Creative Arts',
+                  ]
+                    .filter((preset) => !schoolSubjects.some((s) => s.toLowerCase() === preset.toLowerCase()))
+                    .map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          addSchoolSubject(preset);
+                          setSchoolSubjects(getSchoolSubjects());
+                          setSubjectSuccessMsg(`Added "${preset}" to curriculum!`);
+                          setTimeout(() => setSubjectSuccessMsg(null), 3500);
+                          onDataUpdated();
+                        }}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 text-slate-700 transition cursor-pointer shadow-2xs flex items-center gap-1"
+                      >
+                        <Plus className="h-2.5 w-2.5 text-emerald-600" />
+                        <span>{preset}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Grid of registered subjects */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
+                <span>Registered School Subjects ({schoolSubjects.length})</span>
+                <span>Assign or remove teachers on each subject</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {schoolSubjects.map((subj) => {
+                  const assignedTeachers = teachers.filter(
+                    (t) => t.subjects?.includes(subj) || t.subject === subj
+                  );
+
+                  return (
+                    <div
+                      key={subj}
+                      className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition flex flex-col justify-between space-y-3"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
+                              <BookOpen className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <h5 className="text-xs font-bold text-slate-900 leading-tight">{subj}</h5>
+                              <span className="text-[10px] text-slate-400">
+                                {assignedTeachers.length} teacher(s) assigned
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubjectAction(subj)}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title={`Delete "${subj}" from curriculum`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        {/* List of teachers assigned to teach this subject */}
+                        <div className="space-y-1 pt-2 border-t border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Teaching Staff:
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {assignedTeachers.length > 0 ? (
+                              assignedTeachers.map((t) => (
+                                <span
+                                  key={t.id}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200"
+                                >
+                                  <span>{t.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUnassignSubjectFromTeacherAction(t.id, subj)}
+                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white p-0.5"
+                                    title={`Unassign ${t.name} from ${subj}`}
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-amber-700 font-medium italic">
+                                ⚠️ No teachers assigned yet
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Dropdown to assign a teacher to this subject */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAssignSubjectToTeacherAction(e.target.value, subj);
+                            }
+                          }}
+                          className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                        >
+                          <option value="">+ Assign Teacher to {subj}...</option>
+                          {teachers.map((t) => {
+                            const isAssigned = t.subjects?.includes(subj) || t.subject === subj;
+                            return (
+                              <option key={t.id} value={t.id} disabled={isAssigned}>
+                                {t.name} {isAssigned ? '(Assigned)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>

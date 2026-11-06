@@ -30,6 +30,7 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_STAFF_QUERIES,
   INITIAL_ANNOUNCEMENTS,
+  INITIAL_SCHOOL_SUBJECTS,
 } from './initialData';
 import { isLicenseWriteRestricted, getLicenseRestrictionReason } from './licensing';
 
@@ -37,6 +38,7 @@ const KEYS = {
   STUDENTS: 'attend_iq_students_v2',
   CLASSES: 'attend_iq_classes_v2',
   TEACHERS: 'attend_iq_teachers_v2',
+  SUBJECTS: 'result_iq_school_subjects_v1',
   SESSIONS: 'attend_iq_sessions_v2',
   ALERTS: 'attend_iq_alerts_v2',
   SETTINGS: 'attend_iq_settings_v2',
@@ -810,6 +812,187 @@ export function unassignTeacherFromClass(teacherId: string, classId: string): vo
 
 export function reassignClassTeacher(classId: string, teacherId: string): void {
   setPermanentClassTeacher(classId, teacherId);
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCHOOL CURRICULUM & SUBJECTS MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+export function getSchoolSubjects(): string[] {
+  const loaded = getStored<string[]>(KEYS.SUBJECTS, INITIAL_SCHOOL_SUBJECTS);
+  if (!Array.isArray(loaded) || loaded.length === 0) {
+    return INITIAL_SCHOOL_SUBJECTS;
+  }
+  return loaded;
+}
+
+export function saveSchoolSubjects(subjects: string[]): void {
+  if (isLicenseWriteRestricted()) {
+    console.warn('saveSchoolSubjects blocked: System in strict read-only mode.');
+    return;
+  }
+  setStored(KEYS.SUBJECTS, subjects);
+}
+
+export function addSchoolSubject(subjectName: string): boolean {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return false;
+  }
+  const trimmed = subjectName.trim();
+  if (!trimmed) return false;
+  const subjects = getSchoolSubjects();
+  if (subjects.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
+    return false; // already exists
+  }
+  subjects.push(trimmed);
+  saveSchoolSubjects(subjects);
+
+  try {
+    addAuditLog({
+      actorRole: 'admin',
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      action: 'GRADE_MODIFIED',
+      targetType: 'grade',
+      targetId: `subj-${Date.now()}`,
+      targetName: trimmed,
+      severity: 'info',
+      details: `Added new school curriculum subject: ${trimmed}`,
+    });
+  } catch (e) {
+    console.error(e);
+  }
+  return true;
+}
+
+export function deleteSchoolSubject(subjectName: string): boolean {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return false;
+  }
+  const subjects = getSchoolSubjects();
+  const updated = subjects.filter((s) => s.toLowerCase() !== subjectName.toLowerCase());
+  if (updated.length === subjects.length) return false;
+
+  saveSchoolSubjects(updated);
+
+  // Also remove this subject from teachers' subjects list
+  const teachers = getTeachers();
+  let teachersModified = false;
+  teachers.forEach((t) => {
+    if (t.subjects && t.subjects.includes(subjectName)) {
+      t.subjects = t.subjects.filter((s) => s !== subjectName);
+      teachersModified = true;
+    }
+    if (t.subject === subjectName) {
+      t.subject = t.subjects && t.subjects.length > 0 ? t.subjects[0] : 'Class Teacher';
+      teachersModified = true;
+    }
+  });
+  if (teachersModified) {
+    saveTeachers(teachers);
+  }
+
+  try {
+    addAuditLog({
+      actorRole: 'admin',
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      action: 'GRADE_MODIFIED',
+      targetType: 'grade',
+      targetId: `subj-${Date.now()}`,
+      targetName: subjectName,
+      severity: 'warning',
+      details: `Deleted school curriculum subject: ${subjectName}`,
+    });
+  } catch (e) {
+    console.error(e);
+  }
+  return true;
+}
+
+export function assignSubjectToTeacher(teacherId: string, subjectName: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
+  const teachers = getTeachers();
+  const teacher = teachers.find((t) => t.id === teacherId);
+  if (!teacher) return;
+
+  if (!teacher.subjects) teacher.subjects = [];
+  if (!teacher.subjects.includes(subjectName)) {
+    teacher.subjects.push(subjectName);
+    if (!teacher.subject || teacher.subject === 'Class Teacher') {
+      teacher.subject = subjectName;
+    }
+    saveTeachers(teachers);
+
+    try {
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'admin',
+        actorName: 'School Administrator',
+        action: 'TEACHER_REASSIGNED',
+        targetType: 'teacher',
+        targetId: teacher.id,
+        targetName: teacher.name,
+        severity: 'info',
+        details: `Assigned subject "${subjectName}" to ${teacher.name}`,
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+}
+
+export function unassignSubjectFromTeacher(teacherId: string, subjectName: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
+  const teachers = getTeachers();
+  const teacher = teachers.find((t) => t.id === teacherId);
+  if (!teacher) return;
+
+  teacher.subjects = (teacher.subjects || []).filter((s) => s !== subjectName);
+  if (teacher.subject === subjectName) {
+    teacher.subject = teacher.subjects.length > 0 ? teacher.subjects[0] : 'Class Teacher';
+  }
+  saveTeachers(teachers);
+
+  try {
+    addAuditLog({
+      actorRole: 'admin',
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      action: 'TEACHER_REASSIGNED',
+      targetType: 'teacher',
+      targetId: teacher.id,
+      targetName: teacher.name,
+      severity: 'info',
+      details: `Unassigned subject "${subjectName}" from ${teacher.name}`,
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function setTeacherPrimarySubject(teacherId: string, subjectName: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
+  const teachers = getTeachers();
+  const teacher = teachers.find((t) => t.id === teacherId);
+  if (!teacher) return;
+
+  teacher.subject = subjectName;
+  if (!teacher.subjects) teacher.subjects = [];
+  if (!teacher.subjects.includes(subjectName)) {
+    teacher.subjects.push(subjectName);
+  }
+  saveTeachers(teachers);
 }
 
 // Alert Settings

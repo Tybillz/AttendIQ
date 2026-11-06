@@ -78,6 +78,9 @@ import {
   setPermanentClassTeacher,
   assignTeacherToClass,
   unassignTeacherFromClass,
+  getSchoolSubjects,
+  assignSubjectToTeacher,
+  unassignSubjectFromTeacher,
   deleteStudent,
   moveStudentToClass,
   getStaffQueries,
@@ -129,7 +132,7 @@ interface AdminDashboardProps {
   onDateChange: (date: string) => void;
   alertSettings: AlertSettings;
   teacherAnalytics: TeacherAnalytics[];
-  onOpenDatabaseModal: (tab?: 'pupils' | 'teachers' | 'classes' | 'add_pupil' | 'bulk_import' | 'transfer') => void;
+  onOpenDatabaseModal: (tab?: 'pupils' | 'teachers' | 'classes' | 'add_pupil' | 'bulk_import' | 'transfer' | 'subjects') => void;
   onOpenSettingsModal: () => void;
   onSelectStudentProfile: (student: Student) => void;
   onDataUpdated?: () => void;
@@ -3487,6 +3490,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
               <button
                 type="button"
+                onClick={() => onOpenDatabaseModal('subjects')}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Curriculum & Subjects</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => onOpenDatabaseModal('teachers')}
                 className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
               >
@@ -3642,6 +3653,71 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             return (
                               <option key={c.id} value={c.id} disabled={isCurrent}>
                                 {c.name} {isCurrent ? '(Assigned)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {/* Assigned Curriculum Subjects */}
+                      <div className="p-2 rounded-xl bg-emerald-50/50 border border-emerald-200/60 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                            <BookOpen className="h-3 w-3 text-emerald-600" /> Assigned Subjects:
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            {teacher.subjects?.length || 0} subject(s)
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {teacher.subjects && teacher.subjects.length > 0 ? (
+                            teacher.subjects.map((subj) => {
+                              const isPrimary = teacher.subject === subj;
+                              return (
+                                <span
+                                  key={subj}
+                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                                    isPrimary
+                                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                      : 'bg-slate-100 text-slate-800 border-slate-200'
+                                  }`}
+                                  title={isPrimary ? 'Primary Teaching Subject' : 'Assigned Subject'}
+                                >
+                                  {isPrimary ? `★ ${subj}` : subj}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      unassignSubjectFromTeacher(teacher.id, subj);
+                                      if (onDataUpdated) onDataUpdated();
+                                    }}
+                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white p-0.5 transition cursor-pointer"
+                                    title={`Unassign ${subj}`}
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </span>
+                              );
+                            })
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">No subjects assigned</span>
+                          )}
+                        </div>
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              assignSubjectToTeacher(teacher.id, e.target.value);
+                              if (onDataUpdated) onDataUpdated();
+                            }
+                          }}
+                          className="w-full text-xs font-semibold px-2 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                        >
+                          <option value="">+ Assign Subject to Teacher...</option>
+                          {getSchoolSubjects().map((s) => {
+                            const isAssigned = teacher.subjects?.includes(s);
+                            return (
+                              <option key={s} value={s} disabled={isAssigned}>
+                                {s} {isAssigned ? '(Assigned)' : ''}
                               </option>
                             );
                           })}

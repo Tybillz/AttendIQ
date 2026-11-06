@@ -161,7 +161,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
   const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'preview'>('gradebook');
   const [isPupilModalOpen, setIsPupilModalOpen] = useState<boolean>(false);
-  const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer'>('pupils');
+  const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer' | 'subjects'>('pupils');
   const [isBrandingModalOpen, setIsBrandingModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
 
@@ -935,6 +935,19 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                     >
                       <ArrowRightLeft className="w-4 h-4 shrink-0 text-amber-400" />
                       <span className="flex-1">Move & Promote Pupils</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPupilModalDefaultTab('subjects');
+                        setIsPupilModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 transition cursor-pointer text-left"
+                      title="Manage school curriculum, add/remove subjects & assign to teachers"
+                    >
+                      <BookOpen className="w-4 h-4 shrink-0 text-emerald-400" />
+                      <span className="flex-1">Curriculum & Subjects</span>
                     </button>
 
                     <button

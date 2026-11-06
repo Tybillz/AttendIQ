@@ -86,6 +86,22 @@ export const INITIAL_TEACHERS: Teacher[] = [
   },
 ];
 
+export const INITIAL_SCHOOL_SUBJECTS: string[] = [
+  'Mathematics',
+  'English Language',
+  'Basic Science & Technology',
+  'Civic Education',
+  'Computer Studies / ICT',
+  'Agricultural Science',
+  'Social Studies',
+  'Business Studies',
+  'French Language',
+  'Christian Religious Studies (CRS)',
+  'Islamic Religious Studies (IRS)',
+  'Physical & Health Education',
+  'Creative & Cultural Arts',
+];
+
 export const INITIAL_SUBJECT_GRADES: SubjectGradeRecord[] = [
   {
     id: 'stu-101-Mathematics-First Term',
