@@ -1,18 +1,14 @@
 const https = require('https');
 
-https.get('https://attendiq.vercel.app', (res) => {
+https.get('https://resultiq.vercel.app', (res) => {
   let data = '';
   res.on('data', chunk => data += chunk);
   res.on('end', () => {
-    console.log('Status code:', res.statusCode);
-    console.log('Contains Enter Classroom Workspace:', data.includes('Enter Classroom Workspace'));
-    console.log('Contains Confidential Access:', data.includes('Confidential Access'));
-    console.log('Contains Auto-Fill PIN:', data.includes('Auto-Fill PIN'));
-    const chunks = data.match(/\/_next\/static\/[^"]+/g);
-    console.log('Script chunks found:', chunks ? chunks.length : 0);
-    if (chunks && chunks.length > 0) {
-      console.log('First 3 chunks:', chunks.slice(0, 3));
-    }
+    console.log('ResultIQ Status code:', res.statusCode);
+    console.log('Contains ResultIQ:', data.includes('ResultIQ'));
+    console.log('Contains Verified Portal:', data.includes('Verified Portal'));
+    console.log('Contains Key Generator:', data.includes('Key Generator'));
+    console.log('Title/Header snippet:', data.substring(0, 300).replace(/\s+/g, ' '));
   });
 }).on('error', (e) => {
   console.error(e);
