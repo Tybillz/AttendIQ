@@ -33,7 +33,6 @@ import {
   getSchoolLicense,
   getLicenseStatus,
   activateLicenseKey,
-  generateSignedLicenseKey,
   LicensePlanType,
   LicenseStatusResult,
 } from '@/lib/licensing';
@@ -519,7 +518,7 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                       {licenseStatus.revocationReason || 'This license was revoked by the software licensor due to subscription lapse or agreement termination.'}
                     </p>
                     <p className="text-[11px] text-rose-200 mt-1 font-semibold">
-                      Write operations are restricted. Please contact your AttendIQ vendor representative to settle authorization and obtain an active renewal key.
+                      Write operations are restricted. Please contact your ResultIQ vendor representative to settle authorization and obtain an active renewal key.
                     </p>
                   </div>
                 </div>
@@ -630,8 +629,8 @@ export const WhitelabelModal: React.FC<WhitelabelModalProps> = ({
                 </form>
 
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Commercial Software Licensing • AttendIQ Enterprise Platform</span>
-                  <span>Need an invoice or renewal key? Contact AttendIQ Sales</span>
+                  <span>Commercial Software Licensing • ResultIQ Enterprise Platform</span>
+                  <span>Need an invoice or renewal key? Contact ResultIQ Licensing</span>
                 </div>
               </div>
             </div>
