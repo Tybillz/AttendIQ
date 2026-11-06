@@ -783,11 +783,12 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               </button>
             ) : (
               <span
-                className="text-slate-500 font-medium flex items-center gap-1 cursor-not-allowed select-none opacity-40"
-                title="Licensing Authority is locked for logged-in staff and administrators"
+                className="text-slate-600 font-medium flex items-center gap-1 cursor-not-allowed select-none pointer-events-none opacity-40"
+                title="Licensing Authority is restricted to Vendor/Parent Login Homepage"
+                aria-disabled="true"
               >
-                <Key className="w-3 h-3 text-slate-500" />
-                <span>Licensing Authority</span>
+                <Key className="w-3 h-3 text-slate-600" />
+                <span>Licensing Authority (Restricted)</span>
               </span>
             )}
             <span className="text-slate-400 font-semibold">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>

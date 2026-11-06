@@ -1256,7 +1256,82 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                         </select>
                       </div>
 
-                      {/* 2. Additional / Subject Teaching Classes (Non-Interfering) */}
+                      {/* 2. Assigned Curriculum Subjects (What this teacher teaches) */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                            <BookOpen className="h-3 w-3 text-emerald-600" /> Assigned Subjects:
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            {teacher.subjects?.length || 0} subject(s)
+                          </span>
+                        </div>
+
+                        {/* Subject badges */}
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {teacher.subjects && teacher.subjects.length > 0 ? (
+                            teacher.subjects.map((subj) => {
+                              const isPrimary = teacher.subject === subj;
+                              return (
+                                <span
+                                  key={subj}
+                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                                    isPrimary
+                                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                      : 'bg-slate-100 text-slate-800 border-slate-200'
+                                  }`}
+                                  title={isPrimary ? 'Primary Teaching Specialization (Click ★ to toggle)' : 'Click ★ to make primary specialization'}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetPrimarySubjectAction(teacher.id, subj)}
+                                    className={`cursor-pointer hover:scale-110 transition ${
+                                      isPrimary ? 'text-amber-500 font-black' : 'text-slate-400 hover:text-amber-500'
+                                    }`}
+                                    title={isPrimary ? 'Primary Specialization' : 'Set as primary'}
+                                  >
+                                    ★
+                                  </button>
+                                  <span>{subj}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUnassignSubjectFromTeacherAction(teacher.id, subj)}
+                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition cursor-pointer"
+                                    title={`Unassign ${subj} from ${teacher.name}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              );
+                            })
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">No subjects assigned yet</span>
+                          )}
+                        </div>
+
+                        {/* Dropdown to assign another subject to this teacher */}
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAssignSubjectToTeacherAction(teacher.id, e.target.value);
+                            }
+                          }}
+                          className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-emerald-50/50 border border-emerald-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                        >
+                          <option value="">+ Assign Subject to {teacher.name}...</option>
+                          {schoolSubjects.map((s) => {
+                            const isAssigned = teacher.subjects?.includes(s);
+                            return (
+                              <option key={s} value={s} disabled={isAssigned}>
+                                {s} {isAssigned ? '(Assigned)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {/* 3. Subject Teaching Classes (Where this teacher teaches their subjects) */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800 flex items-center gap-1">
@@ -1286,7 +1361,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveTeachingClass(teacher.id, ac.id)}
-                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition"
+                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition cursor-pointer"
                                     title={`Unassign from ${ac.name}`}
                                   >
                                     <X className="h-3 w-3" />
@@ -1310,7 +1385,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                             }}
                             className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-800 cursor-pointer focus:outline-indigo-500 shadow-2xs"
                           >
-                            <option value="">+ Assign Subject Teaching Class...</option>
+                            <option value="">+ Assign Teaching Class to {teacher.name}...</option>
                             {classes.map((c) => {
                               const isCurrent = teacher.assignedClassIds?.includes(c.id);
                               return (
@@ -1324,71 +1399,6 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                             💡 Teaching a subject here does not replace or interfere with the permanent class teacher.
                           </span>
                         </div>
-                      </div>
-
-                      {/* 3. Assigned Curriculum Subjects */}
-                      <div className="pt-2 border-t border-slate-100">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
-                            <BookOpen className="h-3 w-3 text-emerald-600" /> Assigned Subjects:
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-semibold">
-                            {teacher.subjects?.length || 0} subject(s)
-                          </span>
-                        </div>
-
-                        {/* Subject badges */}
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {teacher.subjects && teacher.subjects.length > 0 ? (
-                            teacher.subjects.map((subj) => {
-                              const isPrimary = teacher.subject === subj;
-                              return (
-                                <span
-                                  key={subj}
-                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                                    isPrimary
-                                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                                      : 'bg-slate-100 text-slate-800 border-slate-200'
-                                  }`}
-                                  title={isPrimary ? 'Primary Teaching Specialization' : 'Assigned Subject'}
-                                >
-                                  {isPrimary ? `★ ${subj}` : subj}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUnassignSubjectFromTeacherAction(teacher.id, subj)}
-                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition cursor-pointer"
-                                    title={`Unassign ${subj}`}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </span>
-                              );
-                            })
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">No subjects assigned</span>
-                          )}
-                        </div>
-
-                        {/* Dropdown to assign another subject */}
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAssignSubjectToTeacherAction(teacher.id, e.target.value);
-                            }
-                          }}
-                          className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-emerald-50/50 border border-emerald-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
-                        >
-                          <option value="">+ Assign Subject to this Teacher...</option>
-                          {schoolSubjects.map((s) => {
-                            const isAssigned = teacher.subjects?.includes(s);
-                            return (
-                              <option key={s} value={s} disabled={isAssigned}>
-                                {s} {isAssigned ? '(Assigned)' : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
                       </div>
                     </div>
                   );
@@ -1674,11 +1684,32 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
               </div>
             </div>
 
+            {/* Guidance Banner: Explaining Subjects are Assigned to Teachers */}
+            <div className="p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <BookOpen className="h-4 w-4 text-emerald-700 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <span className="font-bold">Official School Curriculum Catalog</span>
+                  <p className="text-[11px] text-emerald-800 mt-0.5">
+                    Add or retire subjects offered across all classes. In ResultIQ, subjects are assigned directly to teachers from the <strong>Teachers &amp; Staff</strong> tab.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('teachers')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition cursor-pointer text-xs shrink-0 self-start sm:self-auto shadow-2xs"
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Go to Teachers &amp; Assign Subjects &rarr;</span>
+              </button>
+            </div>
+
             {/* Grid of registered subjects */}
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
-                <span>Registered School Subjects ({schoolSubjects.length})</span>
-                <span>Assign or remove teachers on each subject</span>
+                <span>Active School Subjects ({schoolSubjects.length})</span>
+                <span className="text-[11px] text-slate-400 font-normal">Catalog view • Delete subjects or review assigned staff</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1701,7 +1732,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                             <div>
                               <h5 className="text-xs font-bold text-slate-900 leading-tight">{subj}</h5>
                               <span className="text-[10px] text-slate-400">
-                                {assignedTeachers.length} teacher(s) assigned
+                                {assignedTeachers.length} teacher(s) currently teaching
                               </span>
                             </div>
                           </div>
@@ -1716,10 +1747,10 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                           </button>
                         </div>
 
-                        {/* List of teachers assigned to teach this subject */}
-                        <div className="space-y-1 pt-2 border-t border-slate-100">
+                        {/* Informative List of teachers assigned to teach this subject */}
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Teaching Staff:
+                            Staff Teaching {subj}:
                           </span>
                           <div className="flex flex-wrap gap-1">
                             {assignedTeachers.length > 0 ? (
@@ -1729,46 +1760,26 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                                   className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200"
                                 >
                                   <span>{t.name}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUnassignSubjectFromTeacherAction(t.id, subj)}
-                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white p-0.5"
-                                    title={`Unassign ${t.name} from ${subj}`}
-                                  >
-                                    <X className="h-2.5 w-2.5" />
-                                  </button>
                                 </span>
                               ))
                             ) : (
                               <span className="text-[10px] text-amber-700 font-medium italic">
-                                ⚠️ No teachers assigned yet
+                                Not assigned to any teacher yet
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Dropdown to assign a teacher to this subject */}
-                      <div className="pt-2 border-t border-slate-100">
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAssignSubjectToTeacherAction(e.target.value, subj);
-                            }
-                          }}
-                          className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                      {/* Quick link to assign this subject to teachers */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('teachers')}
+                          className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition cursor-pointer"
                         >
-                          <option value="">+ Assign Teacher to {subj}...</option>
-                          {teachers.map((t) => {
-                            const isAssigned = t.subjects?.includes(subj) || t.subject === subj;
-                            return (
-                              <option key={t.id} value={t.id} disabled={isAssigned}>
-                                {t.name} {isAssigned ? '(Assigned)' : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
+                          <span>Manage staff on Teachers tab &rarr;</span>
+                        </button>
                       </div>
                     </div>
                   );
