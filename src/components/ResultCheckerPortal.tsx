@@ -769,14 +769,25 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             <span className="text-slate-400 hidden sm:inline">• Official Terminal Assessment Verification</span>
           </div>
           <div className="flex items-center gap-4 text-slate-300">
-            <button
-              type="button"
-              onClick={() => setIsVendorAuthModalOpen(true)}
-              className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer"
-            >
-              <Key className="w-3 h-3" />
-              <span>Licensing Authority</span>
-            </button>
+            {!authSession ? (
+              <button
+                type="button"
+                onClick={() => setIsVendorAuthModalOpen(true)}
+                className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer"
+                title="Open Vendor Licensing Authority"
+              >
+                <Key className="w-3 h-3" />
+                <span>Licensing Authority</span>
+              </button>
+            ) : (
+              <span
+                className="text-slate-500 font-medium flex items-center gap-1 cursor-not-allowed select-none opacity-40"
+                title="Licensing Authority is locked for logged-in staff and administrators"
+              >
+                <Key className="w-3 h-3 text-slate-500" />
+                <span>Licensing Authority</span>
+              </span>
+            )}
             <span className="text-slate-400 font-semibold">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>
           </div>
         </div>
@@ -1153,8 +1164,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         </div>
       )}
 
-      {/* 3. REINSTATED VENDOR PASSCODE VERIFICATION MODAL */}
-      {isVendorAuthModalOpen && (
+      {/* 3. REINSTATED VENDOR PASSCODE VERIFICATION MODAL (Parent Homepage Only) */}
+      {!authSession && isVendorAuthModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
           <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-sm w-full overflow-hidden">
             <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
@@ -1211,7 +1222,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       )}
 
       {/* 4. REINSTATED VENDOR LICENSING AUTHORITY MODAL (KEY GENERATOR) */}
-      {isVendorModalOpen && (
+      {!authSession && isVendorModalOpen && (
         <VendorLicensingModal
           isOpen={isVendorModalOpen}
           onClose={() => {
