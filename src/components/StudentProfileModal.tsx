@@ -1392,6 +1392,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               student={activeStudent}
               className={classNameTitle}
               totalSessionsHeld={totalDays > 0 ? totalDays : 60}
+              readOnly={isStrictReadOnly}
               onStudentUpdated={() => {
                 onStudentUpdated();
                 const fresh = getStudents().find((s) => s.id === activeStudent.id);

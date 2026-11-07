@@ -746,12 +746,13 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           </div>
         </div>
 
-        {/* Pure Academic Terminal Report Sheet */}
+        {/* Pure Academic Terminal Report Sheet (Strictly Read-Only for Parents: Printable & Downloadable) */}
         <TerminalReportSheet
           student={verifiedStudent}
           className={currentClass?.name || 'Primary 4'}
           classPupilsCount={currentClass?.pupilCount || 14}
           onStudentUpdated={refreshData}
+          readOnly={true}
         />
       </div>
     );

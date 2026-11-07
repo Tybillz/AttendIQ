@@ -33,6 +33,7 @@ interface TerminalReportSheetProps {
   totalSessionsHeld?: number;
   onPrint?: () => void;
   onStudentUpdated?: () => void;
+  readOnly?: boolean;
 }
 
 export const getDefaultEvaluation = (studentName: string): TerminalEvaluation => ({
@@ -66,6 +67,7 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
   totalSessionsHeld = 60,
   onPrint,
   onStudentUpdated,
+  readOnly = false,
 }) => {
   // Evaluation & Remarks State
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
@@ -197,25 +199,31 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
               Official Nigerian Term Report Sheet • {student.name}
             </span>
             <span className="text-[11px] text-slate-400">
-              Affective, psychomotor traits, teacher remarks & principal recommendations
+              {readOnly
+                ? 'Official Verified Academic Transcript • Authenticated School Copy'
+                : 'Affective, psychomotor traits, teacher remarks & principal recommendations'}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsEditingEvaluation(!isEditingEvaluation)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer shadow-xs ${
-              isEditingEvaluation
-                ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
-                : 'bg-indigo-600 text-white hover:bg-indigo-500'
-            }`}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            <span>{isEditingEvaluation ? 'Close Remarks Editor' : 'Edit Remarks & Ratings'}</span>
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => setIsEditingEvaluation(!isEditingEvaluation)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer shadow-xs ${
+                isEditingEvaluation
+                  ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-500'
+              }`}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span>{isEditingEvaluation ? 'Close Remarks Editor' : 'Edit Remarks & Ratings'}</span>
+            </button>
+          )}
 
           <button
+            type="button"
             onClick={handlePrintTrigger}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:from-emerald-700 hover:to-teal-700 shadow-sm transition active:scale-95 cursor-pointer"
           >
@@ -233,8 +241,8 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
         </div>
       )}
 
-      {/* INTERACTIVE REMARKS & RATINGS EDITOR (Visible when isEditingEvaluation is true) */}
-      {isEditingEvaluation && (
+      {/* INTERACTIVE REMARKS & RATINGS EDITOR (Visible strictly when staff editing is enabled and not read-only) */}
+      {!readOnly && isEditingEvaluation && (
         <form
           onSubmit={handleSaveEvaluation}
           className="no-print p-5 rounded-3xl bg-amber-50/90 border-2 border-amber-300 shadow-md space-y-6 animate-in fade-in"
@@ -675,13 +683,16 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
               <span className="font-bold text-slate-900 uppercase text-[10px] tracking-wider">
                 Affective Domain & Character Development (Rating 1 - 5)
               </span>
-              <button
-                onClick={() => setIsEditingEvaluation(true)}
-                className="no-print p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
-                title="Edit Affective Ratings"
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingEvaluation(true)}
+                  className="no-print p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+                  title="Edit Affective Ratings"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px] text-slate-700">
               <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
@@ -717,13 +728,16 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
               <span className="font-bold text-slate-900 uppercase text-[10px] tracking-wider">
                 Psychomotor & Practical Skills (Rating 1 - 5)
               </span>
-              <button
-                onClick={() => setIsEditingEvaluation(true)}
-                className="no-print p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
-                title="Edit Psychomotor Ratings"
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingEvaluation(true)}
+                  className="no-print p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+                  title="Edit Psychomotor Ratings"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px] text-slate-700">
               <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
@@ -761,13 +775,16 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
             <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase mb-1">
               <div className="flex items-center gap-2">
                 <span>Form / Class Teacher&apos;s Remark</span>
-                <button
-                  onClick={() => setIsEditingEvaluation(true)}
-                  className="no-print p-0.5 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
-                  title="Edit Teacher's Remark"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingEvaluation(true)}
+                    className="no-print p-0.5 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                    title="Edit Teacher's Remark"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                )}
               </div>
               <span>
                 Signature: {evaluation.teacherSignature ? <strong className="text-slate-900 italic font-serif capitalize">{evaluation.teacherSignature}</strong> : '______________________'}
@@ -783,13 +800,16 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
             <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase mb-1">
               <div className="flex items-center gap-2">
                 <span>Principal&apos;s Official Recommendation</span>
-                <button
-                  onClick={() => setIsEditingEvaluation(true)}
-                  className="no-print p-0.5 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
-                  title="Edit Principal's Recommendation"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingEvaluation(true)}
+                    className="no-print p-0.5 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                    title="Edit Principal's Recommendation"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                )}
               </div>
               <span className="text-emerald-700 font-bold">School Stamp & Seal: [ VERIFIED ]</span>
             </div>
