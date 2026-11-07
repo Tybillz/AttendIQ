@@ -79,6 +79,7 @@ import {
   assignTeacherToClass,
   unassignTeacherFromClass,
   getSchoolSubjects,
+  getSchoolSubjectItems,
   assignSubjectToTeacher,
   unassignSubjectFromTeacher,
   setTeacherPrimarySubject,
@@ -3663,17 +3664,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               if (onDataUpdated) onDataUpdated();
                             }
                           }}
-                          className="w-full text-xs font-semibold px-2 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
+                          className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-emerald-50/50 border border-emerald-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
                         >
                           <option value="">+ Assign Subject to {teacher.name}...</option>
-                          {getSchoolSubjects().map((s) => {
-                            const isAssigned = teacher.subjects?.includes(s);
-                            return (
-                              <option key={s} value={s} disabled={isAssigned}>
-                                {s} {isAssigned ? '(Assigned)' : ''}
-                              </option>
-                            );
-                          })}
+
+                          <optgroup label="🌟 Core / General Subjects (All Levels)">
+                            {getSchoolSubjectItems()
+                              .filter((item) => item.level === 'all')
+                              .map((item) => {
+                                const isAssigned = teacher.subjects?.includes(item.name);
+                                return (
+                                  <option key={item.name} value={item.name} disabled={isAssigned}>
+                                    {item.name} {isAssigned ? '(Assigned)' : ''}
+                                  </option>
+                                );
+                              })}
+                          </optgroup>
+
+                          <optgroup label="🎒 Primary School Subjects">
+                            {getSchoolSubjectItems()
+                              .filter((item) => item.level === 'primary')
+                              .map((item) => {
+                                const isAssigned = teacher.subjects?.includes(item.name);
+                                return (
+                                  <option key={item.name} value={item.name} disabled={isAssigned}>
+                                    {item.name} {isAssigned ? '(Assigned)' : ''}
+                                  </option>
+                                );
+                              })}
+                          </optgroup>
+
+                          <optgroup label="🎓 Secondary School Subjects (JSS & SSS)">
+                            {getSchoolSubjectItems()
+                              .filter((item) => item.level === 'secondary')
+                              .map((item) => {
+                                const isAssigned = teacher.subjects?.includes(item.name);
+                                return (
+                                  <option key={item.name} value={item.name} disabled={isAssigned}>
+                                    {item.name} {isAssigned ? '(Assigned)' : ''}
+                                  </option>
+                                );
+                              })}
+                          </optgroup>
                         </select>
                       </div>
 

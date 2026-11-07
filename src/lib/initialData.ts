@@ -1,4 +1,4 @@
-import { Student, ClassSection, Teacher, AttendanceSession, ParentAlert, AlertSettings, TeacherAnalytics, SubjectGradeRecord, AuditLogEntry, StaffQuery, StaffAnnouncement } from '@/types/attendance';
+import { Student, ClassSection, Teacher, AttendanceSession, ParentAlert, AlertSettings, TeacherAnalytics, SubjectGradeRecord, AuditLogEntry, StaffQuery, StaffAnnouncement, SchoolSubjectItem } from '@/types/attendance';
 
 export const INITIAL_CLASSES: ClassSection[] = [
   {
@@ -86,21 +86,46 @@ export const INITIAL_TEACHERS: Teacher[] = [
   },
 ];
 
-export const INITIAL_SCHOOL_SUBJECTS: string[] = [
-  'Mathematics',
-  'English Language',
-  'Basic Science & Technology',
-  'Civic Education',
-  'Computer Studies / ICT',
-  'Agricultural Science',
-  'Social Studies',
-  'Business Studies',
-  'French Language',
-  'Christian Religious Studies (CRS)',
-  'Islamic Religious Studies (IRS)',
-  'Physical & Health Education',
-  'Creative & Cultural Arts',
+export const INITIAL_SCHOOL_SUBJECT_ITEMS: SchoolSubjectItem[] = [
+  // ── General / Core Subjects (All Levels) ──
+  { name: 'Mathematics', level: 'all' },
+  { name: 'English Language', level: 'all' },
+  { name: 'Civic Education', level: 'all' },
+  { name: 'Computer Studies / ICT', level: 'all' },
+  { name: 'French Language', level: 'all' },
+  { name: 'Christian Religious Studies (CRS)', level: 'all' },
+  { name: 'Islamic Religious Studies (IRS)', level: 'all' },
+  { name: 'Physical & Health Education', level: 'all' },
+  { name: 'Creative & Cultural Arts', level: 'all' },
+
+  // ── Primary School Exclusive Subjects ──
+  { name: 'Quantitative Reasoning', level: 'primary' },
+  { name: 'Verbal Reasoning', level: 'primary' },
+  { name: 'Basic Science & Technology', level: 'primary' },
+  { name: 'Social Studies', level: 'primary' },
+  { name: 'Handwriting & Diction', level: 'primary' },
+  { name: 'Home Economics (Primary)', level: 'primary' },
+  { name: 'Vocational Aptitude', level: 'primary' },
+
+  // ── Secondary School Exclusive Subjects (Junior & Senior) ──
+  { name: 'Biology', level: 'secondary' },
+  { name: 'Chemistry', level: 'secondary' },
+  { name: 'Physics', level: 'secondary' },
+  { name: 'Further Mathematics', level: 'secondary' },
+  { name: 'Economics', level: 'secondary' },
+  { name: 'Literature in English', level: 'secondary' },
+  { name: 'Government', level: 'secondary' },
+  { name: 'Financial Accounting', level: 'secondary' },
+  { name: 'Commerce', level: 'secondary' },
+  { name: 'Basic Technology', level: 'secondary' },
+  { name: 'Business Studies', level: 'secondary' },
+  { name: 'Agricultural Science', level: 'secondary' },
+  { name: 'Geography', level: 'secondary' },
+  { name: 'Technical Drawing', level: 'secondary' },
+  { name: 'History', level: 'secondary' },
 ];
+
+export const INITIAL_SCHOOL_SUBJECTS: string[] = INITIAL_SCHOOL_SUBJECT_ITEMS.map((s) => s.name);
 
 export const INITIAL_SUBJECT_GRADES: SubjectGradeRecord[] = [
   {

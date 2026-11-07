@@ -2,6 +2,14 @@ export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
 export type PupilFlag = 'late arrival' | 'left early' | 'nurse visit' | 'behavioral' | 'excused' | 'unexcused';
 
+export type SchoolSubjectLevel = 'all' | 'primary' | 'secondary';
+
+export interface SchoolSubjectItem {
+  name: string;
+  level: SchoolSubjectLevel;
+  category?: string;
+}
+
 export interface TestExamRecord {
   id: string;
   title: string;

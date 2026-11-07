@@ -18,6 +18,8 @@ import {
   SchoolBackupSnapshot,
   StaffQuery,
   StaffAnnouncement,
+  SchoolSubjectItem,
+  SchoolSubjectLevel,
 } from '@/types/attendance';
 import {
   INITIAL_CLASSES,
@@ -31,6 +33,7 @@ import {
   INITIAL_STAFF_QUERIES,
   INITIAL_ANNOUNCEMENTS,
   INITIAL_SCHOOL_SUBJECTS,
+  INITIAL_SCHOOL_SUBJECT_ITEMS,
 } from './initialData';
 import { isLicenseWriteRestricted, getLicenseRestrictionReason } from './licensing';
 
@@ -39,6 +42,7 @@ const KEYS = {
   CLASSES: 'attend_iq_classes_v2',
   TEACHERS: 'attend_iq_teachers_v2',
   SUBJECTS: 'result_iq_school_subjects_v1',
+  SUBJECTS_V2: 'result_iq_school_subjects_v2',
   SESSIONS: 'attend_iq_sessions_v2',
   ALERTS: 'attend_iq_alerts_v2',
   SETTINGS: 'attend_iq_settings_v2',
@@ -815,37 +819,121 @@ export function reassignClassTeacher(classId: string, teacherId: string): void {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SCHOOL CURRICULUM & SUBJECTS MANAGEMENT
+// SCHOOL CURRICULUM & SUBJECTS MANAGEMENT (PRIMARY & SECONDARY)
 // ─────────────────────────────────────────────────────────────
-export function getSchoolSubjects(): string[] {
-  const loaded = getStored<string[]>(KEYS.SUBJECTS, INITIAL_SCHOOL_SUBJECTS);
-  if (!Array.isArray(loaded) || loaded.length === 0) {
-    return INITIAL_SCHOOL_SUBJECTS;
+
+function getSubjectLevelHeuristic(name: string): SchoolSubjectLevel {
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('reasoning') ||
+    lower.includes('handwriting') ||
+    lower.includes('rhymes') ||
+    lower.includes('phonics') ||
+    lower.includes('diction') ||
+    lower.includes('nursery') ||
+    lower.includes('primary') ||
+    lower.includes('vocational')
+  ) {
+    return 'primary';
   }
-  return loaded;
+  if (
+    lower.includes('further') ||
+    lower.includes('physics') ||
+    lower.includes('chemistry') ||
+    lower.includes('biology') ||
+    lower.includes('economics') ||
+    lower.includes('accounting') ||
+    lower.includes('commerce') ||
+    lower.includes('government') ||
+    lower.includes('literature') ||
+    lower.includes('technical drawing') ||
+    lower.includes('business studies') ||
+    lower.includes('basic technology')
+  ) {
+    return 'secondary';
+  }
+  return 'all';
+}
+
+export function getSubjectLevel(subjectName: string): SchoolSubjectLevel {
+  const catalog = getSchoolSubjectItems();
+  const match = catalog.find((s) => s.name.toLowerCase() === subjectName.toLowerCase());
+  if (match) return match.level;
+  return getSubjectLevelHeuristic(subjectName);
+}
+
+export function getSchoolSubjectItems(): SchoolSubjectItem[] {
+  const loadedV2 = getStored<SchoolSubjectItem[]>(KEYS.SUBJECTS_V2, null as any);
+  if (Array.isArray(loadedV2) && loadedV2.length > 0) {
+    return loadedV2;
+  }
+
+  // Fallback / migration from V1 stored strings
+  const loadedV1 = getStored<string[]>(KEYS.SUBJECTS, null as any);
+  if (Array.isArray(loadedV1) && loadedV1.length > 0) {
+    const defaultMap = new Map<string, SchoolSubjectLevel>();
+    INITIAL_SCHOOL_SUBJECT_ITEMS.forEach((item) => defaultMap.set(item.name.toLowerCase(), item.level));
+
+    const migrated: SchoolSubjectItem[] = loadedV1.map((name) => ({
+      name,
+      level: defaultMap.get(name.toLowerCase()) || getSubjectLevelHeuristic(name),
+    }));
+
+    // Ensure core initial subjects are present
+    INITIAL_SCHOOL_SUBJECT_ITEMS.forEach((init) => {
+      if (!migrated.some((m) => m.name.toLowerCase() === init.name.toLowerCase())) {
+        migrated.push(init);
+      }
+    });
+
+    setStored(KEYS.SUBJECTS_V2, migrated);
+    return migrated;
+  }
+
+  // Default to INITIAL_SCHOOL_SUBJECT_ITEMS
+  setStored(KEYS.SUBJECTS_V2, INITIAL_SCHOOL_SUBJECT_ITEMS);
+  return INITIAL_SCHOOL_SUBJECT_ITEMS;
+}
+
+export function getSchoolSubjects(): string[] {
+  return getSchoolSubjectItems().map((s) => s.name);
+}
+
+export function saveSchoolSubjectItems(items: SchoolSubjectItem[]): void {
+  if (isLicenseWriteRestricted()) {
+    console.warn('saveSchoolSubjectItems blocked: System in strict read-only mode.');
+    return;
+  }
+  setStored(KEYS.SUBJECTS_V2, items);
+  setStored(KEYS.SUBJECTS, items.map((i) => i.name));
 }
 
 export function saveSchoolSubjects(subjects: string[]): void {
-  if (isLicenseWriteRestricted()) {
-    console.warn('saveSchoolSubjects blocked: System in strict read-only mode.');
-    return;
-  }
-  setStored(KEYS.SUBJECTS, subjects);
+  const currentItems = getSchoolSubjectItems();
+  const currentMap = new Map<string, SchoolSubjectLevel>();
+  currentItems.forEach((i) => currentMap.set(i.name.toLowerCase(), i.level));
+
+  const items: SchoolSubjectItem[] = subjects.map((name) => ({
+    name,
+    level: currentMap.get(name.toLowerCase()) || getSubjectLevelHeuristic(name),
+  }));
+  saveSchoolSubjectItems(items);
 }
 
-export function addSchoolSubject(subjectName: string): boolean {
+export function addSchoolSubject(subjectName: string, level: SchoolSubjectLevel = 'all'): boolean {
   if (isLicenseWriteRestricted()) {
     if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
     return false;
   }
   const trimmed = subjectName.trim();
   if (!trimmed) return false;
-  const subjects = getSchoolSubjects();
-  if (subjects.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
+
+  const items = getSchoolSubjectItems();
+  if (items.some((s) => s.name.toLowerCase() === trimmed.toLowerCase())) {
     return false; // already exists
   }
-  subjects.push(trimmed);
-  saveSchoolSubjects(subjects);
+  items.push({ name: trimmed, level });
+  saveSchoolSubjectItems(items);
 
   try {
     addAuditLog({
@@ -857,7 +945,7 @@ export function addSchoolSubject(subjectName: string): boolean {
       targetId: `subj-${Date.now()}`,
       targetName: trimmed,
       severity: 'info',
-      details: `Added new school curriculum subject: ${trimmed}`,
+      details: `Added new ${level.toUpperCase()} curriculum subject: ${trimmed}`,
     });
   } catch (e) {
     console.error(e);
@@ -870,11 +958,11 @@ export function deleteSchoolSubject(subjectName: string): boolean {
     if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
     return false;
   }
-  const subjects = getSchoolSubjects();
-  const updated = subjects.filter((s) => s.toLowerCase() !== subjectName.toLowerCase());
-  if (updated.length === subjects.length) return false;
+  const items = getSchoolSubjectItems();
+  const updated = items.filter((s) => s.name.toLowerCase() !== subjectName.toLowerCase());
+  if (updated.length === items.length) return false;
 
-  saveSchoolSubjects(updated);
+  saveSchoolSubjectItems(updated);
 
   // Also remove this subject from teachers' subjects list
   const teachers = getTeachers();
