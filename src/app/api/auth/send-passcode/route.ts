@@ -122,10 +122,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Brevo / Sendinblue API (popular in Africa/Nigeria with free daily quota)
+    // 2. Brevo / Sendinblue API (Sends to ANY recipient without domain DNS setup)
     const brevoApiKey = process.env.BREVO_API_KEY;
     if (!emailSent && brevoApiKey) {
       providerUsed = 'brevo';
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM;
       try {
         const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             sender: {
               name: cleanSchoolName,
-              email: process.env.EMAIL_FROM || 'results@resultiq.school',
+              email: senderEmail || 'notifications@resultiq.com',
             },
             to: [{ email: cleanEmail }],
             subject,
