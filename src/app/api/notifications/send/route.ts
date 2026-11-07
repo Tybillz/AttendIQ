@@ -79,6 +79,33 @@ export async function POST(request: Request) {
       }
     }
 
+    // 3. Brevo Transactional SMS (uses your existing BREVO_API_KEY)
+    const brevoApiKey = process.env.BREVO_API_KEY;
+    if (!dispatched && brevoApiKey && channel !== 'WhatsApp') {
+      try {
+        const brevoPhone = to.startsWith('+') ? to : `+${to}`;
+        const brevoRes = await fetch('https://api.brevo.com/v3/transactionalSMS/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-key': brevoApiKey,
+          },
+          body: JSON.stringify({
+            sender: 'ResultIQ',
+            recipient: brevoPhone,
+            content: message,
+          }),
+        });
+
+        if (brevoRes.ok) {
+          dispatched = true;
+          provider = 'brevo_sms';
+        }
+      } catch (e) {
+        console.warn('Brevo SMS dispatch attempt failed:', e);
+      }
+    }
+
     // 3. Custom Institutional Webhook (Zapier / Make / n8n / Bot)
     if (webhookUrl) {
       try {
