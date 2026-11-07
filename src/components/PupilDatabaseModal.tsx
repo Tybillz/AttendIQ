@@ -82,7 +82,7 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   // Curriculum & Subjects State
   const [schoolSubjects, setSchoolSubjects] = useState<string[]>(getSchoolSubjects());
   const [schoolSubjectItems, setSchoolSubjectItems] = useState<SchoolSubjectItem[]>(getSchoolSubjectItems());
-  const [subjectLevelFilter, setSubjectLevelFilter] = useState<'all' | 'primary' | 'secondary'>('all');
+  const [subjectLevelFilter, setSubjectLevelFilter] = useState<'all' | 'nursery' | 'primary' | 'secondary'>('all');
   const [newSubjectInput, setNewSubjectInput] = useState<string>('');
   const [newSubjectLevel, setNewSubjectLevel] = useState<SchoolSubjectLevel>('all');
   const [subjectSuccessMsg, setSubjectSuccessMsg] = useState<string | null>(null);
@@ -96,7 +96,14 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
     if (ok) {
       setSchoolSubjects(getSchoolSubjects());
       setSchoolSubjectItems(getSchoolSubjectItems());
-      const levelLabel = newSubjectLevel === 'primary' ? 'Primary' : newSubjectLevel === 'secondary' ? 'Secondary' : 'Core (All Levels)';
+      const levelLabel =
+        newSubjectLevel === 'nursery'
+          ? 'Nursery / Early Years'
+          : newSubjectLevel === 'primary'
+          ? 'Primary'
+          : newSubjectLevel === 'secondary'
+          ? 'Secondary'
+          : 'Core (All Levels)';
       setSubjectSuccessMsg(`Subject "${name}" added to ${levelLabel} curriculum!`);
       setNewSubjectInput('');
       setTimeout(() => setSubjectSuccessMsg(null), 3500);
@@ -1348,6 +1355,19 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                               })}
                           </optgroup>
 
+                          <optgroup label="🧸 Early Years & Nursery Subjects">
+                            {schoolSubjectItems
+                              .filter((item) => item.level === 'nursery')
+                              .map((item) => {
+                                const isAssigned = teacher.subjects?.includes(item.name);
+                                return (
+                                  <option key={item.name} value={item.name} disabled={isAssigned}>
+                                    {item.name} {isAssigned ? '(Assigned)' : ''}
+                                  </option>
+                                );
+                              })}
+                          </optgroup>
+
                           <optgroup label="🎒 Primary School Subjects">
                             {schoolSubjectItems
                               .filter((item) => item.level === 'primary')
@@ -1669,7 +1689,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                     Add New Subject to Curriculum:
                   </label>
                   {/* Level Selector */}
-                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs self-start sm:self-auto">
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs self-start sm:self-auto flex-wrap">
                     <button
                       type="button"
                       onClick={() => setNewSubjectLevel('all')}
@@ -1680,6 +1700,17 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                       }`}
                     >
                       ✨ Core (All)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewSubjectLevel('nursery')}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
+                        newSubjectLevel === 'nursery'
+                          ? 'bg-rose-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      🧸 Nursery
                     </button>
                     <button
                       type="button"
@@ -1709,7 +1740,15 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                 <div className="flex flex-col sm:flex-row gap-2.5">
                   <input
                     type="text"
-                    placeholder={`Enter subject name for ${newSubjectLevel === 'primary' ? 'Primary' : newSubjectLevel === 'secondary' ? 'Secondary' : 'all classes'} (e.g. Further Mathematics, Quantitative Reasoning)...`}
+                    placeholder={`Enter subject name for ${
+                      newSubjectLevel === 'nursery'
+                        ? 'Nursery'
+                        : newSubjectLevel === 'primary'
+                        ? 'Primary'
+                        : newSubjectLevel === 'secondary'
+                        ? 'Secondary'
+                        : 'all classes'
+                    } (e.g. Letter Work, Further Mathematics, Quantitative Reasoning)...`}
                     value={newSubjectInput}
                     onChange={(e) => setNewSubjectInput(e.target.value)}
                     className="flex-1 text-xs font-bold px-3 py-2.5 rounded-xl bg-white border border-slate-300 focus:outline-emerald-600 text-slate-900 shadow-2xs"
@@ -1720,13 +1759,59 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                     className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shrink-0"
                   >
                     <Plus className="h-4 w-4" />
-                    <span>Add to {newSubjectLevel === 'primary' ? 'Primary' : newSubjectLevel === 'secondary' ? 'Secondary' : 'Core'}</span>
+                    <span>
+                      Add to{' '}
+                      {newSubjectLevel === 'nursery'
+                        ? 'Nursery'
+                        : newSubjectLevel === 'primary'
+                        ? 'Primary'
+                        : newSubjectLevel === 'secondary'
+                        ? 'Secondary'
+                        : 'Core'}
+                    </span>
                   </button>
                 </div>
               </form>
 
-              {/* Quick preset recommendations separated by Primary vs Secondary */}
+              {/* Quick preset recommendations separated by Nursery, Primary vs Secondary */}
               <div className="space-y-2.5 pt-2 border-t border-slate-200">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 flex items-center gap-1 mb-1">
+                    <span>🧸 1-Click Early Years &amp; Nursery Presets:</span>
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Letter Work & Phonics',
+                      'Number Work & Counting',
+                      'Rhymes, Songs & Poems',
+                      'Social Habits',
+                      'Health & Personal Hygiene',
+                      'Basic Science & Nature Study',
+                      'Colouring & Creative Drawing',
+                      'Pre-Writing & Tracing Skills',
+                    ]
+                      .filter((preset) => !schoolSubjects.some((s) => s.toLowerCase() === preset.toLowerCase()))
+                      .map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => {
+                            addSchoolSubject(preset, 'nursery');
+                            setSchoolSubjects(getSchoolSubjects());
+                            setSchoolSubjectItems(getSchoolSubjectItems());
+                            setSubjectSuccessMsg(`Added "${preset}" to Nursery curriculum!`);
+                            setTimeout(() => setSubjectSuccessMsg(null), 3500);
+                            onDataUpdated();
+                          }}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 hover:border-rose-400 hover:bg-rose-100 text-rose-900 transition cursor-pointer shadow-2xs flex items-center gap-1"
+                        >
+                          <Plus className="h-2.5 w-2.5 text-rose-700" />
+                          <span>{preset}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1 mb-1">
                     <span>🎒 1-Click Primary School Presets:</span>
@@ -1811,9 +1896,9 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
               <div className="flex items-start sm:items-center gap-2.5">
                 <BookOpen className="h-4 w-4 text-emerald-700 shrink-0 mt-0.5 sm:mt-0" />
                 <div>
-                  <span className="font-bold">Institutional Curriculum Catalog</span>
+                  <span className="font-bold">Institutional Curriculum Catalog (Nursery, Primary &amp; Secondary)</span>
                   <p className="text-[11px] text-emerald-800 mt-0.5">
-                    Subjects are categorized by <strong>Primary School</strong> and <strong>Secondary School</strong>. In ResultIQ, subjects are allocated to subject teachers on the <strong>Teachers &amp; Staff</strong> tab.
+                    Subjects are categorized by <strong>Early Years / Nursery</strong>, <strong>Primary School</strong>, and <strong>Secondary School</strong>. In ResultIQ, subjects are allocated to subject teachers on the <strong>Teachers &amp; Staff</strong> tab.
                   </p>
                 </div>
               </div>
@@ -1830,7 +1915,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
             {/* Level Filter Tabs & Grid of registered subjects */}
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setSubjectLevelFilter('all')}
@@ -1844,6 +1929,17 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                   </button>
                   <button
                     type="button"
+                    onClick={() => setSubjectLevelFilter('nursery')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      subjectLevelFilter === 'nursery'
+                        ? 'bg-rose-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    🧸 Nursery ({schoolSubjectItems.filter((s) => s.level === 'nursery' || s.level === 'all').length})
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setSubjectLevelFilter('primary')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                       subjectLevelFilter === 'primary'
@@ -1851,7 +1947,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    🎒 Primary School ({schoolSubjectItems.filter((s) => s.level === 'primary' || s.level === 'all').length})
+                    🎒 Primary ({schoolSubjectItems.filter((s) => s.level === 'primary' || s.level === 'all').length})
                   </button>
                   <button
                     type="button"
@@ -1862,7 +1958,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    🎓 Secondary School ({schoolSubjectItems.filter((s) => s.level === 'secondary' || s.level === 'all').length})
+                    🎓 Secondary ({schoolSubjectItems.filter((s) => s.level === 'secondary' || s.level === 'all').length})
                   </button>
                 </div>
 
@@ -1886,6 +1982,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                       (t) => t.subjects?.includes(subj) || t.subject === subj
                     );
 
+                    const isNursery = item.level === 'nursery';
                     const isPrimary = item.level === 'primary';
                     const isSecondary = item.level === 'secondary';
 
@@ -1893,7 +1990,9 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                       <div
                         key={subj}
                         className={`p-4 rounded-2xl bg-white border shadow-2xs hover:shadow-xs transition flex flex-col justify-between space-y-3 ${
-                          isPrimary
+                          isNursery
+                            ? 'border-rose-200'
+                            : isPrimary
                             ? 'border-amber-200'
                             : isSecondary
                             ? 'border-indigo-200'
@@ -1905,7 +2004,9 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                             <div className="flex items-center gap-2">
                               <div
                                 className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold shrink-0 ${
-                                  isPrimary
+                                  isNursery
+                                    ? 'bg-rose-100 text-rose-800'
+                                    : isPrimary
                                     ? 'bg-amber-100 text-amber-800'
                                     : isSecondary
                                     ? 'bg-indigo-100 text-indigo-800'
@@ -1919,14 +2020,16 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                                   <h5 className="text-xs font-bold text-slate-900 leading-tight">{subj}</h5>
                                   <span
                                     className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide border ${
-                                      isPrimary
+                                      isNursery
+                                        ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                        : isPrimary
                                         ? 'bg-amber-50 text-amber-800 border-amber-200'
                                         : isSecondary
                                         ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                     }`}
                                   >
-                                    {isPrimary ? 'Primary' : isSecondary ? 'Secondary' : 'Core'}
+                                    {isNursery ? '🧸 Nursery' : isPrimary ? '🎒 Primary' : isSecondary ? '🎓 Secondary' : '✨ Core'}
                                   </span>
                                 </div>
                                 <span className="text-[10px] text-slate-400 block mt-0.5">

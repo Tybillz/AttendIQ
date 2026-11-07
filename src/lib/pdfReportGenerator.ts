@@ -1,5 +1,5 @@
 import { Student, ClassSection, SubjectGradeRecord, AttendanceSession } from '@/types/attendance';
-import { getUnifiedAcademicReport } from './academicCalculations';
+import { getUnifiedAcademicReport, getClassLevel } from './academicCalculations';
 import { getSchoolBranding, SchoolBranding } from './licensing';
 
 async function getJsPDFWithAutoTable(): Promise<any> {
@@ -280,7 +280,14 @@ export async function downloadStudentReportCardPDF(
   doc.setTextColor(...accentColor);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text('OFFICIAL TERMINAL ACADEMIC ASSESSMENT & EXAMINATION DOSSIER', pageWidth / 2, 38, { align: 'center' });
+  const classLvl = getClassLevel(classSection?.name || classSection?.grade);
+  const sectionTitle =
+    classLvl === 'nursery'
+      ? 'OFFICIAL EARLY YEARS MILESTONE & CONTINUOUS EVALUATION DOSSIER'
+      : classLvl === 'primary'
+      ? 'OFFICIAL PRIMARY SECTION TERMINAL CONTINUOUS ASSESSMENT DOSSIER'
+      : 'OFFICIAL TERMINAL ACADEMIC ASSESSMENT & EXAMINATION DOSSIER';
+  doc.text(sectionTitle, pageWidth / 2, 38, { align: 'center' });
 
   // 3. Render Anti-Criminality Transparent Watermark Layer
   drawAntiTamperWatermark(doc, pageWidth, pageHeight, branding, report.student.rollNumber, logoBase64);

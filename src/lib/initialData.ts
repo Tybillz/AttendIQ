@@ -2,6 +2,16 @@ import { Student, ClassSection, Teacher, AttendanceSession, ParentAlert, AlertSe
 
 export const INITIAL_CLASSES: ClassSection[] = [
   {
+    id: 'class-nur2-emerald',
+    name: 'Nursery 2 - Emerald',
+    grade: 'Nursery 2',
+    room: 'Early Years Suite A',
+    teacherId: 't-105',
+    teacherName: 'Miss Blessing Eze',
+    scheduleTime: '08:00 AM - 01:00 PM',
+    pupilCount: 8,
+  },
+  {
     id: 'class-pry4-gold',
     name: 'Primary 4 - Gold',
     grade: 'Primary 4',
@@ -44,6 +54,16 @@ export const INITIAL_CLASSES: ClassSection[] = [
 ];
 
 export const INITIAL_TEACHERS: Teacher[] = [
+  {
+    id: 't-105',
+    name: 'Miss Blessing Eze',
+    email: 'b.eze@apexcrestacademy.edu.ng',
+    phone: '+234 805 123 9876',
+    permanentClassId: 'class-nur2-emerald',
+    assignedClassIds: ['class-nur2-emerald'],
+    subjects: ['Letter Work & Phonics', 'Number Work & Counting', 'Rhymes, Songs & Poems'],
+    subject: 'Letter Work & Phonics',
+  },
   {
     id: 't-102',
     name: 'Mr. Chinedu Okonkwo',
@@ -97,6 +117,16 @@ export const INITIAL_SCHOOL_SUBJECT_ITEMS: SchoolSubjectItem[] = [
   { name: 'Islamic Religious Studies (IRS)', level: 'all' },
   { name: 'Physical & Health Education', level: 'all' },
   { name: 'Creative & Cultural Arts', level: 'all' },
+
+  // ── Early Years & Nursery Exclusive Subjects ──
+  { name: 'Letter Work & Phonics', level: 'nursery' },
+  { name: 'Number Work & Counting', level: 'nursery' },
+  { name: 'Rhymes, Songs & Poems', level: 'nursery' },
+  { name: 'Social Habits', level: 'nursery' },
+  { name: 'Health & Personal Hygiene', level: 'nursery' },
+  { name: 'Basic Science & Nature Study', level: 'nursery' },
+  { name: 'Colouring & Creative Drawing', level: 'nursery' },
+  { name: 'Pre-Writing & Tracing Skills', level: 'nursery' },
 
   // ── Primary School Exclusive Subjects ──
   { name: 'Quantitative Reasoning', level: 'primary' },

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Student, ClassSection, SubjectGradeRecord, TerminalEvaluation } from '@/types/attendance';
 import { getSubjectGrades, updateTerminalEvaluation } from '@/lib/storage';
-import { getUnifiedAcademicReport } from '@/lib/academicCalculations';
+import { getUnifiedAcademicReport, getClassLevel } from '@/lib/academicCalculations';
 import { getSchoolBranding, SchoolBranding } from '@/lib/licensing';
 
 interface TerminalReportSheetProps {
@@ -569,8 +569,31 @@ export const TerminalReportSheet: React.FC<TerminalReportSheetProps> = ({
               </p>
             </div>
           </div>
-          <div className="inline-block px-4 py-1 rounded-full bg-slate-900 text-white font-bold text-[11px] tracking-wide uppercase mt-1">
-            Official Terminal Academic Transcript & Examination Report Sheet
+          <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+            <span
+              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-black text-[10px] tracking-wide uppercase border ${
+                getClassLevel(className) === 'nursery'
+                  ? 'bg-rose-100 text-rose-900 border-rose-300'
+                  : getClassLevel(className) === 'primary'
+                  ? 'bg-amber-100 text-amber-900 border-amber-300'
+                  : 'bg-indigo-100 text-indigo-900 border-indigo-300'
+              }`}
+            >
+              <span>
+                {getClassLevel(className) === 'nursery'
+                  ? '🧸 EARLY YEARS & NURSERY SECTION'
+                  : getClassLevel(className) === 'primary'
+                  ? '🎒 PRIMARY SECTION'
+                  : '🎓 SECONDARY SECTION'}
+              </span>
+            </span>
+            <div className="inline-block px-4 py-1 rounded-full bg-slate-900 text-white font-bold text-[11px] tracking-wide uppercase">
+              {getClassLevel(className) === 'nursery'
+                ? 'Official Early Years Milestone & Continuous Evaluation Slip'
+                : getClassLevel(className) === 'primary'
+                ? 'Official Primary Section Terminal Continuous Assessment & Evaluation Sheet'
+                : 'Official Terminal Academic Transcript & Examination Report Sheet'}
+            </div>
           </div>
         </div>
 

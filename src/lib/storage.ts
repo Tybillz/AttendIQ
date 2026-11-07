@@ -819,18 +819,32 @@ export function reassignClassTeacher(classId: string, teacherId: string): void {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SCHOOL CURRICULUM & SUBJECTS MANAGEMENT (PRIMARY & SECONDARY)
+// SCHOOL CURRICULUM & SUBJECTS MANAGEMENT (NURSERY, PRIMARY & SECONDARY)
 // ─────────────────────────────────────────────────────────────
 
 function getSubjectLevelHeuristic(name: string): SchoolSubjectLevel {
   const lower = name.toLowerCase();
   if (
+    lower.includes('letter work') ||
+    lower.includes('number work') ||
+    lower.includes('rhyme') ||
+    lower.includes('habit') ||
+    lower.includes('colouring') ||
+    lower.includes('coloring') ||
+    lower.includes('tracing') ||
+    lower.includes('nursery') ||
+    lower.includes('early years') ||
+    lower.includes('kindergarten') ||
+    lower.includes('kg') ||
+    lower.includes('pre-writing')
+  ) {
+    return 'nursery';
+  }
+  if (
     lower.includes('reasoning') ||
     lower.includes('handwriting') ||
-    lower.includes('rhymes') ||
     lower.includes('phonics') ||
     lower.includes('diction') ||
-    lower.includes('nursery') ||
     lower.includes('primary') ||
     lower.includes('vocational')
   ) {

@@ -2,7 +2,7 @@ export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
 export type PupilFlag = 'late arrival' | 'left early' | 'nurse visit' | 'behavioral' | 'excused' | 'unexcused';
 
-export type SchoolSubjectLevel = 'all' | 'primary' | 'secondary';
+export type SchoolSubjectLevel = 'all' | 'nursery' | 'primary' | 'secondary';
 
 export interface SchoolSubjectItem {
   name: string;

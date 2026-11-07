@@ -29,9 +29,10 @@ import {
   batchSaveSubjectGrades,
   exportSubjectGradesCSV,
   downloadCSVFile,
+  getSubjectLevel,
 } from '@/lib/storage';
 import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
-import { computeGrade } from '@/lib/academicCalculations';
+import { computeGrade, getClassLevel } from '@/lib/academicCalculations';
 import { isLicenseWriteRestricted } from '@/lib/licensing';
 
 interface SubjectGradebookProps {
@@ -70,12 +71,32 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
-  // When teacher changes, reset selected subject to teacher's first subject
+  const activeClass = useMemo(() => {
+    if (selectedClassId === 'all') return null;
+    return assignedClasses.find((c) => c.id === selectedClassId) || null;
+  }, [selectedClassId, assignedClasses]);
+
+  const activeClassLevel = useMemo(() => {
+    if (!activeClass) return null;
+    return getClassLevel(activeClass.name || activeClass.grade);
+  }, [activeClass]);
+
+  // Filter teacher's subjects based on selected class section level (Nursery, Primary, Secondary)
+  const displayedSubjects = useMemo(() => {
+    if (!activeClassLevel) return teacherSubjects;
+    const filtered = teacherSubjects.filter((subj) => {
+      const lvl = getSubjectLevel(subj);
+      return lvl === 'all' || lvl === activeClassLevel;
+    });
+    return filtered.length > 0 ? filtered : teacherSubjects;
+  }, [teacherSubjects, activeClassLevel]);
+
+  // When class or teacher changes, keep selected subject valid
   useEffect(() => {
-    if (teacherSubjects.length > 0 && !teacherSubjects.includes(selectedSubject)) {
-      setSelectedSubject(teacherSubjects[0]);
+    if (displayedSubjects.length > 0 && !displayedSubjects.includes(selectedSubject)) {
+      setSelectedSubject(displayedSubjects[0]);
     }
-  }, [currentTeacher, teacherSubjects, selectedSubject]);
+  }, [displayedSubjects, selectedSubject]);
 
   // Load existing subject grades from storage (CA1: 15, CA2: 15, Assignment: 10, Exam: 60)
   const [recordsMap, setRecordsMap] = useState<Record<string, { ca1: number; ca2: number; assignment: number; exam: number; vitalNotes: string }>>({});
@@ -363,11 +384,32 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
 
         {/* 1-Click Subject Switcher Buttons */}
         <div className="mt-6 pt-5 border-t border-slate-200">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-2">
-            Filter by Subject You Teach:
-          </label>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block">
+              Filter by Subject You Teach:
+            </label>
+            {activeClassLevel && (
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border self-start sm:self-auto ${
+                  activeClassLevel === 'nursery'
+                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    : activeClassLevel === 'primary'
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                    : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                }`}
+              >
+                <span>
+                  {activeClassLevel === 'nursery'
+                    ? '🧸 Early Years / Nursery Section'
+                    : activeClassLevel === 'primary'
+                    ? '🎒 Primary Section'
+                    : '🎓 Secondary Section'}
+                </span>
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
-            {teacherSubjects.map((subj) => {
+            {displayedSubjects.map((subj) => {
               const isSelected = selectedSubject === subj;
               return (
                 <button

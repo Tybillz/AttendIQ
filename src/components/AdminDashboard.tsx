@@ -3681,6 +3681,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               })}
                           </optgroup>
 
+                          <optgroup label="🧸 Early Years & Nursery Subjects">
+                            {getSchoolSubjectItems()
+                              .filter((item) => item.level === 'nursery')
+                              .map((item) => {
+                                const isAssigned = teacher.subjects?.includes(item.name);
+                                return (
+                                  <option key={item.name} value={item.name} disabled={isAssigned}>
+                                    {item.name} {isAssigned ? '(Assigned)' : ''}
+                                  </option>
+                                );
+                              })}
+                          </optgroup>
+
                           <optgroup label="🎒 Primary School Subjects">
                             {getSchoolSubjectItems()
                               .filter((item) => item.level === 'primary')

@@ -273,3 +273,39 @@ export function getStudentAgeToday(dateOfBirth?: string, targetDateStr?: string)
   }
   return null;
 }
+
+/**
+ * Detects whether a class belongs to Nursery, Primary, or Secondary section.
+ */
+export function getClassLevel(classNameOrGrade?: string): 'nursery' | 'primary' | 'secondary' {
+  if (!classNameOrGrade) return 'secondary';
+  const lower = classNameOrGrade.toLowerCase();
+  if (
+    lower.includes('nursery') ||
+    lower.includes('nur') ||
+    lower.includes('kindergarten') ||
+    lower.includes('kg') ||
+    lower.includes('creche') ||
+    lower.includes('playgroup') ||
+    lower.includes('early years') ||
+    lower.includes('eyfs') ||
+    lower.includes('reception') ||
+    lower.includes('toddler')
+  ) {
+    return 'nursery';
+  }
+  if (
+    lower.includes('primary') ||
+    lower.includes('pry') ||
+    lower.includes('basic') ||
+    lower.includes('grade 1') ||
+    lower.includes('grade 2') ||
+    lower.includes('grade 3') ||
+    lower.includes('grade 4') ||
+    lower.includes('grade 5') ||
+    lower.includes('grade 6')
+  ) {
+    return 'primary';
+  }
+  return 'secondary';
+}
