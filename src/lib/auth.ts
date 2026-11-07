@@ -16,8 +16,8 @@ const LOGGED_OUT_KEY = 'attend_iq_user_logged_out_v2';
 const LAST_ACTIVE_KEY = 'attend_iq_last_active_time_v2';
 const TIMED_OUT_KEY = 'attend_iq_session_timed_out_v2';
 
-// 30 minutes in milliseconds
-export const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+// Strict Inactivity Timeout: 15 minutes in milliseconds
+export const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 
 export function recordUserActivity(): void {
   if (typeof window === 'undefined') return;
@@ -56,6 +56,7 @@ export function handleInactivityTimeout(): void {
   if (typeof window === 'undefined') return;
   try {
     sessionStorage.setItem(TIMED_OUT_KEY, 'true');
+    window.dispatchEvent(new CustomEvent('attendiq:session-timeout', { detail: { reason: '15_min_inactivity' } }));
   } catch {}
   logout();
 }
@@ -66,8 +67,8 @@ export function initInactivityTracker(onTimeout?: () => void): () => void {
   let lastThrottle = 0;
   const updateActivity = () => {
     const now = Date.now();
-    // Throttle storage writes to once every 10 seconds to avoid unnecessary I/O
-    if (now - lastThrottle > 10000) {
+    // Throttle storage writes to once every 5 seconds to avoid unnecessary I/O
+    if (now - lastThrottle > 5000) {
       lastThrottle = now;
       recordUserActivity();
     }
@@ -76,17 +77,14 @@ export function initInactivityTracker(onTimeout?: () => void): () => void {
   const activityEvents = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'pointerdown', 'click'];
   activityEvents.forEach((ev) => window.addEventListener(ev, updateActivity, { passive: true }));
 
-  // Check every 15 seconds if 30 minutes of inactivity has elapsed
+  // Check every 5 seconds if 15 minutes of inactivity has elapsed
   const intervalId = window.setInterval(() => {
-    const session = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (session && localStorage.getItem(LOGGED_OUT_KEY) !== 'true') {
-      const lastActive = getLastActiveTime();
-      if (lastActive && (Date.now() - lastActive > INACTIVITY_TIMEOUT_MS)) {
-        handleInactivityTimeout();
-        if (onTimeout) onTimeout();
-      }
+    const lastActive = getLastActiveTime();
+    if (lastActive && Date.now() - lastActive > INACTIVITY_TIMEOUT_MS) {
+      handleInactivityTimeout();
+      if (onTimeout) onTimeout();
     }
-  }, 15000);
+  }, 5000);
 
   // Record initial activity timestamp
   recordUserActivity();

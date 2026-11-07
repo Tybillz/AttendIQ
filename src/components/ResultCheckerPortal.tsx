@@ -69,7 +69,16 @@ import { PupilDatabaseModal } from './PupilDatabaseModal';
 import { WhitelabelModal } from './WhitelabelModal';
 import { VendorLicensingModal } from './VendorLicensingModal';
 import { AuditLogModal } from './AuditLogModal';
-import { AuthSession, getAuthSession, saveAuthSession, logout as performAuthLogout } from '@/lib/auth';
+import {
+  AuthSession,
+  getAuthSession,
+  saveAuthSession,
+  logout as performAuthLogout,
+  initInactivityTracker,
+  wasSessionTimedOut,
+  clearSessionTimedOut,
+  INACTIVITY_TIMEOUT_MS,
+} from '@/lib/auth';
 import {
   getStudentTotpSecret,
   verifyStudentTotp,
@@ -169,6 +178,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer' | 'subjects'>('pupils');
   const [isBrandingModalOpen, setIsBrandingModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
+  const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
 
   // Sync latest branding & data
   const refreshData = useCallback(() => {
@@ -206,6 +216,40 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       window.removeEventListener('attendiq:license-updated', handleLicense);
     };
   }, [refreshData]);
+
+  // Bank-Grade Security: 15-Minute Inactivity Auto-Logout Tracker
+  useEffect(() => {
+    // If returning from an already timed-out session
+    if (wasSessionTimedOut()) {
+      setInactivityNotice('🔒 Security: Your previous session was automatically logged out after 15 minutes of inactivity.');
+      clearSessionTimedOut();
+      setTimeout(() => setInactivityNotice(null), 8000);
+    }
+
+    const handleInactivityLogout = () => {
+      // 1. Staff session logout
+      performAuthLogout();
+      setAuthSession(null);
+
+      // 2. Parent result viewing session reset
+      setVerifiedStudent(null);
+      setParentFamilyStudents([]);
+      setParentLoginStep('email');
+      setLoginPasscodeSentNotice(null);
+
+      // 3. User feedback notice
+      setInactivityNotice('🔒 Security Auto-Logout: You were logged out after 15 minutes of inactivity to protect student records.');
+      setTimeout(() => setInactivityNotice(null), 10000);
+    };
+
+    const cleanupTracker = initInactivityTracker(handleInactivityLogout);
+    window.addEventListener('attendiq:session-timeout', handleInactivityLogout);
+
+    return () => {
+      cleanupTracker();
+      window.removeEventListener('attendiq:session-timeout', handleInactivityLogout);
+    };
+  }, []);
 
   // Selected class
   const activeClass = useMemo(() => {
@@ -977,6 +1021,24 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
+      {/* Security Auto-Logout Toast Notification (15-Minute Rule) */}
+      {inactivityNotice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
+          <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-2xl border border-rose-500/50 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base shrink-0">⏳</span>
+              <span className="font-semibold">{inactivityNotice}</span>
+            </div>
+            <button
+              onClick={() => setInactivityNotice(null)}
+              className="text-slate-400 hover:text-white font-mono text-sm px-1.5 py-0.5 rounded cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ─────────────────────────────────────────────────────────────
           1. TOP INSTITUTIONAL REGISTRAR HEADER
           ───────────────────────────────────────────────────────────── */}
