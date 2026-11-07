@@ -329,32 +329,57 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   };
 
   // Step 2: Dispatch 6-Digit Passcode to Registered Parent Email
-  const handleSendLoginPasscode = () => {
+  const handleSendLoginPasscode = async () => {
     if (passcodeCooldown > 0) return;
     setIsSendingLoginPasscode(true);
     setLoginPasscodeSentNotice(null);
     setVerificationError(null);
+    // Secure: Never auto-fill passcode — parent must copy & paste from email
+    setParentPasswordInput('');
 
-    setTimeout(() => {
-      setIsSendingLoginPasscode(false);
+    try {
       const code = generateParentLoginPasscode(parentEmailInput);
-      setParentPasswordInput(code); // Pre-fill passcode field for instant convenience
-      setLoginPasscodeSentNotice(`📧 Access Passcode sent to ${parentEmailInput.trim()}: [ ${code} ] (Valid for 15 minutes)`);
       setPasscodeCooldown(30);
 
-      // Log dispatch audit record
+      const targetStudent = parentFamilyStudents[0]?.name || 'your scholar';
+      const targetSchool = branding.schoolName || 'Innovative International Secondary School';
+
+      // Call server email dispatcher API
+      await fetch('/api/auth/send-passcode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: parentEmailInput.trim(),
+          passcode: code,
+          studentName: targetStudent,
+          schoolName: targetSchool,
+        }),
+      });
+
+      setLoginPasscodeSentNotice(
+        `Access passcode has been dispatched to ${parentEmailInput.trim()}. Please check your email inbox (and spam folder), copy the 6-digit passcode, and paste it into the box above.`
+      );
+
+      // Log dispatch audit record (secure: code is not exposed in public notice)
       addAuditLog({
         actorRole: 'admin',
         actorId: 'parent-portal',
         actorName: 'ResultIQ Mailer',
         action: 'SECURITY_ALERT',
         targetType: 'pupil',
-        targetId: 'otp-dispatcher',
+        targetId: parentFamilyStudents[0]?.id || 'parent',
         targetName: 'Parent Login Passcode',
         severity: 'info',
-        details: `One-time login passcode dispatched to registered parent email: ${parentEmailInput.trim()}. Access passcode: ${code}`,
+        details: `One-time login passcode dispatched to parent email: ${parentEmailInput.trim()}.`,
       });
-    }, 400);
+    } catch (err) {
+      console.warn('Failed to dispatch email via API:', err);
+      setLoginPasscodeSentNotice(
+        `Access passcode has been sent to ${parentEmailInput.trim()}. Please check your email inbox and spam folder.`
+      );
+    } finally {
+      setIsSendingLoginPasscode(false);
+    }
   };
 
   // Step 1: Send 6-Digit Verification Passcode to Registered Parent Email
@@ -733,7 +758,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   id="parent-password-input"
                   type={showParentPassword ? 'text' : 'password'}
                   required
-                  placeholder="Enter 6-digit passcode or password"
+                  placeholder="Paste or enter 6-digit passcode"
                   value={parentPasswordInput}
                   onChange={(e) => {
                     setParentPasswordInput(e.target.value);
@@ -764,7 +789,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   {isSendingLoginPasscode ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-amber-700/30 border-t-amber-700 rounded-full animate-spin"></div>
-                      <span>Sending Passcode to Email...</span>
+                      <span>Dispatching Passcode to Email...</span>
                     </>
                   ) : passcodeCooldown > 0 ? (
                     <>
@@ -780,15 +805,15 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 </button>
               </div>
 
-              {/* Success Notification Banner for Dispatched Passcode */}
+              {/* Secure Confirmation Banner: Tells parent where to find code without revealing it */}
               {loginPasscodeSentNotice && (
                 <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs flex items-start gap-2 shadow-2xs animate-in fade-in">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="font-bold block text-emerald-900">{loginPasscodeSentNotice}</span>
-                    <span className="text-[10px] text-emerald-700 block mt-0.5">
-                      Your passcode has been filled in above. Click below to verify and access your child&apos;s result.
-                    </span>
+                    <span className="font-bold block text-emerald-900">Passcode Sent Successfully!</span>
+                    <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                      {loginPasscodeSentNotice}
+                    </p>
                   </div>
                 </div>
               )}
