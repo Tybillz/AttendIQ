@@ -2326,6 +2326,28 @@ export function deleteStaffAnnouncement(announcementId: string): void {
 // PARENT AUTHENTICATION & PASSWORD MANAGEMENT
 // ─────────────────────────────────────────────────────────────
 
+// In-memory / storage registry for one-time login passcodes sent to parent emails
+const activeLoginPasscodes: Record<string, { code: string; expiresAt: number }> = {};
+
+export function generateParentLoginPasscode(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  activeLoginPasscodes[normalized] = {
+    code,
+    expiresAt: Date.now() + 15 * 60 * 1000, // 15 mins
+  };
+  return code;
+}
+
+export function verifyParentLoginPasscode(email: string, code: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  const entry = activeLoginPasscodes[normalized];
+  if (entry && entry.code === code.trim() && entry.expiresAt > Date.now()) {
+    return true;
+  }
+  return false;
+}
+
 export function getParentPasswords(): Record<string, string> {
   return getStored<Record<string, string>>(KEYS.PARENT_PASSWORDS, {});
 }
@@ -2366,6 +2388,12 @@ export function verifyParentCredentials(
   }
 
   const pass = passwordInput.trim();
+
+  // 1. One-time login passcode verified via email
+  if (verifyParentLoginPasscode(normalizedEmail, pass)) {
+    return { success: true, students: matchingStudents };
+  }
+
   const savedPasswords = getParentPasswords();
   const savedPassword = savedPasswords[normalizedEmail];
 

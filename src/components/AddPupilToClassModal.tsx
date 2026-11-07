@@ -15,6 +15,7 @@ import {
   Phone,
   User,
   Calendar,
+  Mail,
 } from 'lucide-react';
 import { Student, ClassSection } from '@/types/attendance';
 import { updateStudent, addStudent, addAuditLog } from '@/lib/storage';
@@ -357,6 +358,24 @@ export function AddPupilToClassModal({
                   />
                 </div>
                 <p className="text-[10px] text-slate-500 mt-1">Used for automated daily attendance notifications & WhatsApp absence alerts.</p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Parent Email (Result Portal Username) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="email"
+                    required
+                    value={newParentEmail}
+                    onChange={(e) => setNewParentEmail(e.target.value)}
+                    placeholder="e.g. parent@gmail.com"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">For every child registered, the parent&apos;s email is their username to view results and receive passcodes.</p>
               </div>
             </div>
 

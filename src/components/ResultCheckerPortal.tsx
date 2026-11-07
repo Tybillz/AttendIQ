@@ -53,6 +53,7 @@ import {
   getAuditLogs,
   saveParentPassword,
   verifyParentCredentials,
+  generateParentLoginPasscode,
 } from '@/lib/storage';
 import {
   getSchoolBranding,
@@ -100,11 +101,15 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClasses[0]?.id || '');
   const [admissionNumberInput, setAdmissionNumberInput] = useState<string>('');
 
-  // Parent Email & Password Authentication State
+  // Parent Email (Username) -> Passcode (with Send Passcode button) 2-Step Authentication State
+  const [parentLoginStep, setParentLoginStep] = useState<'email' | 'passcode'>('email');
   const [parentEmailInput, setParentEmailInput] = useState<string>('emeka.obi@gmail.com');
   const [parentPasswordInput, setParentPasswordInput] = useState<string>('');
   const [showParentPassword, setShowParentPassword] = useState<boolean>(false);
   const [parentFamilyStudents, setParentFamilyStudents] = useState<Student[]>([]);
+  const [loginPasscodeSentNotice, setLoginPasscodeSentNotice] = useState<string | null>(null);
+  const [isSendingLoginPasscode, setIsSendingLoginPasscode] = useState<boolean>(false);
+  const [passcodeCooldown, setPasscodeCooldown] = useState<number>(0);
 
   // Email-Verified 6-Digit Passcode Forgot Password State
   const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] = useState<boolean>(false);
@@ -279,6 +284,78 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Login Passcode Countdown Timer
+  useEffect(() => {
+    if (passcodeCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setPasscodeCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [passcodeCooldown]);
+
+  // Step 1 -> Step 2: Validate Email (Username) and advance to Passcode Step
+  const handleParentEmailNext = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setVerificationError(null);
+    setLoginPasscodeSentNotice(null);
+    const email = parentEmailInput.trim().toLowerCase();
+
+    if (!email) {
+      setVerificationError('Please enter your parent email address.');
+      return;
+    }
+
+    if (!email.includes('@') || !email.includes('.')) {
+      setVerificationError('Please enter a valid email address (e.g. parent@gmail.com).');
+      return;
+    }
+
+    // Verify parent email is registered in the school database
+    const matching = students.filter(
+      (s) => s.parentEmail && s.parentEmail.trim().toLowerCase() === email
+    );
+
+    if (matching.length === 0) {
+      setVerificationError(
+        `No registered student found associated with "${parentEmailInput.trim()}". Please enter the exact parent email address provided to the school during onboarding.`
+      );
+      return;
+    }
+
+    setParentFamilyStudents(matching);
+    setParentLoginStep('passcode');
+    setVerificationError(null);
+  };
+
+  // Step 2: Dispatch 6-Digit Passcode to Registered Parent Email
+  const handleSendLoginPasscode = () => {
+    if (passcodeCooldown > 0) return;
+    setIsSendingLoginPasscode(true);
+    setLoginPasscodeSentNotice(null);
+    setVerificationError(null);
+
+    setTimeout(() => {
+      setIsSendingLoginPasscode(false);
+      const code = generateParentLoginPasscode(parentEmailInput);
+      setParentPasswordInput(code); // Pre-fill passcode field for instant convenience
+      setLoginPasscodeSentNotice(`📧 Access Passcode sent to ${parentEmailInput.trim()}: [ ${code} ] (Valid for 15 minutes)`);
+      setPasscodeCooldown(30);
+
+      // Log dispatch audit record
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'parent-portal',
+        actorName: 'ResultIQ Mailer',
+        action: 'SECURITY_ALERT',
+        targetType: 'pupil',
+        targetId: 'otp-dispatcher',
+        targetName: 'Parent Login Passcode',
+        severity: 'info',
+        details: `One-time login passcode dispatched to registered parent email: ${parentEmailInput.trim()}. Access passcode: ${code}`,
+      });
+    }, 400);
+  };
 
   // Step 1: Send 6-Digit Verification Passcode to Registered Parent Email
   const handleSendResetOtp = (e?: React.FormEvent) => {
@@ -492,7 +569,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   };
 
   // ─────────────────────────────────────────────────────────────
-  // RENDER: PARENT SIGN-IN CARD (EMAIL & PASSWORD + FORGOT PASSWORD)
+  // RENDER: PARENT SIGN-IN CARD (2-STEP: USERNAME/EMAIL -> NEXT -> PASSCODE + SEND PASSCODE)
   // ─────────────────────────────────────────────────────────────
   const renderParentSignInCard = () => (
     <div className="max-w-md mx-auto space-y-6">
@@ -508,154 +585,257 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 Parent &amp; Guardian Portal
               </h2>
               <p className="text-xs text-slate-300">
-                Sign in to view your child&apos;s official terminal result
+                {parentLoginStep === 'email'
+                  ? 'Enter your registered parent email to begin'
+                  : 'Enter your access passcode or generate a one-time code'}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Sign In Form */}
-        <form onSubmit={handleVerifyResult} className="p-6 sm:p-7 space-y-4">
-          {/* Academic Session & Term Selector */}
-          <div className="space-y-1">
-            <label htmlFor="session-term-select" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-              Academic Term:
-            </label>
-            <div className="relative">
-              <select
-                id="session-term-select"
-                value={`${selectedSession} • ${selectedTerm}`}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val.includes('Second Term')) {
-                    setSelectedTerm('Second Term');
-                  } else if (val.includes('Third Term')) {
-                    setSelectedTerm('Third Term');
-                  } else {
-                    setSelectedTerm('First Term');
-                  }
-                }}
-                className="w-full text-xs font-semibold pl-3 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition appearance-none cursor-pointer"
-              >
-                <option value="2026/2027 • Second Term">2026/2027 • Second Term (Lent)</option>
-                <option value="2026/2027 • First Term">2026/2027 • First Term (Harmattan)</option>
-                <option value="2025/2026 • Third Term">2025/2026 • Third Term (Trinity)</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
-                <ChevronDown className="w-4 h-4" />
+        {/* STEP 1: USERNAME (PARENT EMAIL) -> NEXT BUTTON */}
+        {parentLoginStep === 'email' ? (
+          <form onSubmit={handleParentEmailNext} className="p-6 sm:p-7 space-y-4">
+            {/* Academic Session & Term Selector */}
+            <div className="space-y-1">
+              <label htmlFor="session-term-select" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+                Academic Term:
+              </label>
+              <div className="relative">
+                <select
+                  id="session-term-select"
+                  value={`${selectedSession} • ${selectedTerm}`}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.includes('Second Term')) {
+                      setSelectedTerm('Second Term');
+                    } else if (val.includes('Third Term')) {
+                      setSelectedTerm('Third Term');
+                    } else {
+                      setSelectedTerm('First Term');
+                    }
+                  }}
+                  className="w-full text-xs font-semibold pl-3 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition appearance-none cursor-pointer"
+                >
+                  <option value="2026/2027 • Second Term">2026/2027 • Second Term (Lent)</option>
+                  <option value="2026/2027 • First Term">2026/2027 • First Term (Harmattan)</option>
+                  <option value="2025/2026 • Third Term">2025/2026 • Third Term (Trinity)</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Registered Parent Email */}
-          <div className="space-y-1">
-            <label htmlFor="parent-email-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-              Registered Parent Email:
-            </label>
-            <div className="relative">
-              <input
-                id="parent-email-input"
-                type="email"
-                required
-                placeholder="e.g. emeka.obi@gmail.com"
-                value={parentEmailInput}
-                onChange={(e) => {
-                  setParentEmailInput(e.target.value);
-                  setVerificationError(null);
-                }}
-                className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition"
-              />
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+            {/* Registered Parent Email as Username */}
+            <div className="space-y-1">
+              <label htmlFor="parent-email-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+                Parent Email (Username):
+              </label>
+              <div className="relative">
+                <input
+                  id="parent-email-input"
+                  type="email"
+                  required
+                  placeholder="e.g. emeka.obi@gmail.com"
+                  value={parentEmailInput}
+                  onChange={(e) => {
+                    setParentEmailInput(e.target.value);
+                    setVerificationError(null);
+                  }}
+                  className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition"
+                  autoFocus
+                />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              </div>
+              <span className="text-[10px] text-slate-500 block leading-tight">
+                💡 For every child registered in the school database, the parent&apos;s email is their portal username.
+              </span>
             </div>
-            <span className="text-[10px] text-slate-400 block">
-              Enter the email address provided to the school during onboarding.
-            </span>
-          </div>
 
-          {/* Password Field with Show/Hide Toggle */}
-          <div className="space-y-1">
-            <label htmlFor="parent-password-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-              Account Password:
-            </label>
-            <div className="relative">
-              <input
-                id="parent-password-input"
-                type={showParentPassword ? 'text' : 'password'}
-                required
-                placeholder="Enter parent password"
-                value={parentPasswordInput}
-                onChange={(e) => {
-                  setParentPasswordInput(e.target.value);
-                  setVerificationError(null);
-                }}
-                className="w-full text-xs font-medium pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition"
-              />
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+            {/* Error Notice */}
+            {verificationError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{verificationError}</span>
+              </div>
+            )}
+
+            {/* NEXT BUTTON */}
+            <div className="pt-2">
               <button
-                type="button"
-                onClick={() => setShowParentPassword(!showParentPassword)}
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-                title={showParentPassword ? 'Hide password' : 'Show password'}
+                type="submit"
+                className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs tracking-wide shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                {showParentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <span>Next</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Forgot Password Row */}
-            <div className="flex items-center justify-between pt-1.5 text-[11px]">
-              <span className="text-slate-400">
-                Default: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">parent123</code> or Child ID
-              </span>
+          </form>
+        ) : (
+          /* STEP 2: PASSCODE STEP WITH "SEND PASSCODE" BUTTON BENEATH */
+          <form onSubmit={handleVerifyResult} className="p-6 sm:p-7 space-y-4">
+            {/* Active Username readout with Change link */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                  Parent Username:
+                </span>
+                <span className="text-xs font-bold text-slate-900 truncate block">
+                  {parentEmailInput}
+                </span>
+                {parentFamilyStudents.length > 0 && (
+                  <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5 truncate">
+                    ✓ Linked: {parentFamilyStudents.map((s) => s.name).join(', ')}
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {
-                  setForgotEmailInput(parentEmailInput);
-                  setForgotPasscodeInput('');
-                  setForgotNewPassword('');
-                  setForgotConfirmPassword('');
-                  setForgotError(null);
-                  setForgotSuccess(null);
-                  setOtpSentNotice(null);
-                  setForgotStep('request_otp');
-                  setIsForgotPasswordModalOpen(true);
+                  setParentLoginStep('email');
+                  setLoginPasscodeSentNotice(null);
+                  setVerificationError(null);
                 }}
-                className="text-amber-600 hover:text-amber-700 font-bold transition hover:underline cursor-pointer"
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-bold transition hover:underline cursor-pointer shrink-0"
               >
-                Forgot Password?
+                Change
               </button>
             </div>
-          </div>
 
-          {/* Error Notice */}
-          {verificationError && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <span>{verificationError}</span>
-            </div>
-          )}
+            {/* Passcode Field */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label htmlFor="parent-password-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+                  Access Passcode / Password:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotEmailInput(parentEmailInput);
+                    setForgotPasscodeInput('');
+                    setForgotNewPassword('');
+                    setForgotConfirmPassword('');
+                    setForgotError(null);
+                    setForgotSuccess(null);
+                    setOtpSentNotice(null);
+                    setForgotStep('request_otp');
+                    setIsForgotPasswordModalOpen(true);
+                  }}
+                  className="text-[10px] text-amber-600 hover:text-amber-700 font-bold hover:underline cursor-pointer"
+                >
+                  Forgot Password?
+                </button>
+              </div>
 
-          {/* Submit Action */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={isVerifying}
-              className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs tracking-wide shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isVerifying ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Verifying Credentials...</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>Sign In &amp; View Official Report Sheet</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
+              <div className="relative">
+                <input
+                  id="parent-password-input"
+                  type={showParentPassword ? 'text' : 'password'}
+                  required
+                  placeholder="Enter 6-digit passcode or password"
+                  value={parentPasswordInput}
+                  onChange={(e) => {
+                    setParentPasswordInput(e.target.value);
+                    setVerificationError(null);
+                  }}
+                  className="w-full text-xs font-medium pl-9 pr-10 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:border-slate-900 transition font-mono tracking-wider"
+                  autoFocus
+                />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowParentPassword(!showParentPassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                  title={showParentPassword ? 'Hide passcode' : 'Show passcode'}
+                >
+                  {showParentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* SEND PASSCODE BUTTON BENEATH THE PASSCODE INPUT */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleSendLoginPasscode}
+                  disabled={isSendingLoginPasscode || passcodeCooldown > 0}
+                  className="w-full py-2.5 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300/80 text-amber-950 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-60 shadow-2xs"
+                >
+                  {isSendingLoginPasscode ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-amber-700/30 border-t-amber-700 rounded-full animate-spin"></div>
+                      <span>Sending Passcode to Email...</span>
+                    </>
+                  ) : passcodeCooldown > 0 ? (
+                    <>
+                      <Clock className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Resend Passcode in {passcodeCooldown}s</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Send Passcode to my Email</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Success Notification Banner for Dispatched Passcode */}
+              {loginPasscodeSentNotice && (
+                <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs flex items-start gap-2 shadow-2xs animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="font-bold block text-emerald-900">{loginPasscodeSentNotice}</span>
+                    <span className="text-[10px] text-emerald-700 block mt-0.5">
+                      Your passcode has been filled in above. Click below to verify and access your child&apos;s result.
+                    </span>
+                  </div>
+                </div>
               )}
-            </button>
-          </div>
-        </form>
+            </div>
+
+            {/* Error Notice */}
+            {verificationError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{verificationError}</span>
+              </div>
+            )}
+
+            {/* Submit Action: Verify & View Result */}
+            <div className="pt-2 space-y-2">
+              <button
+                type="submit"
+                disabled={isVerifying}
+                className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs tracking-wide shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isVerifying ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Verifying Passcode...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>Verify Passcode &amp; Access Terminal Results</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setParentLoginStep('email');
+                  setVerificationError(null);
+                }}
+                className="w-full py-2 text-center text-xs text-slate-500 hover:text-slate-800 font-semibold transition cursor-pointer"
+              >
+                &larr; Back to Email Step
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -721,6 +901,9 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               onClick={() => {
                 setVerifiedStudent(null);
                 setParentFamilyStudents([]);
+                setParentLoginStep('email');
+                setLoginPasscodeSentNotice(null);
+                setParentPasswordInput('');
               }}
               className="px-3 py-1.5 rounded-lg bg-emerald-800/80 hover:bg-emerald-800 text-xs font-medium text-white transition flex items-center gap-1.5 cursor-pointer"
             >
