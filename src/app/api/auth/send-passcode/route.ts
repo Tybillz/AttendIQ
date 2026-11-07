@@ -83,11 +83,13 @@ export async function POST(request: Request) {
     const textContent = `Official Result Access Passcode\n\nSchool: ${cleanSchoolName}\nStudent: ${cleanStudentName}\nYour Passcode: ${passcode}\n\nValid for 15 minutes. Enter this code on the portal to access terminal results.`;
 
     let emailSent = false;
-    let providerUsed = 'simulated';
+    let providerUsed = 'none';
+    let providerError = '';
 
     // 1. Resend API (Most popular & reliable for Next.js / Vercel)
     const resendApiKey = process.env.RESEND_API_KEY;
     if (resendApiKey) {
+      providerUsed = 'resend';
       try {
         const resendRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -106,19 +108,24 @@ export async function POST(request: Request) {
 
         if (resendRes.ok) {
           emailSent = true;
-          providerUsed = 'resend';
         } else {
           const errData = await resendRes.json();
           console.warn('Resend API returned an error:', errData);
+          providerError = errData.message || 'Resend API rejected the email.';
+          if (providerError.toLowerCase().includes('only send testing emails')) {
+            providerError = `${providerError} (Note: On Resend free onboarding domain, emails can only be delivered to your Resend account email. Please test with that email, or verify a domain at resend.com/domains).`;
+          }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Resend dispatch failed:', err);
+        providerError = err?.message || 'Network error connecting to Resend.';
       }
     }
 
     // 2. Brevo / Sendinblue API (popular in Africa/Nigeria with free daily quota)
     const brevoApiKey = process.env.BREVO_API_KEY;
     if (!emailSent && brevoApiKey) {
+      providerUsed = 'brevo';
       try {
         const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -140,16 +147,22 @@ export async function POST(request: Request) {
 
         if (brevoRes.ok) {
           emailSent = true;
-          providerUsed = 'brevo';
+          providerError = '';
+        } else {
+          const errData = await brevoRes.json();
+          console.warn('Brevo dispatch failed:', errData);
+          providerError = errData.message || 'Brevo API rejected the email.';
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Brevo dispatch failed:', err);
+        providerError = err?.message || 'Network error connecting to Brevo.';
       }
     }
 
     // 3. SendGrid API
     const sendgridApiKey = process.env.SENDGRID_API_KEY;
     if (!emailSent && sendgridApiKey) {
+      providerUsed = 'sendgrid';
       try {
         const sendgridRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
           method: 'POST',
@@ -173,16 +186,22 @@ export async function POST(request: Request) {
 
         if (sendgridRes.ok) {
           emailSent = true;
-          providerUsed = 'sendgrid';
+          providerError = '';
+        } else {
+          const errData = await sendgridRes.json().catch(() => ({}));
+          console.warn('SendGrid dispatch failed:', errData);
+          providerError = (errData as any).errors?.[0]?.message || 'SendGrid rejected the email.';
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('SendGrid dispatch failed:', err);
+        providerError = err?.message || 'Network error connecting to SendGrid.';
       }
     }
 
     // 4. Custom Institutional Webhook (Zapier / Make / n8n / School Email Gateway)
     const webhookUrl = process.env.EMAIL_WEBHOOK_URL || process.env.NOTIFICATION_WEBHOOK_URL;
     if (!emailSent && webhookUrl) {
+      providerUsed = 'webhook';
       try {
         const hookRes = await fetch(webhookUrl, {
           method: 'POST',
@@ -200,7 +219,7 @@ export async function POST(request: Request) {
 
         if (hookRes.ok) {
           emailSent = true;
-          providerUsed = 'webhook';
+          providerError = '';
         }
       } catch (err) {
         console.warn('Webhook email dispatch failed:', err);
@@ -208,12 +227,24 @@ export async function POST(request: Request) {
     }
 
     // Log dispatch internally
-    console.log(`[Passcode Dispatch] Provider: ${providerUsed} | Recipient: ${cleanEmail} | Status: ${emailSent ? 'DISPATCHED' : 'RECORDED'}`);
+    console.log(`[Passcode Dispatch] Provider: ${providerUsed} | Recipient: ${cleanEmail} | Status: ${emailSent ? 'DISPATCHED' : 'FAILED'} | Error: ${providerError}`);
+
+    if (!emailSent) {
+      if (!resendApiKey && !brevoApiKey && !sendgridApiKey && !webhookUrl) {
+        providerError = 'No email provider API key configured on Vercel. Please add RESEND_API_KEY under Environment Variables in Vercel.';
+      }
+      return NextResponse.json({
+        success: false,
+        error: providerError || 'Failed to dispatch email.',
+        provider: providerUsed,
+        dispatched: false,
+      }, { status: 400 });
+    }
 
     return NextResponse.json({
       success: true,
       provider: providerUsed,
-      dispatched: emailSent,
+      dispatched: true,
       message: `Access passcode dispatched to ${cleanEmail}.`,
     });
   } catch (error) {

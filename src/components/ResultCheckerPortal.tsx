@@ -345,7 +345,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       const targetSchool = branding.schoolName || 'Innovative International Secondary School';
 
       // Call server email dispatcher API
-      await fetch('/api/auth/send-passcode', {
+      const apiRes = await fetch('/api/auth/send-passcode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -355,6 +355,15 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           schoolName: targetSchool,
         }),
       });
+
+      const data = await apiRes.json().catch(() => null);
+
+      if (!apiRes.ok || (data && !data.success)) {
+        setVerificationError(
+          data?.error || 'Email dispatch failed. Please check your email provider configuration.'
+        );
+        return;
+      }
 
       setLoginPasscodeSentNotice(
         `Access passcode has been dispatched to ${parentEmailInput.trim()}. Please check your email inbox (and spam folder), copy the 6-digit passcode, and paste it into the box above.`
