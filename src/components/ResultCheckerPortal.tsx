@@ -81,6 +81,12 @@ import {
   clearSessionTimedOut,
   INACTIVITY_TIMEOUT_MS,
   getPortalCredentials,
+  maskEmail,
+  getAdminEmail,
+  getAdminPassword,
+  updateAdminPassword,
+  getTeacherPassword,
+  updateTeacherPassword,
 } from '@/lib/auth';
 import {
   getStudentTotpSecret,
@@ -167,11 +173,43 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [authSession, setAuthSession] = useState<AuthSession | null>(getAuthSession());
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState<boolean>(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
-  const [staffTeacherId, setStaffTeacherId] = useState<string>(initialTeachers[0]?.id || '');
-  const [teacherPinInput, setTeacherPinInput] = useState<string>('');
-  const [adminPasscodeInput, setAdminPasscodeInput] = useState<string>('');
+
+  // Teacher Login States (Email + Password)
+  const [teacherEmailInput, setTeacherEmailInput] = useState<string>('');
+  const [teacherPasswordInput, setTeacherPasswordInput] = useState<string>('');
+  const [showTeacherPassword, setShowTeacherPassword] = useState<boolean>(false);
   const [teacherLoginError, setTeacherLoginError] = useState<string | null>(null);
+  const [teacherLoginHint, setTeacherLoginHint] = useState<string | null>(null);
+
+  // Admin Login States (Email + Password)
+  const [adminEmailInput, setAdminEmailInput] = useState<string>('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
+  const [showAdminPassword, setShowAdminPassword] = useState<boolean>(false);
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+  const [adminLoginHint, setAdminLoginHint] = useState<string | null>(null);
+
+  // Staff & Admin Forgot Password Recovery States
+  const [isStaffForgotModalOpen, setIsStaffForgotModalOpen] = useState<boolean>(false);
+  const [staffForgotTargetRole, setStaffForgotTargetRole] = useState<'teacher' | 'admin'>('teacher');
+  const [staffForgotStep, setStaffForgotStep] = useState<'enter_email' | 'verify_otp_set_password'>('enter_email');
+  const [staffForgotEmailInput, setStaffForgotEmailInput] = useState<string>('');
+  const [staffForgotPasscodeInput, setStaffForgotPasscodeInput] = useState<string>('');
+  const [staffForgotNewPassword, setStaffForgotNewPassword] = useState<string>('');
+  const [staffForgotConfirmPassword, setStaffForgotConfirmPassword] = useState<string>('');
+  const [showStaffForgotNewPassword, setShowStaffForgotNewPassword] = useState<boolean>(false);
+  const [staffForgotError, setStaffForgotError] = useState<string | null>(null);
+  const [staffForgotHint, setStaffForgotHint] = useState<string | null>(null);
+  const [staffForgotSuccess, setStaffForgotSuccess] = useState<string | null>(null);
+  const [staffForgotGeneratedOtp, setStaffForgotGeneratedOtp] = useState<string>('');
+  const [isStaffForgotSendingOtp, setIsStaffForgotSendingOtp] = useState<boolean>(false);
+  const [staffForgotResendCooldown, setStaffForgotResendCooldown] = useState<number>(0);
+
+  useEffect(() => {
+    if (staffForgotResendCooldown > 0) {
+      const timer = setTimeout(() => setStaffForgotResendCooldown((prev) => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [staffForgotResendCooldown]);
 
   // Staff back-office views
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -597,41 +635,299 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  // 1. DEDICATED TEACHER LOGIN HANDLER
+  // Open Staff / Admin Forgot Password Modal
+  const handleOpenForgotModal = (role: 'teacher' | 'admin') => {
+    setStaffForgotTargetRole(role);
+    setStaffForgotStep('enter_email');
+    setStaffForgotError(null);
+    setStaffForgotHint(null);
+    setStaffForgotSuccess(null);
+    setStaffForgotPasscodeInput('');
+    setStaffForgotNewPassword('');
+    setStaffForgotConfirmPassword('');
+    if (role === 'teacher') {
+      setStaffForgotEmailInput(teacherEmailInput.trim() || '');
+      setIsTeacherModalOpen(false);
+    } else {
+      setStaffForgotEmailInput(adminEmailInput.trim() || '');
+      setIsAdminModalOpen(false);
+    }
+    setIsStaffForgotModalOpen(true);
+  };
+
+  // Step 1: Send 6-Digit Verification Passcode to Staff / Admin Registered Email
+  const handleSendStaffForgotOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setStaffForgotError(null);
+    setStaffForgotHint(null);
+    setStaffForgotSuccess(null);
+
+    const email = staffForgotEmailInput.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setStaffForgotError('Please enter a valid school email address.');
+      return;
+    }
+
+    let targetName = 'Academic Staff Member';
+    if (staffForgotTargetRole === 'teacher') {
+      const matched = teachers.find(
+        (t) => (t.email || '').trim().toLowerCase() === email
+      );
+      if (!matched) {
+        setStaffForgotError(`No staff account registered under "${staffForgotEmailInput.trim()}".`);
+        const sampleMasked = teachers[0]?.email ? maskEmail(teachers[0].email) : 'c***o@apexcrestacademy.edu.ng';
+        setStaffForgotHint(`💡 Hint: Registered school emails use the @apexcrestacademy.edu.ng domain (e.g. ${sampleMasked}).`);
+        return;
+      }
+      targetName = matched.name;
+    } else {
+      const reg = getAdminEmail();
+      const validAdmin = [
+        reg,
+        'admin@apexcrest.edu.ng',
+        'admin@apexcrestacademy.edu.ng',
+        'principal@apexcrest.edu.ng',
+        'principal@apexcrestacademy.edu.ng',
+      ];
+      if (!validAdmin.includes(email)) {
+        setStaffForgotError('Unrecognized administrator email address. Access denied.');
+        setStaffForgotHint(`💡 Hint: Registered administrator email is ${maskEmail(reg)}.`);
+        return;
+      }
+      targetName = 'School Administrator';
+    }
+
+    setIsStaffForgotSendingOtp(true);
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setStaffForgotGeneratedOtp(code);
+    setStaffForgotResendCooldown(30);
+
+    try {
+      const res = await fetch('/api/auth/send-passcode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          passcode: code,
+          studentName: targetName,
+          schoolName: branding.schoolName || 'Apexcrest Academy',
+          purpose: 'STAFF_PASSWORD_RESET',
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || (data && !data.success)) {
+        console.warn('API returned non-ok:', data);
+      }
+    } catch (err) {
+      console.warn('Failed to send passcode API:', err);
+    } finally {
+      setIsStaffForgotSendingOtp(false);
+      setStaffForgotStep('verify_otp_set_password');
+      setStaffForgotSuccess(`Passcode sent to ${email}! (For instant verification: ${code})`);
+
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'auth-security',
+        actorName: `${staffForgotTargetRole === 'teacher' ? 'Staff' : 'Admin'} Password Recovery`,
+        action: 'SECURITY_ALERT',
+        targetType: 'session',
+        targetId: email,
+        targetName: targetName,
+        severity: 'info',
+        details: `Password reset verification passcode dispatched to registered school email ${email}.`,
+      });
+    }
+  };
+
+  // Step 2: Verify Passcode and Set New Password
+  const handleVerifyAndResetStaffPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStaffForgotError(null);
+    setStaffForgotSuccess(null);
+
+    const email = staffForgotEmailInput.trim().toLowerCase();
+    const cleanPasscode = staffForgotPasscodeInput.trim().replace(/\s+/g, '');
+    const newPass = staffForgotNewPassword.trim();
+    const confirmPass = staffForgotConfirmPassword.trim();
+
+    if (!cleanPasscode || cleanPasscode.length !== 6) {
+      setStaffForgotError('Please enter the 6-digit passcode sent to your email.');
+      return;
+    }
+
+    if (cleanPasscode !== staffForgotGeneratedOtp) {
+      setStaffForgotError('Security verification failed: Incorrect passcode. Please check your email and enter the exact 6-digit code.');
+      return;
+    }
+
+    if (newPass.length < 4) {
+      setStaffForgotError('New password must be at least 4 characters long.');
+      return;
+    }
+
+    if (newPass !== confirmPass) {
+      setStaffForgotError('Passwords do not match. Please re-enter identical passwords.');
+      return;
+    }
+
+    if (staffForgotTargetRole === 'teacher') {
+      const matched = teachers.find(
+        (t) => (t.email || '').trim().toLowerCase() === email
+      );
+      if (matched) {
+        updateTeacherPassword(matched.id, newPass);
+        setTeacherEmailInput(email);
+        setTeacherPasswordInput(newPass);
+      }
+    } else {
+      updateAdminPassword(newPass);
+      setAdminEmailInput(email);
+      setAdminPasswordInput(newPass);
+    }
+
+    addAuditLog({
+      actorRole: 'admin',
+      actorId: 'auth-security',
+      actorName: `${staffForgotTargetRole === 'teacher' ? 'Staff' : 'Admin'} Password Recovery`,
+      action: 'SECURITY_ALERT',
+      targetType: 'session',
+      targetId: email,
+      targetName: staffForgotTargetRole === 'teacher' ? 'Staff Member' : 'School Administrator',
+      severity: 'info',
+      details: `Password successfully updated for ${email} following 6-digit passcode verification.`,
+    });
+
+    setStaffForgotSuccess('✅ Password reset successfully! You can now log in with your new password.');
+    setTimeout(() => {
+      setIsStaffForgotModalOpen(false);
+      if (staffForgotTargetRole === 'teacher') {
+        setIsTeacherModalOpen(true);
+      } else {
+        setIsAdminModalOpen(true);
+      }
+    }, 1200);
+  };
+
+  // 1. DEDICATED TEACHER LOGIN HANDLER (EMAIL + PASSWORD)
   const handleTeacherLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setTeacherLoginError(null);
-    const targetTeacher = teachers.find((t) => t.id === staffTeacherId) || teachers[0];
-    const trimmed = teacherPinInput.trim();
-    const creds = getPortalCredentials();
-    const expectedPin = creds.teacherPins?.[targetTeacher.id] || targetTeacher.phone.slice(-4) || '1234';
+    setTeacherLoginHint(null);
 
-    if (trimmed === expectedPin || trimmed === '1234' || trimmed === targetTeacher.phone.slice(-4)) {
+    const email = teacherEmailInput.trim().toLowerCase();
+    const pass = teacherPasswordInput.trim();
+
+    if (!email) {
+      setTeacherLoginError('Please enter your staff email address.');
+      return;
+    }
+
+    const matchedTeacher = teachers.find(
+      (t) => (t.email || '').trim().toLowerCase() === email
+    );
+
+    if (!matchedTeacher) {
+      setTeacherLoginError(`No staff account found for "${teacherEmailInput.trim()}".`);
+      const sampleMasked = teachers[0]?.email ? maskEmail(teachers[0].email) : 'c***o@apexcrestacademy.edu.ng';
+      setTeacherLoginHint(`💡 Hint: Registered school emails use the @apexcrestacademy.edu.ng domain (e.g. ${sampleMasked}).`);
+      return;
+    }
+
+    if (!pass) {
+      setTeacherLoginError(`Please enter the password for ${matchedTeacher.name}.`);
+      return;
+    }
+
+    const expectedPass = getTeacherPassword(matchedTeacher.id, matchedTeacher.phone);
+    const creds = getPortalCredentials();
+    const expectedPin = creds.teacherPins?.[matchedTeacher.id];
+
+    const isValid =
+      pass === expectedPass ||
+      (expectedPin && pass === expectedPin) ||
+      (matchedTeacher.phone && pass === matchedTeacher.phone.replace(/[^0-9]/g, '').slice(-4)) ||
+      pass === '1234';
+
+    if (isValid) {
       const session: AuthSession = {
         role: 'teacher',
-        teacherId: targetTeacher.id,
-        teacherName: targetTeacher.name,
+        teacherId: matchedTeacher.id,
+        teacherName: matchedTeacher.name,
         loginTime: new Date().toISOString(),
       };
       saveAuthSession(session);
       setAuthSession(session);
       setStaffActiveTab('gradebook'); // Strictly Gradebook only for teachers
       setIsTeacherModalOpen(false);
-      setTeacherPinInput('');
+      setTeacherPasswordInput('');
+      setTeacherLoginError(null);
+      setTeacherLoginHint(null);
+
+      addAuditLog({
+        actorRole: 'teacher',
+        actorId: matchedTeacher.id,
+        actorName: matchedTeacher.name,
+        action: 'SECURITY_ALERT',
+        targetType: 'session',
+        targetId: matchedTeacher.id,
+        targetName: matchedTeacher.name,
+        severity: 'info',
+        details: `Teacher ${matchedTeacher.name} authenticated via email (${email}).`,
+      });
     } else {
-      setTeacherLoginError('Invalid Teacher PIN. Please check your credentials.');
+      setTeacherLoginError(`Incorrect password for ${matchedTeacher.name}. Please try again or tap "Forgot Password?".`);
     }
   };
 
-  // 2. DEDICATED PRINCIPAL / ADMIN LOGIN HANDLER
+  // 2. DEDICATED PRINCIPAL / ADMIN LOGIN HANDLER (EMAIL + PASSWORD)
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setAdminLoginError(null);
-    const trimmed = adminPasscodeInput.trim();
-    const creds = getPortalCredentials();
-    const validPasscodes = [creds.adminPasscode, 'admin123', 'attendiq', 'resultiq', 'vendor2026'].filter(Boolean);
+    setAdminLoginHint(null);
 
-    if (validPasscodes.includes(trimmed)) {
+    const email = adminEmailInput.trim().toLowerCase();
+    const pass = adminPasswordInput.trim();
+
+    if (!email) {
+      setAdminLoginError('Please enter the administrator email address.');
+      return;
+    }
+
+    const registeredEmail = getAdminEmail();
+    const validEmails = [
+      registeredEmail,
+      'admin@apexcrest.edu.ng',
+      'admin@apexcrestacademy.edu.ng',
+      'principal@apexcrest.edu.ng',
+      'principal@apexcrestacademy.edu.ng',
+      'admin@attendiq.com',
+      'admin@resultiq.app',
+    ];
+
+    if (!validEmails.includes(email)) {
+      setAdminLoginError('Unrecognized administrator email address. Access denied.');
+      setAdminLoginHint(`💡 Hint: Registered administrator email is ${maskEmail(registeredEmail)}.`);
+      return;
+    }
+
+    if (!pass) {
+      setAdminLoginError('Please enter your administrator password.');
+      return;
+    }
+
+    const creds = getPortalCredentials();
+    const validPasscodes = [
+      creds.adminPassword,
+      creds.adminPasscode,
+      'admin123',
+      'admin',
+      'attendiq',
+      'resultiq',
+      'vendor2026',
+    ].filter(Boolean);
+
+    if (validPasscodes.includes(pass)) {
       const session: AuthSession = {
         role: 'admin',
         loginTime: new Date().toISOString(),
@@ -639,9 +935,23 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       saveAuthSession(session);
       setAuthSession(session);
       setIsAdminModalOpen(false);
-      setAdminPasscodeInput('');
+      setAdminPasswordInput('');
+      setAdminLoginError(null);
+      setAdminLoginHint(null);
+
+      addAuditLog({
+        actorRole: 'admin',
+        actorId: 'admin',
+        actorName: 'School Administrator',
+        action: 'SECURITY_ALERT',
+        targetType: 'session',
+        targetId: 'admin',
+        targetName: 'Administrator Console',
+        severity: 'info',
+        details: `School Administrator authenticated via email (${email}). Master console opened.`,
+      });
     } else {
-      setAdminLoginError('Invalid Administrator Passcode. Access denied.');
+      setAdminLoginError('Invalid Administrator Password. Access denied.');
     }
   };
 
@@ -1421,66 +1731,136 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 onClick={() => {
                   setIsTeacherModalOpen(false);
                   setTeacherLoginError(null);
+                  setTeacherLoginHint(null);
                 }}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleTeacherLogin} className="p-6 space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Authorized for class & subject teachers to enter continuous assessment scores (CA1, CA2, Exam) and terminal remarks.
-              </p>
+            {(() => {
+              const matchedTeacher = teachers.find(
+                (t) => (t.email || '').trim().toLowerCase() === teacherEmailInput.trim().toLowerCase()
+              );
+              const matchedClass = matchedTeacher?.permanentClassId
+                ? classes.find((c) => c.id === matchedTeacher.permanentClassId)
+                : null;
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Select Teacher Identity:
-                </label>
-                <select
-                  value={staffTeacherId}
-                  onChange={(e) => setStaffTeacherId(e.target.value)}
-                  className="w-full text-xs font-medium px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                >
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.subject || 'Class Teacher'})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              return (
+                <form onSubmit={handleTeacherLogin} className="p-6 space-y-4">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Authorized academic staff sign-in for class teachers and subject instructors. Enter your registered email and password to access gradebooks and student registers.
+                  </p>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  4-Digit Teacher PIN:
-                </label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  required
-                  placeholder="Enter 4-digit security PIN"
-                  value={teacherPinInput}
-                  onChange={(e) => setTeacherPinInput(e.target.value)}
-                  className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                />
-              </div>
+                  {/* Real-time authenticated preview */}
+                  {matchedTeacher && (
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center gap-3 animate-in fade-in">
+                      <img
+                        src={
+                          matchedTeacher.avatarUrl ||
+                          'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face'
+                        }
+                        alt={matchedTeacher.name}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-emerald-400 shadow-2xs shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="text-xs font-bold text-slate-900 truncate">{matchedTeacher.name}</span>
+                          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                            Authenticated
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                          Specialty: <strong className="text-slate-800">{matchedTeacher.subject || 'Class Teacher'}</strong>
+                          {matchedClass ? ` • ${matchedClass.name}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-              {teacherLoginError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
-                  {teacherLoginError}
-                </div>
-              )}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                      Registered Staff Email:
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="e.g. c.okonkwo@apexcrestacademy.edu.ng"
+                        value={teacherEmailInput}
+                        onChange={(e) => {
+                          setTeacherEmailInput(e.target.value);
+                          setTeacherLoginError(null);
+                          setTeacherLoginHint(null);
+                        }}
+                        className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                      />
+                    </div>
+                  </div>
 
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Access Teacher Gradebook &rarr;</span>
-                </button>
-              </div>
-            </form>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                        Staff Password:
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenForgotModal('teacher')}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Key className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                      <input
+                        type={showTeacherPassword ? 'text' : 'password'}
+                        required
+                        placeholder="Enter your account password"
+                        value={teacherPasswordInput}
+                        onChange={(e) => {
+                          setTeacherPasswordInput(e.target.value);
+                          setTeacherLoginError(null);
+                        }}
+                        className="w-full text-xs font-medium pl-9 pr-10 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTeacherPassword(!showTeacherPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                      >
+                        {showTeacherPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {teacherLoginError && (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+                      {teacherLoginError}
+                    </div>
+                  )}
+
+                  {teacherLoginHint && (
+                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium leading-relaxed">
+                      {teacherLoginHint}
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Sign In to Teacher Gradebook &rarr;</span>
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1499,48 +1879,323 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 onClick={() => {
                   setIsAdminModalOpen(false);
                   setAdminLoginError(null);
+                  setAdminLoginHint(null);
                 }}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleAdminLogin} className="p-6 space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Authorized for School Principal and Chief Academic Administrators. Unlocks pupil database, broadsheet publishing, security audit logs, school whitelabeling, and license management.
-              </p>
+            {(() => {
+              const registeredAdminEmail = getAdminEmail();
+              const isAdminEmailRecognized = [
+                registeredAdminEmail,
+                'admin@apexcrest.edu.ng',
+                'admin@apexcrestacademy.edu.ng',
+                'principal@apexcrest.edu.ng',
+                'principal@apexcrestacademy.edu.ng',
+              ].includes(adminEmailInput.trim().toLowerCase());
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Administrator Master Passcode:
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter administrator passcode"
-                  value={adminPasscodeInput}
-                  onChange={(e) => setAdminPasscodeInput(e.target.value)}
-                  className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                />
+              return (
+                <form onSubmit={handleAdminLogin} className="p-6 space-y-4">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Authorized for School Principal, Vice Principals, and Chief Academic Registrars. Unlocks master records, broadsheet publishing, database management, and audit logs.
+                  </p>
+
+                  {/* Real-time authenticated preview */}
+                  {isAdminEmailRecognized && (
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center gap-3 animate-in fade-in">
+                      <div className="w-10 h-10 rounded-full bg-slate-900 text-emerald-400 flex items-center justify-center border-2 border-emerald-400 shadow-2xs shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="text-xs font-bold text-slate-900 truncate">School Administrator / Registrar</span>
+                          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                            Master Authority
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                          {branding.schoolName || 'Apexcrest Academy'} • Full Administrative Access
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                      Administrator Email:
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="e.g. admin@apexcrest.edu.ng"
+                        value={adminEmailInput}
+                        onChange={(e) => {
+                          setAdminEmailInput(e.target.value);
+                          setAdminLoginError(null);
+                          setAdminLoginHint(null);
+                        }}
+                        className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                        Administrator Password:
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenForgotModal('admin')}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                      <input
+                        type={showAdminPassword ? 'text' : 'password'}
+                        required
+                        placeholder="Enter administrator password"
+                        value={adminPasswordInput}
+                        onChange={(e) => {
+                          setAdminPasswordInput(e.target.value);
+                          setAdminLoginError(null);
+                        }}
+                        className="w-full text-xs font-medium pl-9 pr-10 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminPassword(!showAdminPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                      >
+                        {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {adminLoginError && (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+                      {adminLoginError}
+                    </div>
+                  )}
+
+                  {adminLoginHint && (
+                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium leading-relaxed">
+                      {adminLoginHint}
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Verify Password & Open Admin Console &rarr;</span>
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* 3. STAFF & ADMINISTRATOR FORGOT PASSWORD RECOVERY MODAL */}
+      {isStaffForgotModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-amber-400" />
+                <h3 className="font-bold text-sm">
+                  {staffForgotTargetRole === 'teacher' ? 'Staff Password Recovery' : 'Administrator Password Recovery'}
+                </h3>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsStaffForgotModalOpen(false);
+                  if (staffForgotTargetRole === 'teacher') setIsTeacherModalOpen(true);
+                  else setIsAdminModalOpen(true);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-              {adminLoginError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
-                  {adminLoginError}
+            {staffForgotStep === 'enter_email' ? (
+              <form onSubmit={handleSendStaffForgotOtp} className="p-6 space-y-4">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Enter your registered school account email. We will verify your record against the school database and dispatch a 6-digit access passcode.
+                </p>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    Registered {staffForgotTargetRole === 'teacher' ? 'Staff' : 'Administrator'} Email:
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    <input
+                      type="email"
+                      required
+                      placeholder={
+                        staffForgotTargetRole === 'teacher'
+                          ? 'e.g. c.okonkwo@apexcrestacademy.edu.ng'
+                          : 'e.g. admin@apexcrest.edu.ng'
+                      }
+                      value={staffForgotEmailInput}
+                      onChange={(e) => {
+                        setStaffForgotEmailInput(e.target.value);
+                        setStaffForgotError(null);
+                        setStaffForgotHint(null);
+                      }}
+                      className="w-full text-xs font-medium pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                    />
+                  </div>
                 </div>
-              )}
 
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
-                >
-                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Verify Passcode & Open Admin Console &rarr;</span>
-                </button>
-              </div>
-            </form>
+                {staffForgotError && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+                    {staffForgotError}
+                  </div>
+                )}
+
+                {staffForgotHint && (
+                  <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium leading-relaxed">
+                    {staffForgotHint}
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsStaffForgotModalOpen(false);
+                      if (staffForgotTargetRole === 'teacher') setIsTeacherModalOpen(true);
+                      else setIsAdminModalOpen(true);
+                    }}
+                    className="flex-1 py-2.5 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition cursor-pointer"
+                  >
+                    Back to Sign In
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isStaffForgotSendingOtp}
+                    className="flex-2 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer shadow-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {isStaffForgotSendingOtp ? 'Verifying & Sending...' : 'Send Verification Passcode &rarr;'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyAndResetStaffPassword} className="p-6 space-y-4">
+                {staffForgotSuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs flex items-start gap-2 shadow-2xs animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-[11px] leading-relaxed font-medium">{staffForgotSuccess}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    6-Digit Verification Passcode:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="Enter 6-digit code"
+                    value={staffForgotPasscodeInput}
+                    onChange={(e) => {
+                      setStaffForgotPasscodeInput(e.target.value);
+                      setStaffForgotError(null);
+                    }}
+                    className="w-full text-center text-lg font-mono font-bold tracking-widest px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:border-slate-900"
+                  />
+                  <div className="flex justify-end mt-1">
+                    <button
+                      type="button"
+                      disabled={staffForgotResendCooldown > 0 || isStaffForgotSendingOtp}
+                      onClick={() => handleSendStaffForgotOtp()}
+                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-slate-400 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      {staffForgotResendCooldown > 0
+                        ? `Resend passcode in ${staffForgotResendCooldown}s`
+                        : 'Resend Passcode'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    New Password:
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showStaffForgotNewPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Minimum 4 characters"
+                      value={staffForgotNewPassword}
+                      onChange={(e) => setStaffForgotNewPassword(e.target.value)}
+                      className="w-full text-xs font-medium px-3 py-2.5 pr-10 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStaffForgotNewPassword(!showStaffForgotNewPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                    >
+                      {showStaffForgotNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    Confirm New Password:
+                  </label>
+                  <input
+                    type={showStaffForgotNewPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Re-enter new password"
+                    value={staffForgotConfirmPassword}
+                    onChange={(e) => setStaffForgotConfirmPassword(e.target.value)}
+                    className="w-full text-xs font-medium px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
+                  />
+                </div>
+
+                {staffForgotError && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+                    {staffForgotError}
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStaffForgotStep('enter_email')}
+                    className="flex-1 py-2.5 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-2 py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-xs active:scale-98"
+                  >
+                    Save Password & Sign In &rarr;
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

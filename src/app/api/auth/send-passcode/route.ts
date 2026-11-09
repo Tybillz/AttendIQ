@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, passcode, studentName, schoolName } = body;
+    const { email, passcode, studentName, schoolName, purpose } = body;
 
     if (!email || !passcode) {
       return NextResponse.json(
@@ -16,9 +16,21 @@ export async function POST(request: Request) {
 
     const cleanEmail = String(email).trim().toLowerCase();
     const cleanSchoolName = schoolName || 'Innovative International Secondary School';
-    const cleanStudentName = studentName || 'your child';
+    const isPasswordReset = purpose === 'STAFF_PASSWORD_RESET';
+    const cleanStudentName = studentName || (isPasswordReset ? 'Staff Member' : 'your child');
 
-    const subject = `Official Result Access Passcode: [ ${passcode} ] - ${cleanSchoolName}`;
+    const subject = isPasswordReset
+      ? `Security Passcode for Password Reset: [ ${passcode} ] - ${cleanSchoolName}`
+      : `Official Result Access Passcode: [ ${passcode} ] - ${cleanSchoolName}`;
+
+    const badgeTitle = isPasswordReset ? 'Staff Security & Identity' : 'ResultIQ™ Academic Registrar';
+    const greeting = isPasswordReset ? `Hello <strong>${cleanStudentName}</strong>,` : `Dear Parent / Guardian of <strong>${cleanStudentName}</strong>,`;
+    const introParagraph = isPasswordReset
+      ? `You initiated a password reset request for your staff / administrator account at <strong>${cleanSchoolName}</strong>.`
+      : `You requested a secure one-time access passcode to view official terminal assessment results on the ResultIQ Parent Portal.`;
+    const instructionParagraph = isPasswordReset
+      ? `<strong>Instructions:</strong> Copy the 6-digit verification passcode above, return to the password reset page, enter it with your new password, and click <strong>Reset Password & Update Account</strong>.`
+      : `<strong>Instructions:</strong> Copy the 6-digit passcode above, return to the portal page, paste it into the <em>Access Passcode</em> field, and click <strong>Verify Passcode & Access Terminal Results</strong>.`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -33,29 +45,29 @@ export async function POST(request: Request) {
           <!-- Header -->
           <div style="background: #0f172a; padding: 24px 28px; text-align: left;">
             <div style="display: inline-block; padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; color: #fbbf24; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;">
-              ResultIQ™ Academic Registrar
+              ${badgeTitle}
             </div>
             <h1 style="color: #ffffff; font-size: 18px; margin: 0; font-weight: 700; line-height: 1.3;">
               ${cleanSchoolName}
             </h1>
             <p style="color: #94a3b8; font-size: 12px; margin: 4px 0 0 0;">
-              Official Terminal Examination & Continuous Assessment Portal
+              ${isPasswordReset ? 'Official Academic Staff & Administrator Credential Recovery' : 'Official Terminal Examination & Continuous Assessment Portal'}
             </p>
           </div>
 
           <!-- Body -->
           <div style="padding: 28px;">
             <p style="font-size: 14px; line-height: 1.5; color: #334155; margin-top: 0;">
-              Dear Parent / Guardian of <strong>${cleanStudentName}</strong>,
+              ${greeting}
             </p>
             <p style="font-size: 14px; line-height: 1.5; color: #334155;">
-              You requested a secure one-time access passcode to view official terminal assessment results on the ResultIQ Parent Portal.
+              ${introParagraph}
             </p>
 
             <!-- Passcode Display Box -->
             <div style="margin: 28px 0; padding: 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; text-align: center;">
               <span style="display: block; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
-                Your 6-Digit Access Passcode
+                Your 6-Digit Verification Passcode
               </span>
               <div style="font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #0f172a;">
                 ${passcode}
@@ -66,12 +78,12 @@ export async function POST(request: Request) {
             </div>
 
             <p style="font-size: 13px; line-height: 1.5; color: #475569;">
-              <strong>Instructions:</strong> Copy the 6-digit passcode above, return to the portal page, paste it into the <em>Access Passcode</em> field, and click <strong>Verify Passcode & Access Terminal Results</strong>.
+              ${instructionParagraph}
             </p>
 
             <div style="border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 16px;">
               <p style="font-size: 11px; color: #94a3b8; line-height: 1.4; margin: 0;">
-                🔒 <strong>Security Notice:</strong> If you did not initiate this result check request, please contact the school administration office immediately. This email was automatically generated by ResultIQ.
+                🔒 <strong>Security Notice:</strong> If you did not initiate this request, please notify school IT administration immediately. Your current password remains unchanged until this code is verified.
               </p>
             </div>
           </div>
@@ -80,7 +92,7 @@ export async function POST(request: Request) {
       </html>
     `;
 
-    const textContent = `Official Result Access Passcode\n\nSchool: ${cleanSchoolName}\nStudent: ${cleanStudentName}\nYour Passcode: ${passcode}\n\nValid for 15 minutes. Enter this code on the portal to access terminal results.`;
+    const textContent = `${isPasswordReset ? 'Staff Password Reset Verification Passcode' : 'Official Result Access Passcode'}\n\nSchool: ${cleanSchoolName}\nAccount: ${cleanStudentName}\nYour Passcode: ${passcode}\n\nValid for 15 minutes. Enter this code to verify and proceed.`;
 
     let emailSent = false;
     let providerUsed = 'none';
