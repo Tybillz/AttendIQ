@@ -809,28 +809,32 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     }, 1200);
   };
 
-  // 1. DEDICATED TEACHER LOGIN HANDLER (EMAIL + PASSWORD)
+  // 1. DEDICATED TEACHER LOGIN HANDLER (EMAIL / NAME + PASSWORD)
   const handleTeacherLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setTeacherLoginError(null);
     setTeacherLoginHint(null);
 
-    const email = teacherEmailInput.trim().toLowerCase();
+    const input = teacherEmailInput.trim().toLowerCase();
     const pass = teacherPasswordInput.trim();
 
-    if (!email) {
-      setTeacherLoginError('Please enter your staff email address.');
+    if (!input) {
+      setTeacherLoginError('Please enter your staff email, name, or phone number.');
       return;
     }
 
     const matchedTeacher = teachers.find(
-      (t) => (t.email || '').trim().toLowerCase() === email
+      (t) =>
+        (t.email || '').trim().toLowerCase() === input ||
+        (t.name || '').trim().toLowerCase() === input ||
+        (t.name || '').trim().toLowerCase().includes(input) ||
+        (input.length >= 7 && (t.phone || '').replace(/[^0-9]/g, '').includes(input.replace(/[^0-9]/g, '')))
     );
 
     if (!matchedTeacher) {
       setTeacherLoginError(`No staff account found for "${teacherEmailInput.trim()}".`);
       const sampleMasked = teachers[0]?.email ? maskEmail(teachers[0].email) : 'c***o@apexcrestacademy.edu.ng';
-      setTeacherLoginHint(`💡 Hint: Registered school emails use the @apexcrestacademy.edu.ng domain (e.g. ${sampleMasked}).`);
+      setTeacherLoginHint(`💡 Hint: Registered school emails use the @apexcrestacademy.edu.ng domain (e.g. ${sampleMasked}). You can also sign in with your Staff Name.`);
       return;
     }
 
@@ -847,7 +851,9 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       pass === expectedPass ||
       (expectedPin && pass === expectedPin) ||
       (matchedTeacher.phone && pass === matchedTeacher.phone.replace(/[^0-9]/g, '').slice(-4)) ||
-      pass === '1234';
+      pass === '1234' ||
+      pass === 'admin123' ||
+      pass === 'admin';
 
     if (isValid) {
       const session: AuthSession = {
@@ -873,10 +879,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         targetId: matchedTeacher.id,
         targetName: matchedTeacher.name,
         severity: 'info',
-        details: `Teacher ${matchedTeacher.name} authenticated via email (${email}).`,
+        details: `Teacher ${matchedTeacher.name} authenticated via email (${matchedTeacher.email || input}).`,
       });
     } else {
-      setTeacherLoginError(`Incorrect password for ${matchedTeacher.name}. Please try again or tap "Forgot Password?".`);
+      setTeacherLoginError(`Incorrect password for ${matchedTeacher.name}. Please try again or tap "Forgot Password?". (Default password: 1234)`);
     }
   };
 
@@ -886,10 +892,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     setAdminLoginError(null);
     setAdminLoginHint(null);
 
-    const email = adminEmailInput.trim().toLowerCase();
+    const input = adminEmailInput.trim().toLowerCase();
     const pass = adminPasswordInput.trim();
 
-    if (!email) {
+    if (!input) {
       setAdminLoginError('Please enter the administrator email address.');
       return;
     }
@@ -897,6 +903,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     const registeredEmail = getAdminEmail();
     const validEmails = [
       registeredEmail,
+      'admin',
+      'principal',
       'admin@apexcrest.edu.ng',
       'admin@apexcrestacademy.edu.ng',
       'principal@apexcrest.edu.ng',
@@ -905,9 +913,14 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       'admin@resultiq.app',
     ];
 
-    if (!validEmails.includes(email)) {
+    const isRecognized =
+      validEmails.includes(input) ||
+      input.startsWith('admin') ||
+      input.startsWith('principal');
+
+    if (!isRecognized) {
       setAdminLoginError('Unrecognized administrator email address. Access denied.');
-      setAdminLoginHint(`💡 Hint: Registered administrator email is ${maskEmail(registeredEmail)}.`);
+      setAdminLoginHint(`💡 Hint: Registered administrator email is admin@apexcrest.edu.ng (or simply type "admin").`);
       return;
     }
 
@@ -922,6 +935,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       creds.adminPasscode,
       'admin123',
       'admin',
+      '1234',
       'attendiq',
       'resultiq',
       'vendor2026',
@@ -948,10 +962,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         targetId: 'admin',
         targetName: 'Administrator Console',
         severity: 'info',
-        details: `School Administrator authenticated via email (${email}). Master console opened.`,
+        details: `School Administrator authenticated (${input}). Master console opened.`,
       });
     } else {
-      setAdminLoginError('Invalid Administrator Password. Access denied.');
+      setAdminLoginError('Invalid Administrator Password. Access denied. (Default: admin123 or admin)');
     }
   };
 
@@ -1740,9 +1754,15 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             </div>
 
             {(() => {
-              const matchedTeacher = teachers.find(
-                (t) => (t.email || '').trim().toLowerCase() === teacherEmailInput.trim().toLowerCase()
-              );
+              const input = teacherEmailInput.trim().toLowerCase();
+              const matchedTeacher = input
+                ? teachers.find(
+                    (t) =>
+                      (t.email || '').trim().toLowerCase() === input ||
+                      (t.name || '').trim().toLowerCase() === input ||
+                      (t.name || '').trim().toLowerCase().includes(input)
+                  )
+                : null;
               const matchedClass = matchedTeacher?.permanentClassId
                 ? classes.find((c) => c.id === matchedTeacher.permanentClassId)
                 : null;
@@ -1888,14 +1908,21 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             </div>
 
             {(() => {
+              const input = adminEmailInput.trim().toLowerCase();
               const registeredAdminEmail = getAdminEmail();
-              const isAdminEmailRecognized = [
-                registeredAdminEmail,
-                'admin@apexcrest.edu.ng',
-                'admin@apexcrestacademy.edu.ng',
-                'principal@apexcrest.edu.ng',
-                'principal@apexcrestacademy.edu.ng',
-              ].includes(adminEmailInput.trim().toLowerCase());
+              const isAdminEmailRecognized = input
+                ? [
+                    registeredAdminEmail,
+                    'admin',
+                    'principal',
+                    'admin@apexcrest.edu.ng',
+                    'admin@apexcrestacademy.edu.ng',
+                    'principal@apexcrest.edu.ng',
+                    'principal@apexcrestacademy.edu.ng',
+                  ].includes(input) ||
+                  input.startsWith('admin') ||
+                  input.startsWith('principal')
+                : false;
 
               return (
                 <form onSubmit={handleAdminLogin} className="p-6 space-y-4">
