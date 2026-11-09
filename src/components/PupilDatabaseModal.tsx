@@ -22,6 +22,9 @@ import {
   ExternalLink,
   ArrowRightLeft,
   Award,
+  Share2,
+  Key,
+  MessageSquare,
 } from 'lucide-react';
 import { Student, ClassSection, Teacher, SchoolSubjectItem, SchoolSubjectLevel } from '@/types/attendance';
 import {
@@ -49,7 +52,9 @@ import {
   downloadCSVFile,
 } from '@/lib/storage';
 import { calculateStudentAttendanceMetrics, isStudentBirthdayToday, getStudentAgeToday } from '@/lib/academicCalculations';
-import { isLicenseWriteRestricted } from '@/lib/licensing';
+import { isLicenseWriteRestricted, getSchoolBranding } from '@/lib/licensing';
+import { generateWhatsAppUrl, formatNigerianPhoneForWhatsApp } from '@/lib/notifications';
+import { getPortalCredentials, savePortalCredentials, generateRandomPin } from '@/lib/auth';
 
 interface PupilDatabaseModalProps {
   isOpen: boolean;
@@ -226,6 +231,11 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   const [tClassId, setTClassId] = useState('');
   const [tSearchQuery, setTSearchQuery] = useState('');
   const [teacherSuccessMsg, setTeacherSuccessMsg] = useState('');
+  const [newlyEmployedTeacherNotice, setNewlyEmployedTeacherNotice] = useState<{
+    teacher: Teacher;
+    pin: string;
+    waUrl: string;
+  } | null>(null);
 
   if (!isOpen) return null;
 
@@ -341,6 +351,63 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
     downloadCSVFile(sample, 'AttendIQ_Pupil_Import_Template.csv');
   };
 
+  const formatTeacherWhatsAppInvite = (teacher: Teacher, pin: string) => {
+    const branding = getSchoolBranding();
+    const schoolName = branding?.schoolName || 'AttendIQ Academy';
+    const assignedClasses = classes
+      .filter((c) => teacher.assignedClassIds?.includes(c.id) || c.teacherId === teacher.id)
+      .map((c) => c.name)
+      .join(', ') || 'Pending Class Assignment';
+    
+    const subjectsList = teacher.subjects && teacher.subjects.length > 0 
+      ? teacher.subjects.join(', ') 
+      : (teacher.subject || 'Class Teacher');
+
+    const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}` : 'https://resultiq.vercel.app';
+
+    return (
+      `*WELCOME TO ${schoolName.toUpperCase()} STAFF PORTAL* 🏫\n\n` +
+      `Hello *${teacher.name}*,\n` +
+      `You have been registered as an academic staff member at *${schoolName}*.\n\n` +
+      `🔐 *YOUR PORTAL LOGIN CREDENTIALS:*\n` +
+      `• *Staff ID / Name:* ${teacher.name}\n` +
+      `• *4-Digit Security PIN:* *${pin}*\n` +
+      `• *Specialty / Subjects:* ${subjectsList}\n` +
+      `• *Assigned Classes:* ${assignedClasses}\n\n` +
+      `🌐 *Result & Attendance Portal Link:*\n` +
+      `${portalUrl}\n\n` +
+      `*How to Log In:*\n` +
+      `1. Open the portal link above.\n` +
+      `2. Tap on *Teacher Login*.\n` +
+      `3. Select your name from the staff dropdown.\n` +
+      `4. Enter your 4-digit PIN: *${pin}* to access your class grade sheets and registers.\n\n` +
+      `_Please keep your login PIN safe and confidential._`
+    );
+  };
+
+  const handleSendTeacherWhatsAppCredentials = (teacher: Teacher) => {
+    const creds = getPortalCredentials();
+    let pin = creds.teacherPins[teacher.id];
+    if (!pin) {
+      pin = generateRandomPin();
+      creds.teacherPins[teacher.id] = pin;
+      savePortalCredentials(creds);
+    }
+
+    const message = formatTeacherWhatsAppInvite(teacher, pin);
+    const waUrl = generateWhatsAppUrl(teacher.phone || '', message);
+
+    if (teacher.phone && teacher.phone.replace(/[^0-9]/g, '').length >= 10) {
+      window.open(waUrl, '_blank');
+    }
+
+    setNewlyEmployedTeacherNotice({
+      teacher,
+      pin,
+      waUrl,
+    });
+  };
+
   const handleCreateTeacher = (e: React.FormEvent) => {
     e.preventDefault();
     if (isStrictReadOnly) {
@@ -349,7 +416,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
     }
     if (!tName.trim()) return;
 
-    addTeacher({
+    const created = addTeacher({
       name: tName.trim(),
       phone: tPhone.trim() || '+234 800 000 0000',
       email: tEmail.trim() || `${tName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@apexcrest.edu.ng`,
@@ -358,8 +425,23 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
       avatarUrl: `https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face`,
     });
 
-    setTeacherSuccessMsg(`Teacher "${tName}" successfully registered & added to roster!`);
-    setTimeout(() => setTeacherSuccessMsg(''), 4500);
+    const creds = getPortalCredentials();
+    const pin = creds.teacherPins[created.id] || '1234';
+    const message = formatTeacherWhatsAppInvite(created, pin);
+    const waUrl = generateWhatsAppUrl(created.phone, message);
+
+    setNewlyEmployedTeacherNotice({
+      teacher: created,
+      pin,
+      waUrl,
+    });
+
+    if (tPhone.trim() && tPhone.replace(/[^0-9]/g, '').length >= 10) {
+      window.open(waUrl, '_blank');
+    }
+
+    setTeacherSuccessMsg(`Teacher "${tName}" successfully registered! 4-Digit Login PIN: ${pin}`);
+    setTimeout(() => setTeacherSuccessMsg(''), 6000);
     setTName('');
     setTPhone('');
     setTEmail('');
@@ -421,12 +503,12 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+        <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+            <div className="h-10 w-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
               <Users className="h-5 w-5" />
             </div>
             <div>
@@ -438,80 +520,80 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition shrink-0 cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Tabs Bar */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-6 overflow-x-auto">
+        <div className="flex border-b border-slate-200 bg-slate-100/90 px-4 sm:px-6 overflow-x-auto shrink-0 min-h-[52px] items-stretch gap-1.5 scrollbar-thin">
           <button
             onClick={() => setActiveTab('pupils')}
-            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'pupils'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <Users className="h-4 w-4" /> All Pupils ({students.length})
           </button>
           <button
             onClick={() => setActiveTab('transfer')}
-            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'transfer'
-                ? 'border-amber-500 text-amber-700 bg-white font-bold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-amber-500 text-amber-700 bg-white font-black shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <ArrowRightLeft className="h-4 w-4 text-amber-600" /> Move & Promote Pupils
           </button>
           <button
             onClick={() => setActiveTab('teachers')}
-            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'teachers'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <GraduationCap className="h-4 w-4 text-indigo-600" /> Teachers & Staff ({teachers.length})
           </button>
           <button
             onClick={() => setActiveTab('classes')}
-            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'classes'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <BookOpen className="h-4 w-4" /> Classes & Sections ({classes.length})
           </button>
           <button
             onClick={() => setActiveTab('subjects')}
-            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'subjects'
-                ? 'border-emerald-600 text-emerald-800 bg-white font-bold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-emerald-600 text-emerald-800 bg-white font-black shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <BookOpen className="h-4 w-4 text-emerald-600" /> Curriculum & Subjects ({schoolSubjects.length})
           </button>
           <button
             onClick={() => setActiveTab('add_pupil')}
-            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'add_pupil'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <Plus className="h-4 w-4" /> Enroll Pupil
           </button>
           <button
             onClick={() => setActiveTab('bulk_import')}
-            className={`py-3 px-4 font-semibold text-xs border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'bulk_import'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-bold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
             <Upload className="h-4 w-4" /> Bulk CSV Import
@@ -520,7 +602,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
 
         {/* TAB 1: ALL PUPILS LIST */}
         {activeTab === 'pupils' && (
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
             {quickNotice && (
               <div className="mx-4 mt-3 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
                 <span>{quickNotice}</span>
@@ -674,7 +756,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
 
         {/* TAB 2: ENROLL NEW PUPIL */}
         {activeTab === 'add_pupil' && (
-          <form onSubmit={handleCreatePupil} className="p-6 overflow-y-auto flex-1 space-y-4">
+          <form onSubmit={handleCreatePupil} className="min-h-0 p-6 overflow-y-auto flex-1 space-y-4">
             <h4 className="text-sm font-bold text-slate-900">Pupil Registration Form</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -810,7 +892,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
 
         {/* TAB 3: BULK CSV IMPORT */}
         {activeTab === 'bulk_import' && (
-          <div className="p-6 overflow-y-auto flex-1 space-y-4">
+          <div className="min-h-0 p-6 overflow-y-auto flex-1 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-bold text-slate-900">Bulk Pupil CSV Import</h4>
@@ -897,7 +979,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
 
         {/* TAB 4: CLASSES & SECTIONS */}
         {activeTab === 'classes' && (
-          <div className="p-6 overflow-y-auto flex-1 space-y-5">
+          <div className="min-h-0 p-6 overflow-y-auto flex-1 space-y-5">
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-bold text-slate-900">Manage School Sections & Rooms</h4>
@@ -1049,7 +1131,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
 
         {/* TAB 5: TEACHERS & STAFF ROSTER */}
         {activeTab === 'teachers' && (
-          <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          <div className="min-h-0 p-6 overflow-y-auto flex-1 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -1077,6 +1159,47 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
               <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                 <span>{teacherSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Teacher WhatsApp Credentials Notice Banner */}
+            {newlyEmployedTeacherNotice && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-2 border-emerald-400 text-slate-900 shadow-sm animate-in fade-in flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="p-1.5 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
+                      <MessageSquare className="h-4 w-4" />
+                    </span>
+                    <h5 className="text-xs font-bold text-emerald-950">
+                      WhatsApp Login Details Generated for {newlyEmployedTeacherNotice.teacher.name}
+                    </h5>
+                    <span className="text-[11px] font-mono font-black bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 text-emerald-900">
+                      PIN: {newlyEmployedTeacherNotice.pin}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Official appointment notice, assigned classes, portal URL, and confidential 4-digit PIN are ready for dispatch.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                  <a
+                    href={newlyEmployedTeacherNotice.waUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    <span>Open WhatsApp Chat & Send</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setNewlyEmployedTeacherNotice(null)}
+                    className="p-2 text-slate-400 hover:text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
+                    title="Dismiss"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1465,6 +1588,19 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
                           </span>
                         </div>
                       </div>
+
+                      {/* 4. WhatsApp Credentials Dispatch */}
+                      <div className="pt-3 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => handleSendTeacherWhatsAppCredentials(teacher)}
+                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs transition cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
+                          title={`Send Login PIN and Portal link to ${teacher.name} on WhatsApp`}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Send Login PIN via WhatsApp</span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1475,7 +1611,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
 
         {/* TAB 6: MOVE & PROMOTE PUPILS */}
         {activeTab === 'transfer' && (
-          <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
+          <div className="min-h-0 flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
             {/* Header info */}
             <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -1657,7 +1793,7 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
 
         {/* TAB 7: CURRICULUM & SUBJECTS REGISTRY */}
         {activeTab === 'subjects' && (
-          <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
+          <div className="min-h-0 flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
             {/* Header info */}
             <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>

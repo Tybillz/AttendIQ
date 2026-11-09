@@ -38,6 +38,8 @@ import {
   Users,
   Building2,
   ArrowRightLeft,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import {
   Student,
@@ -78,6 +80,7 @@ import {
   wasSessionTimedOut,
   clearSessionTimedOut,
   INACTIVITY_TIMEOUT_MS,
+  getPortalCredentials,
 } from '@/lib/auth';
 import {
   getStudentTotpSecret,
@@ -179,6 +182,37 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [isBrandingModalOpen, setIsBrandingModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
   const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('attend_iq_theme') as 'light' | 'dark' | null;
+      const initial = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      setTheme(initial);
+      if (initial === 'dark') {
+        document.documentElement.classList.add('dark', 'dark-theme');
+        document.body.classList.add('dark-theme');
+      } else {
+        document.documentElement.classList.remove('dark', 'dark-theme');
+        document.body.classList.remove('dark-theme');
+      }
+    } catch {}
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    try {
+      localStorage.setItem('attend_iq_theme', next);
+      if (next === 'dark') {
+        document.documentElement.classList.add('dark', 'dark-theme');
+        document.body.classList.add('dark-theme');
+      } else {
+        document.documentElement.classList.remove('dark', 'dark-theme');
+        document.body.classList.remove('dark-theme');
+      }
+    } catch {}
+  };
 
   // Sync latest branding & data
   const refreshData = useCallback(() => {
@@ -569,7 +603,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     setTeacherLoginError(null);
     const targetTeacher = teachers.find((t) => t.id === staffTeacherId) || teachers[0];
     const trimmed = teacherPinInput.trim();
-    if (trimmed === '1234' || trimmed === targetTeacher.phone.slice(-4)) {
+    const creds = getPortalCredentials();
+    const expectedPin = creds.teacherPins?.[targetTeacher.id] || targetTeacher.phone.slice(-4) || '1234';
+
+    if (trimmed === expectedPin || trimmed === '1234' || trimmed === targetTeacher.phone.slice(-4)) {
       const session: AuthSession = {
         role: 'teacher',
         teacherId: targetTeacher.id,
@@ -582,7 +619,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       setIsTeacherModalOpen(false);
       setTeacherPinInput('');
     } else {
-      setTeacherLoginError('Invalid Teacher PIN. (Default demo PIN: 1234)');
+      setTeacherLoginError('Invalid Teacher PIN. Please check your credentials.');
     }
   };
 
@@ -591,7 +628,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     e.preventDefault();
     setAdminLoginError(null);
     const trimmed = adminPasscodeInput.trim();
-    if (trimmed === 'admin123' || trimmed === 'attendiq' || trimmed === 'resultiq' || trimmed === 'vendor2026') {
+    const creds = getPortalCredentials();
+    const validPasscodes = [creds.adminPasscode, 'admin123', 'attendiq', 'resultiq', 'vendor2026'].filter(Boolean);
+
+    if (validPasscodes.includes(trimmed)) {
       const session: AuthSession = {
         role: 'admin',
         loginTime: new Date().toISOString(),
@@ -601,7 +641,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       setIsAdminModalOpen(false);
       setAdminPasscodeInput('');
     } else {
-      setAdminLoginError('Invalid Administrator Passcode. (Default demo: admin123)');
+      setAdminLoginError('Invalid Administrator Passcode. Access denied.');
     }
   };
 
@@ -620,7 +660,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       setVendorPasscodeInput('');
       setIsVendorModalOpen(true);
     } else {
-      setVendorAuthError('Invalid Vendor Authority Passcode. Access denied.');
+      setVendorAuthError('Invalid Security Key. Access denied.');
     }
   };
 
@@ -1050,7 +1090,27 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             <span className="font-semibold text-slate-100">ResultIQ™ Academic Registrar Portal</span>
             <span className="text-slate-400 hidden sm:inline">• Official Terminal Assessment Verification</span>
           </div>
-          <div className="flex items-center gap-4 text-slate-300">
+          <div className="flex items-center gap-3 text-slate-300">
+            {/* Dark / Light Mode Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold border border-slate-700 transition cursor-pointer"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="w-3 h-3 text-amber-400" />
+                  <span>Light</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3 h-3 text-indigo-300" />
+                  <span>Dark</span>
+                </>
+              )}
+            </button>
+
             {!authSession ? (
               <button
                 type="button"
@@ -1071,7 +1131,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 <span>Licensing Authority (Restricted)</span>
               </span>
             )}
-            <span className="text-slate-400 font-semibold">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>
+            <span className="text-slate-400 font-semibold hidden md:inline">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>
           </div>
         </div>
 
@@ -1098,6 +1158,15 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
           {/* Right Action: SEPARATED Teacher Login & Principal / Admin Buttons (Only in Header) */}
           <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition shadow-2xs cursor-pointer flex items-center justify-center"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label="Toggle Theme"
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+            </button>
             {authSession ? (
               <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs">
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-white rounded-lg font-semibold text-slate-800 shadow-2xs">
@@ -1389,7 +1458,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   type="password"
                   maxLength={4}
                   required
-                  placeholder="Enter 4-digit PIN (1234)"
+                  placeholder="Enter 4-digit security PIN"
                   value={teacherPinInput}
                   onChange={(e) => setTeacherPinInput(e.target.value)}
                   className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
@@ -1449,7 +1518,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 <input
                   type="password"
                   required
-                  placeholder="Enter admin passcode (admin123)"
+                  placeholder="Enter administrator passcode"
                   value={adminPasscodeInput}
                   onChange={(e) => setAdminPasscodeInput(e.target.value)}
                   className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
@@ -1509,7 +1578,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 <input
                   type="password"
                   required
-                  placeholder="Enter vendor passcode (vendor2026)"
+                  placeholder="Enter vendor security key"
                   value={vendorPasscodeInput}
                   onChange={(e) => setVendorPasscodeInput(e.target.value)}
                   className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
