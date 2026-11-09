@@ -63,6 +63,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     assignedClassIds: ['class-nur2-emerald'],
     subjects: ['Letter Work & Phonics', 'Number Work & Counting', 'Rhymes, Songs & Poems'],
     subject: 'Letter Work & Phonics',
+    avatarUrl: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=200&h=200&fit=crop&crop=face',
   },
   {
     id: 't-102',
@@ -73,6 +74,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     assignedClassIds: ['class-pry5-diamond', 'class-pry4-gold'],
     subjects: ['Mathematics', 'English Language'],
     subject: 'Mathematics',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
   },
   {
     id: 't-101',
@@ -83,6 +85,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     assignedClassIds: ['class-pry4-gold', 'class-pry5-diamond'],
     subjects: ['English Language', 'Civic Education'],
     subject: 'English Language',
+    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face',
   },
   {
     id: 't-103',
@@ -93,6 +96,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     assignedClassIds: ['class-jss2-sapphire', 'class-sss1-science'],
     subjects: ['Mathematics', 'Computer Studies / ICT'],
     subject: 'Mathematics',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face',
   },
   {
     id: 't-104',
@@ -103,6 +107,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     assignedClassIds: ['class-sss1-science', 'class-jss2-sapphire'],
     subjects: ['Basic Science', 'Chemistry', 'Biology'],
     subject: 'Basic Science',
+    avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face',
   },
 ];
 

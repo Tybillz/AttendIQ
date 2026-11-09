@@ -68,6 +68,7 @@ import { TerminalReportSheet } from './TerminalReportSheet';
 import { StudentProfileModal } from './StudentProfileModal';
 import { SubjectGradebook } from './SubjectGradebook';
 import { PupilDatabaseModal } from './PupilDatabaseModal';
+import { StaffDatabaseModal } from './StaffDatabaseModal';
 import { WhitelabelModal } from './WhitelabelModal';
 import { VendorLicensingModal } from './VendorLicensingModal';
 import { AuditLogModal } from './AuditLogModal';
@@ -216,7 +217,9 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
   const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'preview'>('gradebook');
   const [isPupilModalOpen, setIsPupilModalOpen] = useState<boolean>(false);
-  const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer' | 'subjects'>('pupils');
+  const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'transfer'>('pupils');
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
+  const [staffModalDefaultTab, setStaffModalDefaultTab] = useState<'teachers' | 'classes' | 'subjects'>('teachers');
   const [isBrandingModalOpen, setIsBrandingModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
   const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
@@ -1593,9 +1596,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                         setIsPupilModalOpen(true);
                       }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
+                      title="Manage pupil enrollment, profiles, and directory"
                     >
-                      <Users className="w-4 h-4 shrink-0 text-slate-400" />
-                      <span className="flex-1">Pupil Database & Directory</span>
+                      <Users className="w-4 h-4 shrink-0 text-indigo-400" />
+                      <span className="flex-1 font-bold text-slate-200">Pupil Database & Directory</span>
                     </button>
 
                     <button
@@ -1611,11 +1615,41 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                       <span className="flex-1">Move & Promote Pupils</span>
                     </button>
 
+                    <div className="pt-2 pb-1 px-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Staff & Academic Registry
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => {
-                        setPupilModalDefaultTab('subjects');
-                        setIsPupilModalOpen(true);
+                        setStaffModalDefaultTab('teachers');
+                        setIsStaffModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
+                      title="Manage employed teachers, change photos, and allocate classes"
+                    >
+                      <GraduationCap className="w-4 h-4 shrink-0 text-indigo-400" />
+                      <span className="flex-1 font-bold text-slate-200">Teachers & Staff Database</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStaffModalDefaultTab('classes');
+                        setIsStaffModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
+                      title="Manage school classes and assign form masters"
+                    >
+                      <Building2 className="w-4 h-4 shrink-0 text-slate-400" />
+                      <span className="flex-1">Classes & Sections</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStaffModalDefaultTab('subjects');
+                        setIsStaffModalOpen(true);
                       }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 transition cursor-pointer text-left"
                       title="Manage school curriculum, add/remove subjects & assign to teachers"
@@ -2551,6 +2585,32 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           defaultTab={pupilModalDefaultTab}
           onDataUpdated={refreshData}
           onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
+          onOpenStaffDatabase={() => {
+            setIsPupilModalOpen(false);
+            setStaffModalDefaultTab('teachers');
+            setIsStaffModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Faculty & Staff Database Modal (ADMINISTRATOR ONLY) */}
+      {isStaffModalOpen && authSession?.role === 'admin' && (
+        <StaffDatabaseModal
+          isOpen={isStaffModalOpen}
+          onClose={() => {
+            setIsStaffModalOpen(false);
+            refreshData();
+          }}
+          teachers={teachers}
+          classes={classes}
+          students={students}
+          defaultTab={staffModalDefaultTab}
+          onDataUpdated={refreshData}
+          onOpenPupilDatabase={() => {
+            setIsStaffModalOpen(false);
+            setPupilModalDefaultTab('pupils');
+            setIsPupilModalOpen(true);
+          }}
         />
       )}
 

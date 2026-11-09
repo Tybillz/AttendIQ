@@ -8,53 +8,26 @@ import {
   Upload,
   Download,
   Trash2,
-  Edit2,
   CheckCircle2,
   Search,
-  BookOpen,
   Camera,
   FolderPlus,
   GraduationCap,
-  Phone,
-  Mail,
-  UserPlus,
-  Check,
-  ExternalLink,
   ArrowRightLeft,
   Award,
-  Share2,
-  Key,
-  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
-import { Student, ClassSection, Teacher, SchoolSubjectItem, SchoolSubjectLevel } from '@/types/attendance';
+import { Student, ClassSection, Teacher } from '@/types/attendance';
 import {
   addStudent,
   deleteStudent,
   moveStudentToClass,
   bulkMoveStudentsToClass,
-  addClass,
-  deleteClass,
-  addTeacher,
-  deleteTeacher,
-  setPermanentClassTeacher,
-  assignTeacherToClass,
-  unassignTeacherFromClass,
-  reassignClassTeacher,
-  getSchoolSubjects,
-  getSchoolSubjectItems,
-  getSubjectLevel,
-  addSchoolSubject,
-  deleteSchoolSubject,
-  assignSubjectToTeacher,
-  unassignSubjectFromTeacher,
-  setTeacherPrimarySubject,
   bulkImportPupilsFromCSV,
   downloadCSVFile,
 } from '@/lib/storage';
 import { calculateStudentAttendanceMetrics, isStudentBirthdayToday, getStudentAgeToday } from '@/lib/academicCalculations';
-import { isLicenseWriteRestricted, getSchoolBranding } from '@/lib/licensing';
-import { generateWhatsAppUrl, formatNigerianPhoneForWhatsApp } from '@/lib/notifications';
-import { getPortalCredentials, savePortalCredentials, generateRandomPin } from '@/lib/auth';
+import { isLicenseWriteRestricted } from '@/lib/licensing';
 
 interface PupilDatabaseModalProps {
   isOpen: boolean;
@@ -64,8 +37,9 @@ interface PupilDatabaseModalProps {
   teachers: Teacher[];
   onDataUpdated: () => void;
   onSelectStudentProfile: (student: Student) => void;
-  defaultTab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer' | 'subjects';
+  defaultTab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'transfer';
   isLicenseLocked?: boolean;
+  onOpenStaffDatabase?: () => void;
 }
 
 export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
@@ -78,202 +52,81 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
   onSelectStudentProfile,
   defaultTab = 'pupils',
   isLicenseLocked = false,
+  onOpenStaffDatabase,
 }) => {
   const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
-  const [activeTab, setActiveTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'classes' | 'teachers' | 'transfer' | 'subjects'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'transfer'>(
+    (defaultTab as any) === 'transfer' ? 'transfer' : (defaultTab as any) === 'add_pupil' ? 'add_pupil' : (defaultTab as any) === 'bulk_import' ? 'bulk_import' : 'pupils'
+  );
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Curriculum & Subjects State
-  const [schoolSubjects, setSchoolSubjects] = useState<string[]>(getSchoolSubjects());
-  const [schoolSubjectItems, setSchoolSubjectItems] = useState<SchoolSubjectItem[]>(getSchoolSubjectItems());
-  const [subjectLevelFilter, setSubjectLevelFilter] = useState<'all' | 'nursery' | 'primary' | 'secondary'>('all');
-  const [newSubjectInput, setNewSubjectInput] = useState<string>('');
-  const [newSubjectLevel, setNewSubjectLevel] = useState<SchoolSubjectLevel>('all');
-  const [subjectSuccessMsg, setSubjectSuccessMsg] = useState<string | null>(null);
-
-  const handleAddSubjectSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (isStrictReadOnly) return;
-    const name = newSubjectInput.trim();
-    if (!name) return;
-    const ok = addSchoolSubject(name, newSubjectLevel);
-    if (ok) {
-      setSchoolSubjects(getSchoolSubjects());
-      setSchoolSubjectItems(getSchoolSubjectItems());
-      const levelLabel =
-        newSubjectLevel === 'nursery'
-          ? 'Nursery / Early Years'
-          : newSubjectLevel === 'primary'
-          ? 'Primary'
-          : newSubjectLevel === 'secondary'
-          ? 'Secondary'
-          : 'Core (All Levels)';
-      setSubjectSuccessMsg(`Subject "${name}" added to ${levelLabel} curriculum!`);
-      setNewSubjectInput('');
-      setTimeout(() => setSubjectSuccessMsg(null), 3500);
-      onDataUpdated();
-    } else {
-      alert(`Subject "${name}" already exists in the curriculum.`);
-    }
-  };
-
-  const handleDeleteSubjectAction = (subjectName: string) => {
-    if (isStrictReadOnly) return;
-    if (confirm(`Remove subject "${subjectName}" from the curriculum? It will also be unassigned from any teachers.`)) {
-      deleteSchoolSubject(subjectName);
-      setSchoolSubjects(getSchoolSubjects());
-      setSchoolSubjectItems(getSchoolSubjectItems());
-      setSubjectSuccessMsg(`Subject "${subjectName}" removed.`);
-      setTimeout(() => setSubjectSuccessMsg(null), 3500);
-      onDataUpdated();
-    }
-  };
-
-  const handleAssignSubjectToTeacherAction = (teacherId: string, subjectName: string) => {
-    if (isStrictReadOnly) return;
-    assignSubjectToTeacher(teacherId, subjectName);
-    onDataUpdated();
-  };
-
-  const handleUnassignSubjectFromTeacherAction = (teacherId: string, subjectName: string) => {
-    if (isStrictReadOnly) return;
-    unassignSubjectFromTeacher(teacherId, subjectName);
-    onDataUpdated();
-  };
-
-  const handleSetPrimarySubjectAction = (teacherId: string, subjectName: string) => {
-    if (isStrictReadOnly) return;
-    setTeacherPrimarySubject(teacherId, subjectName);
-    onDataUpdated();
-  };
-
-  // Transfer & Promotion state
-  const [transferSourceClass, setTransferSourceClass] = useState<string>(classes[0]?.id || '');
-  const [transferTargetClass, setTransferTargetClass] = useState<string>(classes[1]?.id || classes[0]?.id || '');
-  const [selectedPupilsForTransfer, setSelectedPupilsForTransfer] = useState<string[]>([]);
-  const [transferNotice, setTransferNotice] = useState<string | null>(null);
-  const [quickNotice, setQuickNotice] = useState<string | null>(null);
-
-  const handleQuickMovePupil = (studentId: string, studentName: string, newClassId: string) => {
-    if (isStrictReadOnly) {
-      alert('Action blocked: System is in read-only mode.');
-      return;
-    }
-    const success = moveStudentToClass(studentId, newClassId, 'admin', 'School Administrator');
-    if (success) {
-      const targetName = classes.find((c) => c.id === newClassId)?.name || 'Unassigned';
-      setQuickNotice(`✅ Moved "${studentName}" to ${targetName} successfully!`);
-      setTimeout(() => setQuickNotice(null), 3500);
-      onDataUpdated();
-    }
-  };
-
-  const handleExecuteBulkTransfer = () => {
-    if (isStrictReadOnly) {
-      alert('Action blocked: System is in read-only mode.');
-      return;
-    }
-    if (!transferTargetClass) {
-      alert('Please select a destination class.');
-      return;
-    }
-    if (selectedPupilsForTransfer.length === 0) {
-      alert('Please select at least one pupil to move.');
-      return;
-    }
-    const result = bulkMoveStudentsToClass(
-      selectedPupilsForTransfer,
-      transferTargetClass,
-      'admin',
-      'School Administrator'
-    );
-    if (result.successCount > 0) {
-      setTransferNotice(`🎉 Successfully moved and promoted ${result.successCount} pupil(s) to ${result.targetClassName}!`);
-      setSelectedPupilsForTransfer([]);
-      setTimeout(() => setTransferNotice(null), 4500);
-      onDataUpdated();
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen && defaultTab) {
-      setActiveTab(defaultTab);
-    }
-  }, [isOpen, defaultTab]);
 
   // Add Pupil form
   const [name, setName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
   const [classId, setClassId] = useState(classes[0]?.id || '');
-  const [gender, setGender] = useState<'Male' | 'Female'>('Male');
-  const [dob, setDob] = useState('2016-05-15');
+  const [dob, setDob] = useState('');
   const [parentName, setParentName] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [parentEmail, setParentEmail] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
 
-  // Add Class form
-  const [newClassName, setNewClassName] = useState('');
-  const [newGrade, setNewGrade] = useState('Grade 4');
-  const [newRoom, setNewRoom] = useState('Room 201');
-  const [newTeacherId, setNewTeacherId] = useState(teachers[0]?.id || '');
+  // Transfer / Move / Promote form
+  const [transferSourceClass, setTransferSourceClass] = useState<string>(classes[0]?.id || '');
+  const [transferTargetClass, setTransferTargetClass] = useState<string>(classes[1]?.id || classes[0]?.id || '');
+  const [selectedPupilIdsToMove, setSelectedPupilIdsToMove] = useState<string[]>([]);
+  const [transferSuccessMsg, setTransferSuccessMsg] = useState<string | null>(null);
 
-  // CSV Bulk Import
+  // Bulk CSV state
   const [csvContent, setCsvContent] = useState('');
   const [bulkResult, setBulkResult] = useState<{ added: number; errors: string[] } | null>(null);
 
-  // Teacher management state
-  const [tName, setTName] = useState('');
-  const [tPhone, setTPhone] = useState('');
-  const [tEmail, setTEmail] = useState('');
-  const [tSubject, setTSubject] = useState('Class Teacher');
-  const [tClassId, setTClassId] = useState('');
-  const [tSearchQuery, setTSearchQuery] = useState('');
-  const [teacherSuccessMsg, setTeacherSuccessMsg] = useState('');
-  const [newlyEmployedTeacherNotice, setNewlyEmployedTeacherNotice] = useState<{
-    teacher: Teacher;
-    pin: string;
-    waUrl: string;
-  } | null>(null);
+  useEffect(() => {
+    if (isOpen && defaultTab) {
+      if ((defaultTab as any) === 'transfer') setActiveTab('transfer');
+      else if ((defaultTab as any) === 'add_pupil') setActiveTab('add_pupil');
+      else if ((defaultTab as any) === 'bulk_import') setActiveTab('bulk_import');
+      else setActiveTab('pupils');
+    }
+  }, [isOpen, defaultTab]);
 
   if (!isOpen) return null;
 
+  // Filtered students for All Pupils tab
   const filteredStudents = students.filter((s) => {
-    if (selectedClassFilter !== 'all' && s.classId !== selectedClassFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        s.name.toLowerCase().includes(q) ||
-        s.rollNumber.toLowerCase().includes(q) ||
-        s.parentName.toLowerCase().includes(q)
-      );
-    }
-    return true;
+    const matchesClass = selectedClassFilter === 'all' || s.classId === selectedClassFilter;
+    const matchesSearch =
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.rollNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.parentName.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesClass && matchesSearch;
   });
 
   const handleCreatePupil = (e: React.FormEvent) => {
     e.preventDefault();
     if (isStrictReadOnly) {
-      alert('⛔ Action Blocked: Cannot add pupils in strict read-only mode.');
+      alert('Action Blocked: System is in read-only mode.');
       return;
     }
     if (!name.trim()) return;
 
     const defaultAvatar =
       photoUrl ||
-      `https://images.unsplash.com/photo-1544717305-2782549b5136?w=200&h=200&fit=crop&crop=face`;
+      (gender === 'Male'
+        ? 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=200&h=200&fit=crop&crop=face'
+        : 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&h=200&fit=crop&crop=face');
 
     addStudent({
       name: name.trim(),
       rollNumber: rollNumber.trim() || `ROLL-${Date.now().toString().slice(-4)}`,
       gender,
       photoUrl: defaultAvatar,
-      classId: classId || classes[0]?.id,
-      dateOfBirth: dob,
+      classId: classId || classes[0]?.id || 'class-pry1-gold',
+      dateOfBirth: dob || '2016-01-01',
       parentName: parentName.trim() || 'Parent / Guardian',
-      parentPhone: parentPhone.trim() || '+1 (555) 000-0000',
-      parentEmail: parentEmail.trim() || 'parent@school.edu',
+      parentPhone: parentPhone.trim() || '+234 800 000 0000',
+      parentEmail: parentEmail.trim() || '',
       academicRecords: [],
       behavioralNotes: [],
     });
@@ -288,49 +141,20 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
     onDataUpdated();
   };
 
-  const handleCreateClass = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleDeletePupil = (studentId: string, studentName: string) => {
     if (isStrictReadOnly) {
-      alert('⛔ Action Blocked: Cannot add classes in strict read-only mode.');
+      alert('Action Blocked: Cannot delete pupils in read-only mode.');
       return;
     }
-    if (!newClassName.trim()) return;
-
-    const teacher = teachers.find((t) => t.id === newTeacherId);
-
-    addClass({
-      name: newClassName.trim(),
-      grade: newGrade,
-      room: newRoom,
-      teacherId: newTeacherId,
-      teacherName: teacher ? teacher.name : 'Class Teacher',
-      scheduleTime: '08:15 AM - 02:45 PM',
-    });
-
-    setNewClassName('');
-    setActiveTab('classes');
-    onDataUpdated();
-  };
-
-  const handleDeleteClass = (classId: string, className: string) => {
-    if (isStrictReadOnly) {
-      alert('⛔ Action Blocked: Cannot delete classes in strict read-only mode.');
-      return;
-    }
-    const pupilCount = students.filter((s) => s.classId === classId).length;
-    const msg = pupilCount > 0
-      ? `Are you sure you want to delete class "${className}"?\n\n⚠️ Warning: There are currently ${pupilCount} enrolled pupils in this class. Their records will NOT be deleted, but they will be moved to "Unassigned" in the school directory so you can reassign them.`
-      : `Are you sure you want to delete class "${className}"?`;
-
-    if (confirm(msg)) {
-      deleteClass(classId);
+    if (confirm(`Are you sure you want to delete ${studentName} from the database?`)) {
+      deleteStudent(studentId);
       onDataUpdated();
     }
   };
 
   const handleRunBulkImport = () => {
     if (isStrictReadOnly) {
-      alert('⛔ Action Blocked: Cannot bulk import pupils in strict read-only mode.');
+      alert('Action Blocked: Cannot bulk import in read-only mode.');
       return;
     }
     if (!csvContent.trim()) return;
@@ -345,464 +169,470 @@ export const PupilDatabaseModal: React.FC<PupilDatabaseModalProps> = ({
 
   const handleDownloadSampleCSV = () => {
     const sample = `Name,RollNumber,Gender,ParentName,ParentPhone,ParentEmail,DateOfBirth
-Oliver Reed,G4-15,Male,Arthur Reed,+1 (555) 345-0912,arthur.reed@gmail.com,2016-04-18
-Sophia Martinez,G4-16,Female,Carlos Martinez,+1 (555) 871-3321,carlos.m@hotmail.com,2016-07-22
-Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,2016-09-10`;
+Oliver Reed,G4-15,Male,Arthur Reed,+234 803 123 4567,arthur.reed@gmail.com,2016-04-18
+Sophia Martinez,G4-16,Female,Carlos Martinez,+234 802 345 6789,carlos.m@hotmail.com,2016-07-22
+Liam O'Connor,G4-17,Male,Deirdre O'Connor,+234 805 987 6543,deirdre@yahoo.com,2016-09-10`;
     downloadCSVFile(sample, 'AttendIQ_Pupil_Import_Template.csv');
   };
 
-  const formatTeacherWhatsAppInvite = (teacher: Teacher, pin: string) => {
-    const branding = getSchoolBranding();
-    const schoolName = branding?.schoolName || 'AttendIQ Academy';
-    const assignedClasses = classes
-      .filter((c) => teacher.assignedClassIds?.includes(c.id) || c.teacherId === teacher.id)
-      .map((c) => c.name)
-      .join(', ') || 'Pending Class Assignment';
-    
-    const subjectsList = teacher.subjects && teacher.subjects.length > 0 
-      ? teacher.subjects.join(', ') 
-      : (teacher.subject || 'Class Teacher');
-
-    const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}` : 'https://resultiq.vercel.app';
-
-    return (
-      `*WELCOME TO ${schoolName.toUpperCase()} STAFF PORTAL* 🏫\n\n` +
-      `Hello *${teacher.name}*,\n` +
-      `You have been registered as an academic staff member at *${schoolName}*.\n\n` +
-      `🔐 *YOUR PORTAL LOGIN CREDENTIALS:*\n` +
-      `• *Staff ID / Name:* ${teacher.name}\n` +
-      `• *4-Digit Security PIN:* *${pin}*\n` +
-      `• *Specialty / Subjects:* ${subjectsList}\n` +
-      `• *Assigned Classes:* ${assignedClasses}\n\n` +
-      `🌐 *Result & Attendance Portal Link:*\n` +
-      `${portalUrl}\n\n` +
-      `*How to Log In:*\n` +
-      `1. Open the portal link above.\n` +
-      `2. Tap on *Teacher Login*.\n` +
-      `3. Select your name from the staff dropdown.\n` +
-      `4. Enter your 4-digit PIN: *${pin}* to access your class grade sheets and registers.\n\n` +
-      `_Please keep your login PIN safe and confidential._`
-    );
-  };
-
-  const handleSendTeacherWhatsAppCredentials = (teacher: Teacher) => {
-    const creds = getPortalCredentials();
-    let pin = creds.teacherPins[teacher.id];
-    if (!pin) {
-      pin = generateRandomPin();
-      creds.teacherPins[teacher.id] = pin;
-      savePortalCredentials(creds);
-    }
-
-    const message = formatTeacherWhatsAppInvite(teacher, pin);
-    const waUrl = generateWhatsAppUrl(teacher.phone || '', message);
-
-    if (teacher.phone && teacher.phone.replace(/[^0-9]/g, '').length >= 10) {
-      window.open(waUrl, '_blank');
-    }
-
-    setNewlyEmployedTeacherNotice({
-      teacher,
-      pin,
-      waUrl,
-    });
-  };
-
-  const handleCreateTeacher = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isStrictReadOnly) {
-      alert('⛔ Action Blocked: Cannot add teachers in strict read-only mode.');
-      return;
-    }
-    if (!tName.trim()) return;
-
-    const created = addTeacher({
-      name: tName.trim(),
-      phone: tPhone.trim() || '+234 800 000 0000',
-      email: tEmail.trim() || `${tName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@apexcrest.edu.ng`,
-      subject: tSubject.trim() || 'Class Teacher',
-      assignedClassIds: tClassId ? [tClassId] : [],
-      avatarUrl: `https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face`,
-    });
-
-    const creds = getPortalCredentials();
-    const pin = creds.teacherPins[created.id] || '1234';
-    const message = formatTeacherWhatsAppInvite(created, pin);
-    const waUrl = generateWhatsAppUrl(created.phone, message);
-
-    setNewlyEmployedTeacherNotice({
-      teacher: created,
-      pin,
-      waUrl,
-    });
-
-    if (tPhone.trim() && tPhone.replace(/[^0-9]/g, '').length >= 10) {
-      window.open(waUrl, '_blank');
-    }
-
-    setTeacherSuccessMsg(`Teacher "${tName}" successfully registered! 4-Digit Login PIN: ${pin}`);
-    setTimeout(() => setTeacherSuccessMsg(''), 6000);
-    setTName('');
-    setTPhone('');
-    setTEmail('');
-    setTClassId('');
-    onDataUpdated();
-  };
-
-  const handleSetPermanentClass = (teacherId: string, classId: string) => {
-    if (isStrictReadOnly) return;
-    setPermanentClassTeacher(classId, teacherId);
-    onDataUpdated();
-  };
-
-  const handleAddTeachingClass = (teacherId: string, classId: string) => {
-    if (isStrictReadOnly) return;
-    assignTeacherToClass(teacherId, classId);
-    onDataUpdated();
-  };
-
-  const handleRemoveTeachingClass = (teacherId: string, classId: string) => {
-    if (isStrictReadOnly) return;
-    unassignTeacherFromClass(teacherId, classId);
-    onDataUpdated();
-  };
-
-  const handleReassign = (classId: string, teacherId: string) => {
-    if (isStrictReadOnly) return;
-    setPermanentClassTeacher(classId, teacherId);
-    onDataUpdated();
-  };
-
-  const handleDeleteTeacherAction = (teacherId: string, teacherName: string) => {
-    if (isStrictReadOnly) return;
-    if (confirm(`Remove teacher "${teacherName}" from staff database? Their assigned classes will become unassigned.`)) {
-      deleteTeacher(teacherId);
-      onDataUpdated();
-    }
-  };
-
-  const handleDeletePupil = (studentId: string, studentName: string) => {
-    if (confirm(`Are you sure you want to delete ${studentName} from the database?`)) {
-      deleteStudent(studentId);
-      onDataUpdated();
-    }
-  };
-
-  const filteredTeachers = teachers.filter((t) => {
-    if (!tSearchQuery.trim()) return true;
-    const q = tSearchQuery.toLowerCase();
-    const assignedClasses = classes.filter((c) => t.assignedClassIds?.includes(c.id) || c.teacherId === t.id);
-    const classNames = assignedClasses.map((c) => c.name.toLowerCase()).join(' ');
-    return (
-      (t.name || '').toLowerCase().includes(q) ||
-      (t.phone || '').toLowerCase().includes(q) ||
-      (t.email || '').toLowerCase().includes(q) ||
-      ((t.subject || '').toLowerCase().includes(q)) ||
-      classNames.includes(q)
-    );
-  });
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col text-slate-900 dark:text-slate-100">
+        
         {/* Header */}
-        <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0 border-b border-indigo-900/50">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+            <div className="h-10 w-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0 shadow-inner">
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold">School Database & Staff Manager</h3>
-              <p className="text-xs text-slate-300">
-                Enroll pupils, employ teachers, assign classes, and manage school records
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold tracking-tight">Pupil Directory & Enrollment Hub</h3>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  Pupils Only
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Manage pupil records, registrations, class promotions, and bulk CSV admissions
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition shrink-0 cursor-pointer"
-          >
-            <X className="h-4 w-4" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {onOpenStaffDatabase && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenStaffDatabase();
+                }}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-indigo-100 text-xs font-semibold transition cursor-pointer border border-white/15"
+                title="Switch to Faculty & Staff Database"
+              >
+                <GraduationCap className="h-3.5 w-3.5" />
+                <span>Staff Database &rarr;</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition shrink-0 cursor-pointer"
+              title="Close Modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Tabs Bar */}
-        <div className="flex border-b border-slate-200 bg-slate-100/90 px-4 sm:px-6 overflow-x-auto shrink-0 min-h-[52px] items-stretch gap-1.5 scrollbar-thin">
+        {/* Primary Tabs Bar - 4 Spacious Tabs with High Contrast */}
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 px-4 sm:px-6 overflow-x-auto shrink-0 min-h-[50px] items-stretch gap-2 scrollbar-none">
           <button
             onClick={() => setActiveTab('pupils')}
-            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+            className={`py-3 px-4 font-bold text-xs border-b-2 transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'pupils'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400 bg-white dark:bg-slate-900 font-extrabold shadow-xs rounded-t-xl'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Users className="h-4 w-4" /> All Pupils ({students.length})
+            <Users className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <span>All Pupils ({students.length})</span>
           </button>
+
           <button
             onClick={() => setActiveTab('transfer')}
-            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+            className={`py-3 px-4 font-bold text-xs border-b-2 transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'transfer'
-                ? 'border-amber-500 text-amber-700 bg-white font-black shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-white dark:bg-slate-900 font-extrabold shadow-xs rounded-t-xl'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <ArrowRightLeft className="h-4 w-4 text-amber-600" /> Move & Promote Pupils
+            <ArrowRightLeft className="h-4 w-4 text-amber-500" />
+            <span>Move & Promote Pupils</span>
           </button>
-          <button
-            onClick={() => setActiveTab('teachers')}
-            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'teachers'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-            }`}
-          >
-            <GraduationCap className="h-4 w-4 text-indigo-600" /> Teachers & Staff ({teachers.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('classes')}
-            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'classes'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-            }`}
-          >
-            <BookOpen className="h-4 w-4" /> Classes & Sections ({classes.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('subjects')}
-            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'subjects'
-                ? 'border-emerald-600 text-emerald-800 bg-white font-black shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-            }`}
-          >
-            <BookOpen className="h-4 w-4 text-emerald-600" /> Curriculum & Subjects ({schoolSubjects.length})
-          </button>
+
           <button
             onClick={() => setActiveTab('add_pupil')}
-            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+            className={`py-3 px-4 font-bold text-xs border-b-2 transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'add_pupil'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400 bg-white dark:bg-slate-900 font-extrabold shadow-xs rounded-t-xl'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Plus className="h-4 w-4" /> Enroll Pupil
+            <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Enroll Pupil</span>
           </button>
+
           <button
             onClick={() => setActiveTab('bulk_import')}
-            className={`py-3 px-3.5 sm:px-4 font-bold text-xs border-b-2 transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+            className={`py-3 px-4 font-bold text-xs border-b-2 transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'bulk_import'
-                ? 'border-indigo-600 text-indigo-700 bg-white font-black shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400 bg-white dark:bg-slate-900 font-extrabold shadow-xs rounded-t-xl'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Upload className="h-4 w-4" /> Bulk CSV Import
+            <Upload className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Bulk CSV Import</span>
           </button>
         </div>
 
-        {/* TAB 1: ALL PUPILS LIST */}
+        {/* TAB 1: ALL PUPILS */}
         {activeTab === 'pupils' && (
           <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
-            {quickNotice && (
-              <div className="mx-4 mt-3 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
-                <span>{quickNotice}</span>
-                <button onClick={() => setQuickNotice(null)} className="text-emerald-700 hover:text-emerald-950 font-mono">✕</button>
-              </div>
-            )}
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="h-3.5 w-3.5 absolute left-3 top-2.5 text-slate-400" />
+            {/* Search and Filter Bar */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between shrink-0">
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1">
+                {/* Search */}
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Search pupil name, roll #..."
+                    placeholder="Search pupil name, roll number, parent..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs rounded-xl bg-white border border-slate-300 w-52 sm:w-64"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
+                {/* Class Filter */}
                 <select
                   value={selectedClassFilter}
                   onChange={(e) => setSelectedClassFilter(e.target.value)}
-                  className="text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-medium text-slate-700"
+                  className="text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                 >
-                  <option value="all">All Classes & Grades</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                  <option value="unassigned">Unassigned</option>
+                  <option value="all">All Classes ({students.length})</option>
+                  {classes.map((c) => {
+                    const count = students.filter((s) => s.classId === c.id).length;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({count})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('transfer')}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-2xs transition cursor-pointer"
-                  title="Move or promote pupils between classes"
-                >
-                  <ArrowRightLeft className="h-3.5 w-3.5" /> Move / Promote Pupils
-                </button>
-                <button
-                  type="button"
                   onClick={() => setActiveTab('add_pupil')}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition cursor-pointer shadow-xs"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Enroll Pupil
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Enroll Pupil</span>
                 </button>
               </div>
             </div>
 
-            <div className="p-4 overflow-y-auto flex-1">
-              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900 text-white border-b border-slate-800 text-[11px] uppercase tracking-wider font-bold">
-                    <tr>
-                      <th className="py-2.5 px-3">Pupil</th>
-                      <th className="py-2.5 px-3">Roll #</th>
-                      <th className="py-2.5 px-3">Class (Click to Move)</th>
-                      <th className="py-2.5 px-3">Parent Contact</th>
-                      <th className="py-2.5 px-3 text-center">Academic Standing</th>
-                      <th className="py-2.5 px-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredStudents.map((s) => {
-                      return (
-                        <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-2.5">
-                              <img
-                                src={s.photoUrl}
-                                alt={s.name}
-                                className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                              />
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-bold text-slate-900 block">{s.name}</span>
-                                  {isStudentBirthdayToday(s.dateOfBirth) && (
-                                    <span className="text-[10px] font-black bg-gradient-to-r from-pink-500 to-rose-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1 border border-pink-300 animate-pulse">
-                                      🎂 Birthday Today! {getStudentAgeToday(s.dateOfBirth) ? `(${getStudentAgeToday(s.dateOfBirth)} yrs)` : ''} 🎉
-                                    </span>
-                                  )}
+            {/* Pupils Table */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+              {filteredStudents.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Users className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                  <p className="text-xs font-semibold">No pupils found matching your criteria</p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="px-4 py-3">Pupil Name</th>
+                        <th className="px-4 py-3">Roll No.</th>
+                        <th className="px-4 py-3">Class</th>
+                        <th className="px-4 py-3">Parent / Guardian</th>
+                        <th className="px-4 py-3">Phone</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredStudents.map((s) => {
+                        const pupilClass = classes.find((c) => c.id === s.classId);
+                        const isBirthday = isStudentBirthdayToday(s.dateOfBirth);
+                        const age = getStudentAgeToday(s.dateOfBirth);
+
+                        return (
+                          <tr
+                            key={s.id}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition cursor-pointer"
+                            onClick={() => onSelectStudentProfile(s)}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={s.photoUrl}
+                                  alt={s.name}
+                                  className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                                />
+                                <div>
+                                  <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                                    <span>{s.name}</span>
+                                    {isBirthday && (
+                                      <span className="text-[10px] text-amber-500" title="Birthday Today!">
+                                        🎂
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    {s.gender} &bull; {age ? `${age} yrs` : 'DOB pending'}
+                                  </span>
                                 </div>
-                                <span className="text-[10px] text-slate-400">
-                                  {s.gender} • DOB: {s.dateOfBirth}
-                                </span>
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 font-mono font-medium text-slate-600">
-                            {s.rollNumber}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <select
-                              value={s.classId}
-                              disabled={isStrictReadOnly}
-                              onChange={(e) => handleQuickMovePupil(s.id, s.name, e.target.value)}
-                              className="text-xs font-bold px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:border-indigo-500 focus:outline-indigo-600 text-slate-800 cursor-pointer shadow-2xs transition"
-                              title="Click to move pupil to another class"
-                            >
-                              {classes.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.name}
-                                </option>
-                              ))}
-                              <option value="unassigned">Unassigned</option>
-                            </select>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600">
-                            <span className="block font-medium text-slate-800">{s.parentName}</span>
-                            <span className="text-[10px] text-slate-500">{s.parentPhone}</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="inline-block px-2.5 py-0.5 rounded-full font-bold text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              Active Scholar
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => {
-                                  onClose();
-                                  onSelectStudentProfile(s);
-                                }}
-                                className="p-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition"
-                                title="Open Full Profile"
-                              >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeletePupil(s.id, s.name)}
-                                className="p-1 rounded-lg text-rose-600 hover:bg-rose-50 transition"
-                                title="Delete Student"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                            <td className="px-4 py-3 font-mono font-semibold text-slate-600 dark:text-slate-400">
+                              {s.rollNumber}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] border border-indigo-200 dark:border-indigo-800">
+                                {pupilClass?.name || 'Unassigned'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                              {s.parentName}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-slate-500">
+                              {s.parentPhone}
+                            </td>
+                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectStudentProfile(s)}
+                                  className="p-1 rounded-lg text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition cursor-pointer"
+                                  title="View Full Pupil Dossier"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePupil(s.id, s.name)}
+                                  disabled={isStrictReadOnly}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer disabled:opacity-30"
+                                  title="Delete Pupil"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: MOVE & PROMOTE PUPILS */}
+        {activeTab === 'transfer' && (
+          <div className="min-h-0 flex-1 flex flex-col overflow-y-auto p-5 sm:p-6 space-y-6">
+            <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 dark:border-amber-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <ArrowRightLeft className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <span>Class Transfer & Academic Promotion Hub</span>
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                  Promote students to the next grade or transfer between arms/sections.
+                </p>
+              </div>
+            </div>
+
+            {transferSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>{transferSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Class Selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  1. Source Class (Move From):
+                </label>
+                <select
+                  value={transferSourceClass}
+                  onChange={(e) => {
+                    setTransferSourceClass(e.target.value);
+                    setSelectedPupilIdsToMove([]);
+                  }}
+                  className="w-full text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                >
+                  {classes.map((c) => {
+                    const count = students.filter((s) => s.classId === c.id).length;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({count} pupils)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  2. Destination Class (Promote / Move To):
+                </label>
+                <select
+                  value={transferTargetClass}
+                  onChange={(e) => setTransferTargetClass(e.target.value)}
+                  className="w-full text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                >
+                  {classes.map((c) => {
+                    const count = students.filter((s) => s.classId === c.id).length;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({count} pupils)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+
+            {/* Pupils List in Source Class */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400">
+                <span>Select Pupils in Source Class:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ids = students.filter((s) => s.classId === transferSourceClass).map((s) => s.id);
+                      setSelectedPupilIdsToMove(ids);
+                    }}
+                    className="text-amber-600 dark:text-amber-400 hover:underline font-bold cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                  <span>&bull;</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPupilIdsToMove([])}
+                    className="text-slate-500 hover:underline cursor-pointer"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {students
+                  .filter((s) => s.classId === transferSourceClass)
+                  .map((s) => {
+                    const isChecked = selectedPupilIdsToMove.includes(s.id);
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex items-center gap-3 p-3 rounded-2xl border transition cursor-pointer ${
+                          isChecked
+                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 text-amber-900 dark:text-amber-200 shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPupilIdsToMove((prev) => [...prev, s.id]);
+                            } else {
+                              setSelectedPupilIdsToMove((prev) => prev.filter((id) => id !== s.id));
+                            }
+                          }}
+                          className="rounded text-amber-600 focus:ring-amber-500"
+                        />
+                        <img
+                          src={s.photoUrl}
+                          alt={s.name}
+                          className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold truncate">{s.name}</p>
+                          <p className="text-[10px] text-slate-500 font-mono truncate">{s.rollNumber}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+              </div>
+
+              {/* Action Button */}
+              <div className="flex justify-end pt-3">
+                <button
+                  type="button"
+                  disabled={selectedPupilIdsToMove.length === 0 || transferSourceClass === transferTargetClass || isStrictReadOnly}
+                  onClick={() => {
+                    if (isStrictReadOnly) return;
+                    bulkMoveStudentsToClass(selectedPupilIdsToMove, transferTargetClass);
+                    const destName = classes.find((c) => c.id === transferTargetClass)?.name || 'target class';
+                    setTransferSuccessMsg(`Successfully moved ${selectedPupilIdsToMove.length} pupil(s) to ${destName}!`);
+                    setSelectedPupilIdsToMove([]);
+                    setTimeout(() => setTransferSuccessMsg(null), 5000);
+                    onDataUpdated();
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-xs disabled:opacity-40"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  <span>Execute Move / Promotion ({selectedPupilIdsToMove.length})</span>
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: ENROLL NEW PUPIL */}
+        {/* TAB 3: ENROLL NEW PUPIL */}
         {activeTab === 'add_pupil' && (
-          <form onSubmit={handleCreatePupil} className="min-h-0 p-6 overflow-y-auto flex-1 space-y-4">
-            <h4 className="text-sm font-bold text-slate-900">Pupil Registration Form</h4>
+          <form onSubmit={handleCreatePupil} className="min-h-0 p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Enroll New Pupil Registration Form</span>
+            </h4>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Full Name</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Full Name *</label>
                 <input
                   type="text"
-                  placeholder="e.g. Samuel Adeyemi"
+                  required
+                  placeholder="e.g. Samuel Adebayo"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  required
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Roll Number</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Roll / Admission Number</label>
                 <input
                   type="text"
-                  placeholder="e.g. G4-15"
+                  placeholder="Leave blank for automatic generation"
                   value={rollNumber}
                   onChange={(e) => setRollNumber(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Class Assignment</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Assigned Class Section *</label>
                 <select
                   value={classId}
                   onChange={(e) => setClassId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                 >
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}
+                      {c.name} ({c.grade})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Gender</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Gender *</label>
                 <select
                   value={gender}
-                  onChange={(e) => setGender(e.target.value as 'Male' | 'Female')}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  onChange={(e) => setGender(e.target.value as any)}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                 >
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
@@ -810,145 +640,101 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Date of Birth</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Date of Birth</label>
                 <input
                   type="date"
                   value={dob}
                   onChange={(e) => setDob(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Photo Image URL</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Parent / Guardian Name</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Parent / Guardian Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Oluwaseun Adeyemi"
+                  placeholder="e.g. Mr. & Mrs. Adebayo"
                   value={parentName}
                   onChange={(e) => setParentName(e.target.value)}
-                  required
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Parent Phone (for SMS)</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Parent WhatsApp / Phone</label>
                 <input
                   type="tel"
-                  placeholder="e.g. +1 (555) 019-2831"
+                  placeholder="+234 803 123 4567"
                   value={parentPhone}
                   onChange={(e) => setParentPhone(e.target.value)}
-                  required
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Parent Email (Result Portal Username) <span className="text-rose-500">*</span>
-                </label>
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Parent Email</label>
                 <input
                   type="email"
-                  required
-                  placeholder="e.g. parent@gmail.com"
+                  placeholder="parent@gmail.com"
                   value={parentEmail}
                   onChange={(e) => setParentEmail(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
-                <span className="text-[10px] text-slate-500 block mt-1">
-                  💡 For every child registered, the parent&apos;s email is their portal username to access results and receive verification passcodes.
-                </span>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <div className="flex justify-end gap-2 pt-4">
               <button
                 type="button"
                 onClick={() => setActiveTab('pupils')}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm"
+                disabled={isStrictReadOnly}
+                className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition cursor-pointer shadow-xs disabled:opacity-50"
               >
-                Save Pupil to Roster
+                Enroll Pupil
               </button>
             </div>
           </form>
         )}
 
-        {/* TAB 3: BULK CSV IMPORT */}
+        {/* TAB 4: BULK CSV IMPORT */}
         {activeTab === 'bulk_import' && (
-          <div className="min-h-0 p-6 overflow-y-auto flex-1 space-y-4">
+          <div className="min-h-0 p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-bold text-slate-900">Bulk Pupil CSV Import</h4>
-                <p className="text-xs text-slate-500">
-                  Upload multiple pupils at once with auto-generated roll numbers and guardian details.
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Bulk Pupil CSV Import</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Quickly upload or paste a roster of pupils to enroll simultaneously
                 </p>
               </div>
               <button
+                type="button"
                 onClick={handleDownloadSampleCSV}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl hover:bg-indigo-100"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
               >
-                <Download className="h-3.5 w-3.5" /> Download Template CSV
+                <Download className="h-3.5 w-3.5" />
+                <span>Download Sample CSV</span>
               </button>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
-                Assign Imported Pupils to Class
-              </label>
-              <select
-                value={selectedClassFilter === 'all' ? classes[0]?.id : selectedClassFilter}
-                onChange={(e) => setSelectedClassFilter(e.target.value)}
-                className="text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 w-full sm:w-72"
-              >
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
-                Paste CSV Contents (or drag .csv file)
-              </label>
-              <textarea
-                rows={8}
-                placeholder={`Name,RollNumber,Gender,ParentName,ParentPhone,ParentEmail,DateOfBirth\nOliver Reed,G4-15,Male,Arthur Reed,+1 (555) 345-0912,arthur.reed@gmail.com,2016-04-18`}
-                value={csvContent}
-                onChange={(e) => setCsvContent(e.target.value)}
-                className="w-full text-xs font-mono p-3 rounded-2xl bg-slate-50 border border-slate-300 focus:outline-indigo-500"
-              />
-            </div>
+            <textarea
+              rows={8}
+              placeholder="Paste comma-separated pupil records here (Name, RollNumber, Gender, ParentName, ParentPhone, ParentEmail, DateOfBirth)..."
+              value={csvContent}
+              onChange={(e) => setCsvContent(e.target.value)}
+              className="w-full font-mono text-xs p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
 
             {bulkResult && (
-              <div
-                className={`p-3 rounded-xl text-xs font-medium ${
-                  bulkResult.added > 0
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-800 border border-rose-200'
-                }`}
-              >
-                {bulkResult.added > 0 && `✓ Successfully enrolled ${bulkResult.added} pupil(s)!`}
+              <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300">
+                <p className="font-bold">Successfully imported {bulkResult.added} pupil(s)!</p>
                 {bulkResult.errors.length > 0 && (
-                  <ul className="mt-1 list-disc list-inside text-rose-700">
+                  <ul className="list-disc pl-5 mt-1 text-[11px] text-rose-600">
                     {bulkResult.errors.map((err, i) => (
                       <li key={i}>{err}</li>
                     ))}
@@ -957,1274 +743,48 @@ Liam O'Connor,G4-17,Male,Deirdre O'Connor,+1 (555) 201-4411,deirdre@yahoo.com,20
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
-                onClick={() => setCsvContent('')}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
+                disabled={!csvContent.trim() || isStrictReadOnly}
                 onClick={handleRunBulkImport}
-                disabled={!csvContent.trim()}
-                className="px-5 py-2 text-xs font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm disabled:opacity-40"
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition cursor-pointer shadow-xs disabled:opacity-40"
               >
-                Execute Import
+                Execute Bulk Import
               </button>
             </div>
           </div>
         )}
 
-        {/* TAB 4: CLASSES & SECTIONS */}
-        {activeTab === 'classes' && (
-          <div className="min-h-0 p-6 overflow-y-auto flex-1 space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-slate-900">Manage School Sections & Rooms</h4>
-                <p className="text-xs text-slate-500">Assign teachers and configure schedules</p>
-              </div>
+        {/* Modal Footer */}
+        <div className="p-3 sm:p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Pupil Database Synchronized &bull; {students.length} Enrolled Pupils</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onOpenStaffDatabase && (
               <button
                 type="button"
-                onClick={() => setActiveTab('teachers')}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+                onClick={() => {
+                  onClose();
+                  onOpenStaffDatabase();
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition cursor-pointer"
               >
-                <GraduationCap className="h-3.5 w-3.5" /> View Teacher Database
+                Go to Staff Database &rarr;
               </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {classes.map((c) => {
-                const count = students.filter((s) => s.classId === c.id).length;
-                return (
-                  <div key={c.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-slate-900">{c.name}</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                            {count} Pupils
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteClass(c.id, c.name)}
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                            title={`Delete class section "${c.name}"`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-500">{c.room} &bull; {c.grade}</p>
-                      <p className="text-[11px] text-slate-400 mt-1">{c.scheduleTime}</p>
-                    </div>
-
-                    {/* Permanent Class Teacher (Homeroom) */}
-                    <div className="mt-3 pt-3 border-t border-slate-200">
-                      <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1 mb-1">
-                        <Award className="h-3 w-3 text-amber-600" /> Permanent Class Teacher (Homeroom)
-                      </label>
-                      <select
-                        value={c.teacherId || ''}
-                        onChange={(e) => handleReassign(c.id, e.target.value)}
-                        className="w-full text-xs font-bold px-2 py-1.5 rounded-xl bg-white border border-amber-300 text-slate-900 focus:outline-amber-600 cursor-pointer shadow-2xs"
-                      >
-                        <option value="">-- No Permanent Teacher Assigned --</option>
-                        {teachers.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name || 'Staff Member'} {t.permanentClassId && t.permanentClassId !== c.id ? `(Perm: ${classes.find(cl => cl.id === t.permanentClassId)?.name || 'Other'})` : ''}
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* Subject Teachers taking lessons in this class */}
-                      {(() => {
-                        const subjectTeachers = teachers.filter((t) => t.assignedClassIds?.includes(c.id) && t.id !== c.teacherId);
-                        return (
-                          <div className="mt-2 pt-2 border-t border-slate-200/60">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                              Subject Teachers ({subjectTeachers.length}):
-                            </span>
-                            {subjectTeachers.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {subjectTeachers.map((st) => (
-                                  <span key={st.id} className="text-[10px] font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700">
-                                    {st.name} <span className="text-slate-400">({st.subject || 'Subject'})</span>
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 italic">No additional subject teachers</span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Add Class Form */}
-            <form onSubmit={handleCreateClass} className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-3">
-              <h5 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                <FolderPlus className="h-4 w-4 text-indigo-600" /> Create New Class Section
-              </h5>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">Class Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Primary 6 - Emerald"
-                    value={newClassName}
-                    onChange={(e) => setNewClassName(e.target.value)}
-                    required
-                    className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-300"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">Grade Level</label>
-                  <input
-                    type="text"
-                    value={newGrade}
-                    onChange={(e) => setNewGrade(e.target.value)}
-                    className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-300"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">Assigned Teacher</label>
-                  <select
-                    value={newTeacherId}
-                    onChange={(e) => setNewTeacherId(e.target.value)}
-                    className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-300"
-                  >
-                    <option value="">-- Select Teacher --</option>
-                    {teachers.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name || 'Staff Member'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 block mb-1">Room / Hall</label>
-                  <input
-                    type="text"
-                    value={newRoom}
-                    onChange={(e) => setNewRoom(e.target.value)}
-                    className="w-full text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-300"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700"
-                >
-                  Add Class Section
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* TAB 5: TEACHERS & STAFF ROSTER */}
-        {activeTab === 'teachers' && (
-          <div className="min-h-0 p-6 overflow-y-auto flex-1 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <GraduationCap className="h-4 w-4 text-indigo-600" />
-                  School Teachers & Staff Roster
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Employ new teachers, assign or reassign class sections, and manage staff contact records.
-                </p>
-              </div>
-
-              <div className="relative">
-                <Search className="h-3.5 w-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search teachers by name, phone..."
-                  value={tSearchQuery}
-                  onChange={(e) => setTSearchQuery(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-300 w-full sm:w-64"
-                />
-              </div>
-            </div>
-
-            {teacherSuccessMsg && (
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span>{teacherSuccessMsg}</span>
-              </div>
             )}
-
-            {/* Teacher WhatsApp Credentials Notice Banner */}
-            {newlyEmployedTeacherNotice && (
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-2 border-emerald-400 text-slate-900 shadow-sm animate-in fade-in flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="p-1.5 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
-                      <MessageSquare className="h-4 w-4" />
-                    </span>
-                    <h5 className="text-xs font-bold text-emerald-950">
-                      WhatsApp Login Details Generated for {newlyEmployedTeacherNotice.teacher.name}
-                    </h5>
-                    <span className="text-[11px] font-mono font-black bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 text-emerald-900">
-                      PIN: {newlyEmployedTeacherNotice.pin}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-600">
-                    Official appointment notice, assigned classes, portal URL, and confidential 4-digit PIN are ready for dispatch.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                  <a
-                    href={newlyEmployedTeacherNotice.waUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition active:scale-95 cursor-pointer"
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                    <span>Open WhatsApp Chat & Send</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setNewlyEmployedTeacherNotice(null)}
-                    className="p-2 text-slate-400 hover:text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
-                    title="Dismiss"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Form: Employ New Teacher */}
-            <form onSubmit={handleCreateTeacher} className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-sky-50/50 border border-indigo-200/80 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h5 className="text-xs font-bold text-indigo-950 flex items-center gap-2">
-                  <UserPlus className="h-4 w-4 text-indigo-600" />
-                  Employ / Register New Teacher
-                </h5>
-                <span className="text-[11px] font-medium text-slate-400">Linked to Academic Registrar & Result Management Hub</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Teacher Full Name <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Mrs. Ngozi Eze"
-                    value={tName}
-                    onChange={(e) => setTName(e.target.value)}
-                    required
-                    className="w-full text-xs px-3 py-2 rounded-xl bg-white border border-slate-300 focus:outline-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Phone / WhatsApp No.
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="e.g. +234 803 123 4567"
-                    value={tPhone}
-                    onChange={(e) => setTPhone(e.target.value)}
-                    className="w-full text-xs px-3 py-2 rounded-xl bg-white border border-slate-300 focus:outline-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="e.g. ngozi.eze@apexcrest.edu.ng"
-                    value={tEmail}
-                    onChange={(e) => setTEmail(e.target.value)}
-                    className="w-full text-xs px-3 py-2 rounded-xl bg-white border border-slate-300 focus:outline-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Initial Class Assignment
-                  </label>
-                  <select
-                    value={tClassId}
-                    onChange={(e) => setTClassId(e.target.value)}
-                    className="w-full text-xs px-3 py-2 rounded-xl bg-white border border-slate-300 focus:outline-indigo-500 text-slate-800"
-                  >
-                    <option value="">-- Unassigned / Subject Teacher --</option>
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.grade})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] font-bold text-slate-700">Subject / Specialty:</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Class Teacher, Basic Science, English"
-                    value={tSubject}
-                    onChange={(e) => setTSubject(e.target.value)}
-                    className="text-xs px-3 py-1.5 rounded-xl bg-white border border-slate-300 focus:outline-indigo-500 w-56"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-xs active:scale-95 transition"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Employ Teacher
-                </button>
-              </div>
-            </form>
-
-            {/* Teacher Roster Cards Grid */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
-                <span>Employed Teaching Staff ({filteredTeachers.length})</span>
-                <span>Reassign classes instantly via the dropdown on each teacher</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredTeachers.map((teacher) => {
-                  const teacherClasses = classes.filter(
-                    (c) => teacher.assignedClassIds?.includes(c.id) || c.teacherId === teacher.id
-                  );
-                  const cleanPhone = (teacher?.phone || '').replace(/[^0-9]/g, '');
-
-                  return (
-                    <div
-                      key={teacher.id}
-                      className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-xs transition flex flex-col justify-between"
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={
-                              teacher.avatarUrl ||
-                              `https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face`
-                            }
-                            alt={teacher.name || 'Teacher'}
-                            className="h-11 w-11 rounded-full object-cover border-2 border-indigo-200 shadow-2xs"
-                          />
-                          <div>
-                            <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                              {teacher.name || 'Unnamed Teacher'}
-                            </h5>
-                            <p className="text-[11px] text-slate-500 font-medium">
-                              {teacher.subject || 'Class Teacher'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTeacherAction(teacher.id, teacher.name || 'this teacher')}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                          title="Remove Teacher from School Database"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-
-                      {/* Contact Information */}
-                      <div className="space-y-1 mb-3 text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-500 flex items-center gap-1">
-                            <Phone className="h-3 w-3 text-slate-400" /> WhatsApp / Phone:
-                          </span>
-                          {cleanPhone ? (
-                            <a
-                              href={`https://wa.me/${cleanPhone}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-emerald-700 font-semibold hover:underline flex items-center gap-1"
-                            >
-                              {teacher.phone}
-                              <ExternalLink className="h-2.5 w-2.5" />
-                            </a>
-                          ) : (
-                            <span className="text-slate-400 italic">No phone recorded</span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-500 flex items-center gap-1">
-                            <Mail className="h-3 w-3 text-slate-400" /> Email:
-                          </span>
-                          <span className="text-slate-700 font-mono text-[10px]">
-                            {teacher.email || 'No email recorded'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 1. Permanent Homeroom Class (Form Master) */}
-                      <div className="pt-2 border-t border-slate-100">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
-                            <Award className="h-3 w-3 text-amber-600" /> Permanent Homeroom Class:
-                          </span>
-                          {teacher.permanentClassId ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                              Form Master
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-medium text-slate-400 italic">None</span>
-                          )}
-                        </div>
-                        <select
-                          value={teacher.permanentClassId || ''}
-                          onChange={(e) => handleSetPermanentClass(teacher.id, e.target.value)}
-                          className="w-full text-xs font-bold px-2.5 py-1.5 rounded-xl bg-amber-50/60 border border-amber-300 text-slate-900 cursor-pointer focus:outline-amber-600 shadow-2xs mb-1"
-                        >
-                          <option value="">-- No Permanent Homeroom Assigned --</option>
-                          {classes.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name} {c.teacherId && c.teacherId !== teacher.id ? `(Current: ${c.teacherName})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* 2. Assigned Curriculum Subjects (What this teacher teaches) */}
-                      <div className="pt-2 border-t border-slate-100">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
-                            <BookOpen className="h-3 w-3 text-emerald-600" /> Assigned Subjects:
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-semibold">
-                            {teacher.subjects?.length || 0} subject(s)
-                          </span>
-                        </div>
-
-                        {/* Subject badges */}
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {teacher.subjects && teacher.subjects.length > 0 ? (
-                            teacher.subjects.map((subj) => {
-                              const isPrimary = teacher.subject === subj;
-                              return (
-                                <span
-                                  key={subj}
-                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                                    isPrimary
-                                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                                      : 'bg-slate-100 text-slate-800 border-slate-200'
-                                  }`}
-                                  title={isPrimary ? 'Primary Teaching Specialization (Click ★ to toggle)' : 'Click ★ to make primary specialization'}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSetPrimarySubjectAction(teacher.id, subj)}
-                                    className={`cursor-pointer hover:scale-110 transition ${
-                                      isPrimary ? 'text-amber-500 font-black' : 'text-slate-400 hover:text-amber-500'
-                                    }`}
-                                    title={isPrimary ? 'Primary Specialization' : 'Set as primary'}
-                                  >
-                                    ★
-                                  </button>
-                                  <span>{subj}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUnassignSubjectFromTeacherAction(teacher.id, subj)}
-                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition cursor-pointer"
-                                    title={`Unassign ${subj} from ${teacher.name}`}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </span>
-                              );
-                            })
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">No subjects assigned yet</span>
-                          )}
-                        </div>
-
-                        {/* Dropdown to assign another subject to this teacher */}
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAssignSubjectToTeacherAction(teacher.id, e.target.value);
-                            }
-                          }}
-                          className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-emerald-50/50 border border-emerald-300 text-slate-800 cursor-pointer focus:outline-emerald-500 shadow-2xs"
-                        >
-                          <option value="">+ Assign Subject to {teacher.name}...</option>
-
-                          <optgroup label="🌟 Core / General Subjects (All Levels)">
-                            {schoolSubjectItems
-                              .filter((item) => item.level === 'all')
-                              .map((item) => {
-                                const isAssigned = teacher.subjects?.includes(item.name);
-                                return (
-                                  <option key={item.name} value={item.name} disabled={isAssigned}>
-                                    {item.name} {isAssigned ? '(Assigned)' : ''}
-                                  </option>
-                                );
-                              })}
-                          </optgroup>
-
-                          <optgroup label="🧸 Early Years & Nursery Subjects">
-                            {schoolSubjectItems
-                              .filter((item) => item.level === 'nursery')
-                              .map((item) => {
-                                const isAssigned = teacher.subjects?.includes(item.name);
-                                return (
-                                  <option key={item.name} value={item.name} disabled={isAssigned}>
-                                    {item.name} {isAssigned ? '(Assigned)' : ''}
-                                  </option>
-                                );
-                              })}
-                          </optgroup>
-
-                          <optgroup label="🎒 Primary School Subjects">
-                            {schoolSubjectItems
-                              .filter((item) => item.level === 'primary')
-                              .map((item) => {
-                                const isAssigned = teacher.subjects?.includes(item.name);
-                                return (
-                                  <option key={item.name} value={item.name} disabled={isAssigned}>
-                                    {item.name} {isAssigned ? '(Assigned)' : ''}
-                                  </option>
-                                );
-                              })}
-                          </optgroup>
-
-                          <optgroup label="🎓 Secondary School Subjects (JSS & SSS)">
-                            {schoolSubjectItems
-                              .filter((item) => item.level === 'secondary')
-                              .map((item) => {
-                                const isAssigned = teacher.subjects?.includes(item.name);
-                                return (
-                                  <option key={item.name} value={item.name} disabled={isAssigned}>
-                                    {item.name} {isAssigned ? '(Assigned)' : ''}
-                                  </option>
-                                );
-                              })}
-                          </optgroup>
-                        </select>
-                      </div>
-
-                      {/* 3. Subject Teaching Classes (Where this teacher teaches their subjects) */}
-                      <div className="pt-2 border-t border-slate-100">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800 flex items-center gap-1">
-                            <BookOpen className="h-3 w-3 text-indigo-600" /> Subject Teaching Classes:
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-semibold">
-                            {teacherClasses.length} assigned
-                          </span>
-                        </div>
-
-                        {/* Badges of all assigned classes */}
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {teacherClasses.length > 0 ? (
-                            teacherClasses.map((ac) => {
-                              const isPermanent = ac.id === teacher.permanentClassId;
-                              return (
-                                <span
-                                  key={ac.id}
-                                  className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                                    isPermanent
-                                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                      : 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                                  }`}
-                                  title={isPermanent ? 'Permanent Homeroom Class' : 'Subject Teaching Class'}
-                                >
-                                  {isPermanent ? `★ ${ac.name}` : ac.name}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveTeachingClass(teacher.id, ac.id)}
-                                    className="text-slate-400 hover:text-rose-600 rounded-full hover:bg-white/80 p-0.5 transition cursor-pointer"
-                                    title={`Unassign from ${ac.name}`}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </span>
-                              );
-                            })
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">No teaching classes assigned</span>
-                          )}
-                        </div>
-
-                        {/* Dropdown to assign other classes for subject teaching without interfering */}
-                        <div>
-                          <select
-                            value=""
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                handleAddTeachingClass(teacher.id, e.target.value);
-                              }
-                            }}
-                            className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-800 cursor-pointer focus:outline-indigo-500 shadow-2xs"
-                          >
-                            <option value="">+ Assign Teaching Class to {teacher.name}...</option>
-                            {classes.map((c) => {
-                              const isCurrent = teacher.assignedClassIds?.includes(c.id);
-                              return (
-                                <option key={c.id} value={c.id} disabled={isCurrent}>
-                                  {c.name} {isCurrent ? '(Already Assigned)' : ''}
-                                </option>
-                              );
-                            })}
-                          </select>
-                          <span className="text-[9px] text-slate-400 block mt-1 leading-tight">
-                            💡 Teaching a subject here does not replace or interfere with the permanent class teacher.
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 4. WhatsApp Credentials Dispatch */}
-                      <div className="pt-3 border-t border-slate-100">
-                        <button
-                          type="button"
-                          onClick={() => handleSendTeacherWhatsAppCredentials(teacher)}
-                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs transition cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
-                          title={`Send Login PIN and Portal link to ${teacher.name} on WhatsApp`}
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
-                          <span>Send Login PIN via WhatsApp</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-1.5 rounded-xl bg-slate-800 dark:bg-slate-700 text-white font-bold hover:bg-slate-700 transition cursor-pointer"
+            >
+              Done
+            </button>
           </div>
-        )}
-
-        {/* TAB 6: MOVE & PROMOTE PUPILS */}
-        {activeTab === 'transfer' && (
-          <div className="min-h-0 flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
-            {/* Header info */}
-            <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <ArrowRightLeft className="h-4 w-4 text-amber-600" />
-                  <span>Class Transfer & Academic Promotion Engine</span>
-                </h3>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Move individual or entire groups of pupils from one classroom/grade to another with full audit tracking.
-                </p>
-              </div>
-              <span className="text-[11px] font-mono font-bold px-3 py-1 bg-amber-100 text-amber-900 rounded-full border border-amber-300 self-start sm:self-auto">
-                Total School Pupils: {students.length}
-              </span>
-            </div>
-
-            {transferNotice && (
-              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
-                <span>{transferNotice}</span>
-                <button onClick={() => setTransferNotice(null)} className="text-emerald-700 hover:text-emerald-950 font-mono">✕</button>
-              </div>
-            )}
-
-            {/* Selection controls */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                {/* Source Class */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    1. Source Classroom (Moving From):
-                  </label>
-                  <select
-                    value={transferSourceClass}
-                    onChange={(e) => {
-                      setTransferSourceClass(e.target.value);
-                      setSelectedPupilsForTransfer([]);
-                    }}
-                    className="w-full text-xs font-bold px-3 py-2.5 rounded-xl bg-white border border-slate-300 focus:outline-indigo-600 text-slate-900 cursor-pointer shadow-2xs"
-                  >
-                    {classes.map((c) => {
-                      const count = students.filter((s) => s.classId === c.id).length;
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({count} pupils enrolled)
-                        </option>
-                      );
-                    })}
-                    <option value="unassigned">
-                      Unassigned Pupils ({students.filter((s) => s.classId === 'unassigned').length} pupils)
-                    </option>
-                  </select>
-                </div>
-
-                {/* Target Class */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    2. Destination Classroom (Moving To):
-                  </label>
-                  <select
-                    value={transferTargetClass}
-                    onChange={(e) => setTransferTargetClass(e.target.value)}
-                    className="w-full text-xs font-bold px-3 py-2.5 rounded-xl bg-white border border-indigo-300 focus:outline-indigo-600 text-slate-900 cursor-pointer shadow-2xs"
-                  >
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id} disabled={c.id === transferSourceClass}>
-                        {c.name} {c.id === transferSourceClass ? '(Current Source)' : ''}
-                      </option>
-                    ))}
-                    <option value="unassigned" disabled={transferSourceClass === 'unassigned'}>
-                      Unassigned Pool
-                    </option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Action Toolbar */}
-              {(() => {
-                const sourcePupils = students.filter((s) => s.classId === transferSourceClass);
-                const isAllSelected = sourcePupils.length > 0 && selectedPupilsForTransfer.length === sourcePupils.length;
-                const targetName = classes.find((c) => c.id === transferTargetClass)?.name || 'Target Class';
-
-                return (
-                  <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isAllSelected) {
-                            setSelectedPupilsForTransfer([]);
-                          } else {
-                            setSelectedPupilsForTransfer(sourcePupils.map((s) => s.id));
-                          }
-                        }}
-                        disabled={sourcePupils.length === 0}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition cursor-pointer disabled:opacity-50"
-                      >
-                        {isAllSelected ? 'Deselect All' : `Select All (${sourcePupils.length}) Pupils`}
-                      </button>
-                      <span className="text-xs font-semibold text-slate-600">
-                        {selectedPupilsForTransfer.length} of {sourcePupils.length} selected
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={isStrictReadOnly || selectedPupilsForTransfer.length === 0 || transferSourceClass === transferTargetClass}
-                      onClick={handleExecuteBulkTransfer}
-                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-200 disabled:text-slate-400 text-slate-950 font-bold text-xs shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
-                    >
-                      <ArrowRightLeft className="h-4 w-4" />
-                      <span>Move {selectedPupilsForTransfer.length} Pupil(s) to {targetName}</span>
-                    </button>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Pupils List in Source Class */}
-            {(() => {
-              const sourcePupils = students.filter((s) => s.classId === transferSourceClass);
-              const sourceName = classes.find((c) => c.id === transferSourceClass)?.name || 'Selected Class';
-
-              if (sourcePupils.length === 0) {
-                return (
-                  <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 text-xs font-medium">
-                    No pupils are currently enrolled in {sourceName}. Select another source classroom above.
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    Select Pupils in {sourceName} to Move:
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {sourcePupils.map((s) => {
-                      const isSelected = selectedPupilsForTransfer.includes(s.id);
-                      return (
-                        <div
-                          key={s.id}
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedPupilsForTransfer((prev) => prev.filter((id) => id !== s.id));
-                            } else {
-                              setSelectedPupilsForTransfer((prev) => [...prev, s.id]);
-                            }
-                          }}
-                          className={`p-3 rounded-xl border transition cursor-pointer flex items-center gap-3 select-none ${
-                            isSelected
-                              ? 'bg-amber-50/80 border-amber-400 shadow-xs'
-                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer pointer-events-none"
-                          />
-                          <img
-                            src={s.photoUrl}
-                            alt={s.name}
-                            className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <span className="text-xs font-bold text-slate-900 block truncate">{s.name}</span>
-                            <span className="text-[10px] font-mono text-slate-500 block">Roll: {s.rollNumber}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* TAB 7: CURRICULUM & SUBJECTS REGISTRY */}
-        {activeTab === 'subjects' && (
-          <div className="min-h-0 flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
-            {/* Header info */}
-            <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-emerald-600" />
-                  <span>Institutional Curriculum & Subjects Registry</span>
-                </h3>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Add, remove, and manage curriculum subjects taught at the school, and allocate which teachers take each subject.
-                </p>
-              </div>
-              <span className="text-[11px] font-mono font-bold px-3 py-1 bg-emerald-100 text-emerald-900 rounded-full border border-emerald-300 self-start sm:self-auto">
-                Total Subjects: {schoolSubjects.length}
-              </span>
-            </div>
-
-            {subjectSuccessMsg && (
-              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-2xs animate-in fade-in">
-                <span>{subjectSuccessMsg}</span>
-                <button onClick={() => setSubjectSuccessMsg(null)} className="text-emerald-700 hover:text-emerald-950 font-mono">✕</button>
-              </div>
-            )}
-
-            {/* Form: Add New Subject */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-              <form onSubmit={handleAddSubjectSubmit} className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Add New Subject to Curriculum:
-                  </label>
-                  {/* Level Selector */}
-                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs self-start sm:self-auto flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setNewSubjectLevel('all')}
-                      className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
-                        newSubjectLevel === 'all'
-                          ? 'bg-emerald-600 text-white shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      ✨ Core (All)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewSubjectLevel('nursery')}
-                      className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
-                        newSubjectLevel === 'nursery'
-                          ? 'bg-rose-600 text-white shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      🧸 Nursery
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewSubjectLevel('primary')}
-                      className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
-                        newSubjectLevel === 'primary'
-                          ? 'bg-amber-600 text-white shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      🎒 Primary
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewSubjectLevel('secondary')}
-                      className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
-                        newSubjectLevel === 'secondary'
-                          ? 'bg-indigo-600 text-white shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      🎓 Secondary
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2.5">
-                  <input
-                    type="text"
-                    placeholder={`Enter subject name for ${
-                      newSubjectLevel === 'nursery'
-                        ? 'Nursery'
-                        : newSubjectLevel === 'primary'
-                        ? 'Primary'
-                        : newSubjectLevel === 'secondary'
-                        ? 'Secondary'
-                        : 'all classes'
-                    } (e.g. Letter Work, Further Mathematics, Quantitative Reasoning)...`}
-                    value={newSubjectInput}
-                    onChange={(e) => setNewSubjectInput(e.target.value)}
-                    className="flex-1 text-xs font-bold px-3 py-2.5 rounded-xl bg-white border border-slate-300 focus:outline-emerald-600 text-slate-900 shadow-2xs"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isStrictReadOnly || !newSubjectInput.trim()}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shrink-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>
-                      Add to{' '}
-                      {newSubjectLevel === 'nursery'
-                        ? 'Nursery'
-                        : newSubjectLevel === 'primary'
-                        ? 'Primary'
-                        : newSubjectLevel === 'secondary'
-                        ? 'Secondary'
-                        : 'Core'}
-                    </span>
-                  </button>
-                </div>
-              </form>
-
-              {/* Quick preset recommendations separated by Nursery, Primary vs Secondary */}
-              <div className="space-y-2.5 pt-2 border-t border-slate-200">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 flex items-center gap-1 mb-1">
-                    <span>🧸 1-Click Early Years &amp; Nursery Presets:</span>
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      'Letter Work & Phonics',
-                      'Number Work & Counting',
-                      'Rhymes, Songs & Poems',
-                      'Social Habits',
-                      'Health & Personal Hygiene',
-                      'Basic Science & Nature Study',
-                      'Colouring & Creative Drawing',
-                      'Pre-Writing & Tracing Skills',
-                    ]
-                      .filter((preset) => !schoolSubjects.some((s) => s.toLowerCase() === preset.toLowerCase()))
-                      .map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => {
-                            addSchoolSubject(preset, 'nursery');
-                            setSchoolSubjects(getSchoolSubjects());
-                            setSchoolSubjectItems(getSchoolSubjectItems());
-                            setSubjectSuccessMsg(`Added "${preset}" to Nursery curriculum!`);
-                            setTimeout(() => setSubjectSuccessMsg(null), 3500);
-                            onDataUpdated();
-                          }}
-                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 hover:border-rose-400 hover:bg-rose-100 text-rose-900 transition cursor-pointer shadow-2xs flex items-center gap-1"
-                        >
-                          <Plus className="h-2.5 w-2.5 text-rose-700" />
-                          <span>{preset}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1 mb-1">
-                    <span>🎒 1-Click Primary School Presets:</span>
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      'Quantitative Reasoning',
-                      'Verbal Reasoning',
-                      'Basic Science & Technology',
-                      'Social Studies',
-                      'Handwriting & Diction',
-                      'Vocational Aptitude',
-                      'Home Economics (Primary)',
-                    ]
-                      .filter((preset) => !schoolSubjects.some((s) => s.toLowerCase() === preset.toLowerCase()))
-                      .map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => {
-                            addSchoolSubject(preset, 'primary');
-                            setSchoolSubjects(getSchoolSubjects());
-                            setSchoolSubjectItems(getSchoolSubjectItems());
-                            setSubjectSuccessMsg(`Added "${preset}" to Primary curriculum!`);
-                            setTimeout(() => setSubjectSuccessMsg(null), 3500);
-                            onDataUpdated();
-                          }}
-                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 hover:border-amber-400 hover:bg-amber-100 text-amber-900 transition cursor-pointer shadow-2xs flex items-center gap-1"
-                        >
-                          <Plus className="h-2.5 w-2.5 text-amber-700" />
-                          <span>{preset}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800 flex items-center gap-1 mb-1">
-                    <span>🎓 1-Click Secondary School Presets:</span>
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      'Further Mathematics',
-                      'Physics',
-                      'Chemistry',
-                      'Biology',
-                      'Economics',
-                      'Literature in English',
-                      'Government',
-                      'Geography',
-                      'Financial Accounting',
-                      'Commerce',
-                      'Technical Drawing',
-                      'History',
-                    ]
-                      .filter((preset) => !schoolSubjects.some((s) => s.toLowerCase() === preset.toLowerCase()))
-                      .map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => {
-                            addSchoolSubject(preset, 'secondary');
-                            setSchoolSubjects(getSchoolSubjects());
-                            setSchoolSubjectItems(getSchoolSubjectItems());
-                            setSubjectSuccessMsg(`Added "${preset}" to Secondary curriculum!`);
-                            setTimeout(() => setSubjectSuccessMsg(null), 3500);
-                            onDataUpdated();
-                          }}
-                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-100 text-indigo-900 transition cursor-pointer shadow-2xs flex items-center gap-1"
-                        >
-                          <Plus className="h-2.5 w-2.5 text-indigo-700" />
-                          <span>{preset}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Guidance Banner: Explaining Subjects are Assigned to Teachers */}
-            <div className="p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950">
-              <div className="flex items-start sm:items-center gap-2.5">
-                <BookOpen className="h-4 w-4 text-emerald-700 shrink-0 mt-0.5 sm:mt-0" />
-                <div>
-                  <span className="font-bold">Institutional Curriculum Catalog (Nursery, Primary &amp; Secondary)</span>
-                  <p className="text-[11px] text-emerald-800 mt-0.5">
-                    Subjects are categorized by <strong>Early Years / Nursery</strong>, <strong>Primary School</strong>, and <strong>Secondary School</strong>. In ResultIQ, subjects are allocated to subject teachers on the <strong>Teachers &amp; Staff</strong> tab.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab('teachers')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition cursor-pointer text-xs shrink-0 self-start sm:self-auto shadow-2xs"
-              >
-                <Users className="h-3.5 w-3.5" />
-                <span>Assign Staff on Teachers Tab &rarr;</span>
-              </button>
-            </div>
-
-            {/* Level Filter Tabs & Grid of registered subjects */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setSubjectLevelFilter('all')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      subjectLevelFilter === 'all'
-                        ? 'bg-white text-slate-900 shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    🌟 All Subjects ({schoolSubjectItems.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubjectLevelFilter('nursery')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      subjectLevelFilter === 'nursery'
-                        ? 'bg-rose-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    🧸 Nursery ({schoolSubjectItems.filter((s) => s.level === 'nursery' || s.level === 'all').length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubjectLevelFilter('primary')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      subjectLevelFilter === 'primary'
-                        ? 'bg-amber-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    🎒 Primary ({schoolSubjectItems.filter((s) => s.level === 'primary' || s.level === 'all').length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubjectLevelFilter('secondary')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      subjectLevelFilter === 'secondary'
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    🎓 Secondary ({schoolSubjectItems.filter((s) => s.level === 'secondary' || s.level === 'all').length})
-                  </button>
-                </div>
-
-                <span className="text-[11px] text-slate-500 font-medium">
-                  Showing {
-                    schoolSubjectItems.filter((s) =>
-                      subjectLevelFilter === 'all' ? true : s.level === subjectLevelFilter || s.level === 'all'
-                    ).length
-                  } subjects
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {schoolSubjectItems
-                  .filter((item) =>
-                    subjectLevelFilter === 'all' ? true : item.level === subjectLevelFilter || item.level === 'all'
-                  )
-                  .map((item) => {
-                    const subj = item.name;
-                    const assignedTeachers = teachers.filter(
-                      (t) => t.subjects?.includes(subj) || t.subject === subj
-                    );
-
-                    const isNursery = item.level === 'nursery';
-                    const isPrimary = item.level === 'primary';
-                    const isSecondary = item.level === 'secondary';
-
-                    return (
-                      <div
-                        key={subj}
-                        className={`p-4 rounded-2xl bg-white border shadow-2xs hover:shadow-xs transition flex flex-col justify-between space-y-3 ${
-                          isNursery
-                            ? 'border-rose-200'
-                            : isPrimary
-                            ? 'border-amber-200'
-                            : isSecondary
-                            ? 'border-indigo-200'
-                            : 'border-slate-200/90'
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold shrink-0 ${
-                                  isNursery
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : isPrimary
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : isSecondary
-                                    ? 'bg-indigo-100 text-indigo-800'
-                                    : 'bg-emerald-100 text-emerald-800'
-                                }`}
-                              >
-                                <BookOpen className="h-4 w-4" />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <h5 className="text-xs font-bold text-slate-900 leading-tight">{subj}</h5>
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide border ${
-                                      isNursery
-                                        ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                        : isPrimary
-                                        ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                        : isSecondary
-                                        ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                    }`}
-                                  >
-                                    {isNursery ? '🧸 Nursery' : isPrimary ? '🎒 Primary' : isSecondary ? '🎓 Secondary' : '✨ Core'}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-slate-400 block mt-0.5">
-                                  {assignedTeachers.length} teacher(s) currently teaching
-                                </span>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteSubjectAction(subj)}
-                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                              title={`Delete "${subj}" from curriculum`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-
-                          {/* Informative List of teachers assigned to teach this subject */}
-                          <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                              Staff Teaching {subj}:
-                            </span>
-                            <div className="flex flex-wrap gap-1">
-                              {assignedTeachers.length > 0 ? (
-                                assignedTeachers.map((t) => (
-                                  <span
-                                    key={t.id}
-                                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200"
-                                  >
-                                    <span>{t.name}</span>
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-[10px] text-amber-700 font-medium italic">
-                                  Not assigned to any teacher yet
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Quick link to assign this subject to teachers */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('teachers')}
-                            className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition cursor-pointer"
-                          >
-                            <span>Manage staff on Teachers tab &rarr;</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

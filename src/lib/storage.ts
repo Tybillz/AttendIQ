@@ -437,6 +437,87 @@ export function deleteClass(classId: string): boolean {
 }
 
 // Teachers
+export interface PresetAvatarOption {
+  id: string;
+  label: string;
+  url: string;
+  gender: 'male' | 'female' | 'neutral';
+}
+
+export const PRESET_TEACHER_AVATARS: PresetAvatarOption[] = [
+  {
+    id: 'male-1',
+    label: 'Male Educator 1 (Formal)',
+    url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+    gender: 'male',
+  },
+  {
+    id: 'male-2',
+    label: 'Male Educator 2 (Academic Headshot)',
+    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face',
+    gender: 'male',
+  },
+  {
+    id: 'male-3',
+    label: 'Male Educator 3 (African / Blazer)',
+    url: 'https://images.unsplash.com/photo-1531384441138-2736e62e0919?w=200&h=200&fit=crop&crop=face',
+    gender: 'male',
+  },
+  {
+    id: 'male-4',
+    label: 'Male Educator 4 (Executive)',
+    url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
+    gender: 'male',
+  },
+  {
+    id: 'male-5',
+    label: 'Male Educator 5 (Faculty)',
+    url: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&h=200&fit=crop&crop=face',
+    gender: 'male',
+  },
+  {
+    id: 'female-1',
+    label: 'Female Educator 1 (Executive)',
+    url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face',
+    gender: 'female',
+  },
+  {
+    id: 'female-2',
+    label: 'Female Educator 2 (African / Professional)',
+    url: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=200&h=200&fit=crop&crop=face',
+    gender: 'female',
+  },
+  {
+    id: 'female-3',
+    label: 'Female Educator 3 (Faculty Head)',
+    url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face',
+    gender: 'female',
+  },
+  {
+    id: 'female-4',
+    label: 'Female Educator 4 (Academic)',
+    url: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=200&h=200&fit=crop&crop=face',
+    gender: 'female',
+  },
+  {
+    id: 'female-5',
+    label: 'Female Educator 5 (Senior Lecturer)',
+    url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop&crop=face',
+    gender: 'female',
+  },
+];
+
+export function getDefaultTeacherAvatar(name: string): string {
+  const lower = (name || '').toLowerCase();
+  const isMale =
+    /\b(mr|mister|mal|mallam|alhaji|brother|pastor|sir)\b/.test(lower) ||
+    /\b(john|bako|chinedu|ibrahim|musa|emeka|ahmed|david|peter|michael|joseph|paul|samuel|abubakar|tunde|olumide|femi|segun)\b/.test(lower);
+  if (isMale) {
+    return 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face';
+  }
+  return 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=200&h=200&fit=crop&crop=face';
+}
+
 export function getTeachers(): Teacher[] {
   const loaded = getStored<Teacher[]>(KEYS.TEACHERS, INITIAL_TEACHERS);
   const classes = getStored<ClassSection[]>(KEYS.CLASSES, INITIAL_CLASSES);
@@ -465,7 +546,7 @@ export function getTeachers(): Teacher[] {
       subject: t.subject || 'Class Teacher',
       avatarUrl:
         t.avatarUrl ||
-        'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&h=100&fit=crop&crop=face',
+        getDefaultTeacherAvatar(t.name),
     };
   });
 }
@@ -565,6 +646,7 @@ export function addTeacher(newTeacher: Omit<Teacher, 'id'>): Teacher {
   const teachers = getTeachers();
   const created: Teacher = {
     ...newTeacher,
+    avatarUrl: newTeacher.avatarUrl || getDefaultTeacherAvatar(newTeacher.name),
     id: `t-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
   };
   teachers.push(created);
@@ -622,6 +704,19 @@ export function updateTeacher(updated: Teacher): void {
   });
   if (classesChanged) {
     saveClasses(classes);
+  }
+}
+
+export function updateTeacherAvatar(teacherId: string, avatarUrl: string): void {
+  if (isLicenseWriteRestricted()) {
+    if (typeof window !== 'undefined') alert(getLicenseRestrictionReason());
+    return;
+  }
+  const teachers = getTeachers();
+  const target = teachers.find((t) => t.id === teacherId);
+  if (target) {
+    target.avatarUrl = avatarUrl;
+    updateTeacher(target);
   }
 }
 
