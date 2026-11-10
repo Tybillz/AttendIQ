@@ -18,6 +18,7 @@ import {
   RotateCcw,
   BookOpen,
   GraduationCap,
+  Award,
   Sparkles,
   ArrowRight,
   ChevronDown,
@@ -67,6 +68,7 @@ import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
 import { TerminalReportSheet } from './TerminalReportSheet';
 import { StudentProfileModal } from './StudentProfileModal';
 import { SubjectGradebook } from './SubjectGradebook';
+import { HomeroomBroadsheet } from './HomeroomBroadsheet';
 import { PupilDatabaseModal } from './PupilDatabaseModal';
 import { StaffDatabaseModal } from './StaffDatabaseModal';
 import { WhitelabelModal } from './WhitelabelModal';
@@ -215,7 +217,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   // Staff back-office views
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
-  const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'preview'>('gradebook');
+  const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'broadsheet'>('gradebook');
   const [isPupilModalOpen, setIsPupilModalOpen] = useState<boolean>(false);
   const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'transfer'>('pupils');
   const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
@@ -1576,14 +1578,34 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
               {/* Navigation Actions (Strictly Faculty Tools, No License & No Parent Redirection) */}
               <nav className="space-y-1.5">
-                {/* 1. Score Entry & Gradebook */}
+                {/* 1. Score Entry & Gradebook (Subject Teacher Mode) */}
                 <button
                   type="button"
                   onClick={() => setStaffActiveTab('gradebook')}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-amber-500 text-slate-950 font-bold shadow-xs transition cursor-pointer text-left"
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
+                    staffActiveTab === 'gradebook'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Subject Teacher Mode: Enter CA1, CA2, Assignment & Exam marks"
                 >
                   <BookOpen className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">Score Entry & Gradebook</span>
+                  <span className="flex-1">Subject Score Entry</span>
+                </button>
+
+                {/* 2. Homeroom Broadsheet & Results (Form Master Mode) */}
+                <button
+                  type="button"
+                  onClick={() => setStaffActiveTab('broadsheet')}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
+                    staffActiveTab === 'broadsheet'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Form Master Mode: View compiled broadsheet, verify all subjects, and sign report cards"
+                >
+                  <Award className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span className="flex-1">Homeroom Broadsheet</span>
                 </button>
 
                 {/* 2. ADMIN ONLY MODULES */}
@@ -1719,20 +1741,35 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               </div>
             </aside>
 
-            {/* ── RIGHT MAIN WORKSPACE (DEDICATED GRADEBOOK, NO PARENT REDIRECTION) ── */}
+            {/* ── RIGHT MAIN WORKSPACE (DEDICATED GRADEBOOK OR HOMEROOM BROADSHEET) ── */}
             <div className="flex-1 min-w-0 w-full space-y-6">
-              <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">Academic Score Entry &amp; Terminal Gradebook</h2>
-                  <p className="text-xs text-slate-500">Record Continuous Assessment (CA1, CA2, Exam) and synchronize official terminal records.</p>
-                </div>
-              </div>
-              <SubjectGradebook
-                currentTeacher={currentStaffTeacher}
-                assignedClasses={classes}
-                allStudents={students}
-                onDataUpdated={refreshData}
-              />
+              {staffActiveTab === 'gradebook' ? (
+                <>
+                  <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Subject Score Entry &amp; Continuous Assessment</h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Record CA1 (15), CA2 (15), Assignment (10), and Exam (60) for classes you teach.</p>
+                    </div>
+                  </div>
+                  <SubjectGradebook
+                    currentTeacher={currentStaffTeacher}
+                    assignedClasses={classes}
+                    allStudents={students}
+                    onDataUpdated={refreshData}
+                    onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
+                  />
+                </>
+              ) : (
+                <HomeroomBroadsheet
+                  currentTeacher={currentStaffTeacher}
+                  classes={classes}
+                  allStudents={students}
+                  allTeachers={teachers}
+                  isAdmin={authSession.role === 'admin'}
+                  onDataUpdated={refreshData}
+                  onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
+                />
+              )}
             </div>
           </div>
         ) : (
@@ -2614,13 +2651,13 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         />
       )}
 
-      {/* Student Profile Modal (ADMINISTRATOR ONLY) */}
-      {selectedStudentForProfile && authSession?.role === 'admin' && (
+      {/* Student Profile Modal (ADMINISTRATOR & TEACHER ACCESS) */}
+      {selectedStudentForProfile && (authSession?.role === 'admin' || authSession?.role === 'teacher') && (
         <StudentProfileModal
           isOpen={Boolean(selectedStudentForProfile)}
           onClose={() => setSelectedStudentForProfile(null)}
           student={selectedStudentForProfile}
-          classNameTitle={activeClass.name}
+          classNameTitle={classes.find((c) => c.id === selectedStudentForProfile.classId)?.name || activeClass.name}
           onStudentUpdated={refreshData}
         />
       )}

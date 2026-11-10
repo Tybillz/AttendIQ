@@ -443,11 +443,14 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
               className="w-full bg-slate-50 text-slate-800 border border-slate-300 text-xs rounded-xl px-3 py-2 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">★ All My Classes ({assignedClasses.map((c) => c.name).join(', ')})</option>
-              {assignedClasses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.grade})
-                </option>
-              ))}
+              {assignedClasses.map((c) => {
+                const isHomeroom = currentTeacher?.permanentClassId === c.id || c.teacherId === currentTeacher?.id;
+                return (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.grade}) {isHomeroom ? '🏆 [Your Homeroom Class]' : '📚 [Subject Class]'}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
