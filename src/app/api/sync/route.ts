@@ -18,6 +18,7 @@ let inMemoryStore: {
   branding?: any;
   license?: any;
   teacherPins?: Record<string, string>;
+  parentPasswords?: Record<string, string>;
   adminPasscode?: string;
   vendorPasscode?: string;
 } = {
@@ -28,6 +29,7 @@ let inMemoryStore: {
   branding: null,
   license: null,
   teacherPins: {},
+  parentPasswords: {},
   adminPasscode: 'admin123',
   vendorPasscode: 'vendor2026',
 };
@@ -85,6 +87,10 @@ async function saveCloudStore(updates: Record<string, any>) {
     teacherPins: {
       ...(current.teacherPins || {}),
       ...(updates.teacherPins || {}),
+    },
+    parentPasswords: {
+      ...(current.parentPasswords || {}),
+      ...(updates.parentPasswords || {}),
     },
   };
   inMemoryStore = merged;
