@@ -69,6 +69,7 @@ import { TerminalReportSheet } from './TerminalReportSheet';
 import { StudentProfileModal } from './StudentProfileModal';
 import { SubjectGradebook } from './SubjectGradebook';
 import { HomeroomBroadsheet } from './HomeroomBroadsheet';
+import { LamaSchoolDashboard } from './LamaSchoolDashboard';
 import { PupilDatabaseModal } from './PupilDatabaseModal';
 import { StaffDatabaseModal } from './StaffDatabaseModal';
 import { WhitelabelModal } from './WhitelabelModal';
@@ -115,6 +116,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusResult>(getLicenseStatus());
   const [brandingModalTab, setBrandingModalTab] = useState<'branding' | 'licensing'>('branding');
+  const [activeNavTab, setActiveNavTab] = useState<string>('home');
 
   // Synchronize state with props and cloud storage updates
   useEffect(() => {
@@ -409,6 +411,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       setParentFamilyStudents(res.students);
       const primaryChild = res.students[0];
       setVerifiedStudent(primaryChild);
+      setActiveNavTab('parents');
 
       const serial = `REQ-${Date.now().toString().slice(-6)}-${primaryChild.rollNumber.replace(/[^A-Za-z0-9]/g, '')}`;
       setVerificationAuditRecord({
@@ -1451,7 +1454,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen selection:bg-slate-900 selection:text-white">
       {/* Security Auto-Logout Toast Notification (15-Minute Rule) */}
       {inactivityNotice && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
@@ -1471,376 +1474,179 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          1. TOP INSTITUTIONAL REGISTRAR HEADER
+          LAMA DEV SCHOOL MANAGEMENT DASHBOARD MASTER INTERFACE
           ───────────────────────────────────────────────────────────── */}
-      <header className="border-b border-slate-200/90 bg-white sticky top-0 z-40 shadow-xs no-print">
-        {/* Top Official Micro-Ribbon */}
-        <div className="bg-slate-900 text-slate-200 text-[11px] font-mono tracking-wider py-1.5 px-4 sm:px-8 flex items-center justify-between border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="font-semibold text-slate-100">ResultIQ™ Academic Registrar Portal</span>
-            <span className="text-slate-400 hidden sm:inline">• Official Terminal Assessment Verification</span>
-          </div>
-          <div className="flex items-center gap-3 text-slate-300">
-            {/* Dark / Light Mode Toggle Button */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold border border-slate-700 transition cursor-pointer"
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="w-3 h-3 text-amber-400" />
-                  <span>Light</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-3 h-3 text-indigo-300" />
-                  <span>Dark</span>
-                </>
-              )}
-            </button>
-
-            {!authSession ? (
+      <LamaSchoolDashboard
+        students={students}
+        teachers={teachers}
+        classes={classes}
+        branding={branding}
+        authSession={authSession}
+        activeNavTab={activeNavTab}
+        setActiveNavTab={(tab) => {
+          if (tab === 'teachers') {
+            setStaffModalDefaultTab('teachers');
+            setIsStaffModalOpen(true);
+            return;
+          }
+          if (tab === 'students') {
+            setPupilModalDefaultTab('pupils');
+            setIsPupilModalOpen(true);
+            return;
+          }
+          if (tab === 'classes') {
+            setStaffModalDefaultTab('classes');
+            setIsStaffModalOpen(true);
+            return;
+          }
+          if (tab === 'subjects') {
+            setStaffModalDefaultTab('subjects');
+            setIsStaffModalOpen(true);
+            return;
+          }
+          setActiveNavTab(tab);
+        }}
+        onOpenTeacherLogin={() => {
+          setTeacherLoginError(null);
+          setTeacherLoginHint(null);
+          setIsTeacherModalOpen(true);
+        }}
+        onOpenAdminLogin={() => {
+          setAdminLoginError(null);
+          setAdminLoginHint(null);
+          setIsAdminModalOpen(true);
+        }}
+        onLogout={handleStaffLogout}
+        onOpenPupilDatabase={(tab) => {
+          setPupilModalDefaultTab(tab || 'pupils');
+          setIsPupilModalOpen(true);
+        }}
+        onOpenStaffDatabase={(tab) => {
+          setStaffModalDefaultTab(tab || 'teachers');
+          setIsStaffModalOpen(true);
+        }}
+        onOpenBranding={() => {
+          setBrandingModalTab('branding');
+          setIsBrandingModalOpen(true);
+        }}
+        onOpenAuditLogs={() => setIsAuditModalOpen(true)}
+        theme={theme}
+        toggleTheme={toggleTheme}
+      >
+        {/* Child Views rendered inside the Lama Dev Content Workspace */}
+        {activeNavTab === 'parents' ? (
+          <div className="max-w-4xl mx-auto py-2">
+            <div className="mb-4 flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setIsVendorAuthModalOpen(true)}
-                className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer"
-                title="Open Vendor Licensing Authority"
+                onClick={() => setActiveNavTab('home')}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 cursor-pointer"
               >
-                <Key className="w-3 h-3" />
-                <span>Licensing Authority</span>
+                ← Back to Dashboard Overview
               </button>
-            ) : (
-              <span
-                className="text-slate-600 font-medium flex items-center gap-1 cursor-not-allowed select-none pointer-events-none opacity-40"
-                title="Licensing Authority is restricted to Vendor/Parent Login Homepage"
-                aria-disabled="true"
-              >
-                <Key className="w-3 h-3 text-slate-600" />
-                <span>Licensing Authority (Restricted)</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Official Result Access
               </span>
-            )}
-            <span className="text-slate-400 font-semibold hidden md:inline">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>
-          </div>
-        </div>
-
-        {/* Primary School Branding Header */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center font-serif text-2xl shadow-sm border border-slate-700 shrink-0">
-              {branding.crestEmoji || '🎓'}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 font-serif">
-                  {branding.schoolName}
-                </h1>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-300">
-                  Verified Portal
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-sans tracking-wide">
-                {branding.motto} &bull; <span className="text-slate-600 font-medium">{branding.branchLocation}</span>
-              </p>
-            </div>
+            {verifiedStudent ? renderParentReportSheet() : renderParentSignInCard()}
           </div>
-
-          {/* Right Action: SEPARATED Teacher Login & Principal / Admin Buttons (Only in Header) */}
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition shadow-2xs cursor-pointer flex items-center justify-center"
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              aria-label="Toggle Theme"
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-600" />}
-            </button>
-            {authSession ? (
-              <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs">
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-white rounded-lg font-semibold text-slate-800 shadow-2xs">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>
-                    {authSession.role === 'admin'
-                      ? 'Principal Console (Admin)'
-                      : `Teacher: ${authSession.teacherName?.split(' ')[1] || 'Staff'}`}
-                  </span>
+        ) : activeNavTab === 'gradebook' ? (
+          authSession ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Subject Score Entry &amp; Continuous Assessment</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Record CA1 (15), CA2 (15), Assignment (10), and Exam (60) for classes you teach.</p>
                 </div>
                 <button
                   type="button"
-                  onClick={handleStaffLogout}
-                  className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-white transition cursor-pointer"
-                  title="Sign out"
+                  onClick={() => setActiveNavTab('broadsheet')}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-2xs transition cursor-pointer"
                 >
-                  <LogOut className="w-4 h-4" />
+                  View Homeroom Broadsheet →
                 </button>
               </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {/* 1. SEPARATE TEACHER PORTAL BUTTON */}
+              <SubjectGradebook
+                currentTeacher={currentStaffTeacher}
+                assignedClasses={classes}
+                allStudents={students}
+                onDataUpdated={refreshData}
+                onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
+              />
+            </div>
+          ) : (
+            <div className="max-w-md mx-auto my-12 p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto text-2xl font-bold shadow-2xs">
+                🔒
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Academic Faculty Access Only</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                You must sign in as an authorized teacher to enter continuous assessment scores, CA test marks, and terminal exam grades.
+              </p>
+              <div className="pt-2 flex justify-center gap-3">
                 <button
                   type="button"
                   onClick={() => {
                     setTeacherLoginError(null);
                     setIsTeacherModalOpen(true);
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
                 >
-                  <BookOpen className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Teacher Portal</span>
+                  Teacher Sign In
                 </button>
-
-                {/* 2. SEPARATE PRINCIPAL / ADMIN BUTTON */}
+                <button
+                  type="button"
+                  onClick={() => setActiveNavTab('home')}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          )
+        ) : activeNavTab === 'broadsheet' ? (
+          authSession ? (
+            <HomeroomBroadsheet
+              currentTeacher={currentStaffTeacher}
+              classes={classes}
+              allStudents={students}
+              allTeachers={teachers}
+              isAdmin={authSession.role === 'admin'}
+              onDataUpdated={refreshData}
+              onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
+            />
+          ) : (
+            <div className="max-w-md mx-auto my-12 p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto text-2xl font-bold shadow-2xs">
+                🏆
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Form Master &amp; Principal Broadsheet</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Authorized Form Masters and School Administrators can verify class-wide subject scores, track teacher submissions, and endorse terminal results.
+              </p>
+              <div className="pt-2 flex justify-center gap-3">
                 <button
                   type="button"
                   onClick={() => {
-                    setAdminLoginError(null);
-                    setIsAdminModalOpen(true);
+                    setTeacherLoginError(null);
+                    setIsTeacherModalOpen(true);
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
                 >
-                  <Lock className="w-3.5 h-3.5 text-slate-300" />
-                  <span>Principal / Admin</span>
+                  Sign In to Access
                 </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* ─────────────────────────────────────────────────────────────
-          2. MAIN BODY: RESULT CHECKER OR RESULT DISPLAY
-          ───────────────────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-8">
-        {/* ── LEFT SIDEBAR CONSOLE LAYOUT (WHEN LOGGED IN AS STAFF/ADMIN) ── */}
-        {authSession ? (
-          <div className="flex flex-col lg:flex-row gap-6 items-start">
-            {/* ── LEFT SIDEBAR: CONSOLE MODULE NAVIGATION ── */}
-            <aside className="w-full lg:w-64 shrink-0 bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-800 space-y-5">
-              {/* Console Role Badge & Status (No License Info) */}
-              <div className="pb-4 border-b border-slate-800 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold">
-                    {authSession.role === 'admin' ? 'Principal Console' : 'Teacher Console'}
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Online
-                  </span>
-                </div>
-                <h3 className="text-sm font-bold text-white tracking-tight truncate">
-                  {authSession.role === 'admin' ? 'Administrator' : authSession.teacherName || 'Faculty Member'}
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  {authSession.role === 'admin' ? 'Institutional Management' : 'Score Entry & Grading'}
-                </p>
-              </div>
-
-              {/* Navigation Actions (Strictly Faculty Tools, No License & No Parent Redirection) */}
-              <nav className="space-y-1.5">
-                {/* 1. Score Entry & Gradebook (Subject Teacher Mode) */}
                 <button
                   type="button"
-                  onClick={() => setStaffActiveTab('gradebook')}
-                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
-                    staffActiveTab === 'gradebook'
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                  title="Subject Teacher Mode: Enter CA1, CA2, Assignment & Exam marks"
+                  onClick={() => setActiveNavTab('home')}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
                 >
-                  <BookOpen className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">Subject Score Entry</span>
-                </button>
-
-                {/* 2. Homeroom Broadsheet & Results (Form Master Mode) */}
-                <button
-                  type="button"
-                  onClick={() => setStaffActiveTab('broadsheet')}
-                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
-                    staffActiveTab === 'broadsheet'
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                  title="Form Master Mode: View compiled broadsheet, verify all subjects, and sign report cards"
-                >
-                  <Award className="w-4 h-4 shrink-0 text-amber-400" />
-                  <span className="flex-1">Homeroom Broadsheet</span>
-                </button>
-
-                {/* 2. ADMIN ONLY MODULES */}
-                {authSession.role === 'admin' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPupilModalDefaultTab('pupils');
-                        setIsPupilModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
-                      title="Manage pupil enrollment, profiles, and directory"
-                    >
-                      <Users className="w-4 h-4 shrink-0 text-indigo-400" />
-                      <span className="flex-1 font-bold text-slate-200">Pupil Database & Directory</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPupilModalDefaultTab('transfer');
-                        setIsPupilModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-amber-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer text-left"
-                      title="Move or promote pupils between classes"
-                    >
-                      <ArrowRightLeft className="w-4 h-4 shrink-0 text-amber-400" />
-                      <span className="flex-1">Move & Promote Pupils</span>
-                    </button>
-
-                    <div className="pt-2 pb-1 px-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Staff & Academic Registry
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStaffModalDefaultTab('teachers');
-                        setIsStaffModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
-                      title="Manage employed teachers, change photos, and allocate classes"
-                    >
-                      <GraduationCap className="w-4 h-4 shrink-0 text-indigo-400" />
-                      <span className="flex-1 font-bold text-slate-200">Teachers & Staff Database</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStaffModalDefaultTab('classes');
-                        setIsStaffModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
-                      title="Manage school classes and assign form masters"
-                    >
-                      <Building2 className="w-4 h-4 shrink-0 text-slate-400" />
-                      <span className="flex-1">Classes & Sections</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStaffModalDefaultTab('subjects');
-                        setIsStaffModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 transition cursor-pointer text-left"
-                      title="Manage school curriculum, add/remove subjects & assign to teachers"
-                    >
-                      <BookOpen className="w-4 h-4 shrink-0 text-emerald-400" />
-                      <span className="flex-1">Curriculum & Subjects</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsAuditModalOpen(true)}
-                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
-                    >
-                      <ShieldCheck className="w-4 h-4 shrink-0 text-slate-400" />
-                      <span className="flex-1">Result Access Logs</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBrandingModalTab('branding');
-                        setIsBrandingModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
-                    >
-                      <Building2 className="w-4 h-4 shrink-0 text-slate-400" />
-                      <span className="flex-1">School Whitelabeling & Seal</span>
-                    </button>
-                  </>
-                ) : (
-                  <div className="px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-[11px] text-amber-300/90 font-mono">
-                    🔒 Teacher Gradebook Mode: Continuous assessment score entry only.
-                  </div>
-                )}
-              </nav>
-
-              {/* Sidebar Footer Details (Session Status Only, Strictly No License Info) */}
-              <div className="pt-4 border-t border-slate-800 space-y-3">
-                <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 text-[11px] space-y-1.5 font-mono">
-                  <div className="text-slate-400 flex items-center justify-between">
-                    <span>ROLE:</span>
-                    <span className="text-slate-200 font-semibold truncate max-w-[120px]">
-                      {authSession.role === 'admin' ? 'Administrator' : 'Subject Teacher'}
-                    </span>
-                  </div>
-                  <div className="text-slate-400 flex items-center justify-between">
-                    <span>TERM:</span>
-                    <span className="text-slate-300 font-semibold">{branding.currentTerm?.split(' ')[0] || 'Harmattan'}</span>
-                  </div>
-                  <div className="text-slate-400 flex items-center justify-between">
-                    <span>CONSOLE:</span>
-                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                      Active
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleStaffLogout}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-400 hover:text-white hover:bg-rose-600/20 border border-rose-500/30 transition cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Sign Out of Console</span>
+                  Back to Dashboard
                 </button>
               </div>
-            </aside>
-
-            {/* ── RIGHT MAIN WORKSPACE (DEDICATED GRADEBOOK OR HOMEROOM BROADSHEET) ── */}
-            <div className="flex-1 min-w-0 w-full space-y-6">
-              {staffActiveTab === 'gradebook' ? (
-                <>
-                  <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-                    <div>
-                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Subject Score Entry &amp; Continuous Assessment</h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Record CA1 (15), CA2 (15), Assignment (10), and Exam (60) for classes you teach.</p>
-                    </div>
-                  </div>
-                  <SubjectGradebook
-                    currentTeacher={currentStaffTeacher}
-                    assignedClasses={classes}
-                    allStudents={students}
-                    onDataUpdated={refreshData}
-                    onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
-                  />
-                </>
-              ) : (
-                <HomeroomBroadsheet
-                  currentTeacher={currentStaffTeacher}
-                  classes={classes}
-                  allStudents={students}
-                  allTeachers={teachers}
-                  isAdmin={authSession.role === 'admin'}
-                  onDataUpdated={refreshData}
-                  onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
-                />
-              )}
             </div>
-          </div>
-        ) : (
-          /* ── PUBLIC VISITOR / PARENT VIEW: CLEAN CENTERED CARD (NO SIDEBAR) ── */
-          <div>
-            {verifiedStudent ? renderParentReportSheet() : renderParentSignInCard()}
-          </div>
-        )}
-      </main>
+          )
+        ) : null}
+      </LamaSchoolDashboard>
 
       {/* ─────────────────────────────────────────────────────────────
           3. FOOTER
