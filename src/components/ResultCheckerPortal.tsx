@@ -160,7 +160,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
   // Parent Email (Username) -> Passcode (with Send Passcode button) 2-Step Authentication State
   const [parentLoginStep, setParentLoginStep] = useState<'email' | 'passcode'>('email');
-  const [parentEmailInput, setParentEmailInput] = useState<string>('emeka.obi@gmail.com');
+  const [parentEmailInput, setParentEmailInput] = useState<string>('');
   const [parentPasswordInput, setParentPasswordInput] = useState<string>('');
   const [showParentPassword, setShowParentPassword] = useState<boolean>(false);
   const [parentFamilyStudents, setParentFamilyStudents] = useState<Student[]>([]);
@@ -499,7 +499,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
     if (matching.length === 0) {
       setVerificationError(
-        `No registered student found associated with "${parentEmailInput.trim()}". Please enter your registered Parent Email (e.g. emeka.obi@gmail.com) or Student ID (e.g. P4-01).`
+        `No registered student records found associated with "${parentEmailInput.trim()}". Please enter your registered parent email address.`
       );
       return;
     }
@@ -546,17 +546,11 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         console.warn('Email dispatch API error:', e);
       }
 
-      if (dispatchedOverEmail) {
-        setLoginPasscodeSentNotice(
-          `Access passcode has been dispatched to ${parentEmailInput.trim()}. Please check your email inbox (and spam folder), copy the 6-digit passcode, and paste it into the box above.`
-        );
-      } else {
-        // Fallback: Show instant passcode on screen so tester/parent is never blocked!
-        setParentPasswordInput(code);
-        setLoginPasscodeSentNotice(
-          `Your login passcode is: ${code} (Auto-filled). You can also sign in with "parent123".`
-        );
-      }
+      // Strictly no prefilled passcodes
+      setParentPasswordInput('');
+      setLoginPasscodeSentNotice(
+        `A 6-digit access passcode has been sent to ${parentEmailInput.trim()}. Please check your email inbox (and spam folder), copy the passcode, and enter it into the field above.`
+      );
 
       // Log dispatch audit record
       addAuditLog({
@@ -572,8 +566,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       });
     } catch (err) {
       console.warn('Failed to process passcode request:', err);
-      setLoginPasscodeSentNotice(
-        `Default testing password is "parent123" or your child's Admission Number (e.g. P4-01).`
+      setVerificationError(
+        'Unable to send access passcode right now. Please verify your internet connection or try again shortly.'
       );
     } finally {
       setIsSendingLoginPasscode(false);
@@ -1142,17 +1136,17 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               </div>
             </div>
 
-            {/* Registered Parent Email as Username */}
+            {/* Registered Parent Email */}
             <div className="space-y-1">
               <label htmlFor="parent-email-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                Parent Email or Student ID:
+                Parent Email:
               </label>
               <div className="relative">
                 <input
                   id="parent-email-input"
-                  type="text"
+                  type="email"
                   required
-                  placeholder="e.g. emeka.obi@gmail.com or P4-01"
+                  placeholder="Enter your registered parent email"
                   value={parentEmailInput}
                   onChange={(e) => {
                     setParentEmailInput(e.target.value);
@@ -1164,28 +1158,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
               </div>
               <span className="text-[10px] text-slate-500 block leading-tight">
-                💡 Sign in using your registered Parent Email, Phone number, or Student ID (e.g. <strong>P4-01</strong>).
+                Enter the email address registered with the school to proceed.
               </span>
-            </div>
-
-            {/* Quick Demo Helper for Evaluators & Testers */}
-            <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200/90 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <span className="text-[10px] font-bold text-amber-900 block">⚡ Quick Demo Login:</span>
-                <span className="text-[11px] font-mono font-semibold text-amber-800 truncate block">
-                  emeka.obi@gmail.com <span className="text-amber-600 font-sans font-normal">(or P4-01)</span>
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setParentEmailInput('emeka.obi@gmail.com');
-                  setVerificationError(null);
-                }}
-                className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] transition shrink-0 cursor-pointer shadow-2xs"
-              >
-                Auto-fill
-              </button>
             </div>
 
             {/* Error Notice */}
@@ -1214,7 +1188,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                  Parent Username / ID:
+                  Parent Email:
                 </span>
                 <span className="text-xs font-bold text-slate-900 truncate block">
                   {parentEmailInput}
@@ -1238,31 +1212,11 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               </button>
             </div>
 
-            {/* Default Password Testing Helper */}
-            <div className="p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-[11px] text-blue-900 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <span className="text-[10px] font-bold text-blue-800 block">🔑 Default Testing Password:</span>
-                <span className="text-[11px] text-blue-950">
-                  Enter <strong className="font-mono bg-blue-100 px-1 rounded">parent123</strong> or <strong className="font-mono bg-blue-100 px-1 rounded">1234</strong>
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setParentPasswordInput('parent123');
-                  setVerificationError(null);
-                }}
-                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition shrink-0 cursor-pointer shadow-2xs"
-              >
-                Use parent123
-              </button>
-            </div>
-
             {/* Passcode Field */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label htmlFor="parent-password-input" className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
-                  Access Passcode / Password:
+                  Access Passcode:
                 </label>
                 <button
                   type="button"
@@ -1288,7 +1242,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   id="parent-password-input"
                   type={showParentPassword ? 'text' : 'password'}
                   required
-                  placeholder="Paste or enter 6-digit passcode"
+                  placeholder="Enter 6-digit passcode"
                   value={parentPasswordInput}
                   onChange={(e) => {
                     setParentPasswordInput(e.target.value);
@@ -1319,7 +1273,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                   {isSendingLoginPasscode ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-amber-700/30 border-t-amber-700 rounded-full animate-spin"></div>
-                      <span>Dispatching Passcode to Email...</span>
+                      <span>Sending Passcode to Email...</span>
                     </>
                   ) : passcodeCooldown > 0 ? (
                     <>
@@ -1335,12 +1289,12 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 </button>
               </div>
 
-              {/* Secure Confirmation Banner: Tells parent where to find code without revealing it */}
+              {/* Confirmation Banner */}
               {loginPasscodeSentNotice && (
                 <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs flex items-start gap-2 shadow-2xs animate-in fade-in">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="font-bold block text-emerald-900">Passcode Sent Successfully!</span>
+                    <span className="font-bold block text-emerald-900">Passcode Sent!</span>
                     <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
                       {loginPasscodeSentNotice}
                     </p>

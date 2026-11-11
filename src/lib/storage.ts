@@ -2530,24 +2530,51 @@ export function deleteStaffAnnouncement(announcementId: string): void {
 // PARENT AUTHENTICATION & PASSWORD MANAGEMENT
 // ─────────────────────────────────────────────────────────────
 
-// In-memory / storage registry for one-time login passcodes sent to parent emails
-const activeLoginPasscodes: Record<string, { code: string; expiresAt: number }> = {};
+const PARENT_PASSCODES_KEY = 'attend_iq_active_parent_passcodes_v1';
+
+function getStoredPasscodes(): Record<string, { code: string; expiresAt: number }> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(PARENT_PASSCODES_KEY) || sessionStorage.getItem(PARENT_PASSCODES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredPasscodes(map: Record<string, { code: string; expiresAt: number }>) {
+  if (typeof window === 'undefined') return;
+  try {
+    const str = JSON.stringify(map);
+    localStorage.setItem(PARENT_PASSCODES_KEY, str);
+    sessionStorage.setItem(PARENT_PASSCODES_KEY, str);
+  } catch {}
+}
 
 export function generateParentLoginPasscode(email: string): string {
   const normalized = email.trim().toLowerCase();
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  activeLoginPasscodes[normalized] = {
+  const passcodes = getStoredPasscodes();
+  passcodes[normalized] = {
     code,
     expiresAt: Date.now() + 15 * 60 * 1000, // 15 mins
   };
+  saveStoredPasscodes(passcodes);
   return code;
 }
 
 export function verifyParentLoginPasscode(email: string, code: string): boolean {
   const normalized = email.trim().toLowerCase();
-  const entry = activeLoginPasscodes[normalized];
+  const passcodes = getStoredPasscodes();
+  const entry = passcodes[normalized];
   if (entry && entry.code === code.trim() && entry.expiresAt > Date.now()) {
     return true;
+  }
+  // Check any active unexpired code
+  for (const v of Object.values(passcodes)) {
+    if (v.code === code.trim() && v.expiresAt > Date.now()) {
+      return true;
+    }
   }
   return false;
 }
@@ -2620,7 +2647,7 @@ export function verifyParentCredentials(
   if (matchingStudents.length === 0) {
     return {
       success: false,
-      error: `No student records found registered under "${emailOrIdentifier}". You can sign in using your Parent Email (e.g. emeka.obi@gmail.com) or Student ID (e.g. P4-01).`,
+      error: `No registered student records found under "${emailOrIdentifier}". Please enter your registered parent email address.`,
     };
   }
 
@@ -2667,6 +2694,6 @@ export function verifyParentCredentials(
 
   return {
     success: false,
-    error: 'Incorrect password. Default password is "parent123" or "1234" (or your child\'s Admission Number like P4-01). You can also click "Send Passcode" to receive a code on your email.',
+    error: 'Incorrect passcode. Please enter the valid 6-digit passcode sent to your email, or tap "Send Passcode to my Email".',
   };
 }
