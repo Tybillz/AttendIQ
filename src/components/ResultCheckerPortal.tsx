@@ -1483,29 +1483,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         branding={branding}
         authSession={authSession}
         activeNavTab={activeNavTab}
-        setActiveNavTab={(tab) => {
-          if (tab === 'teachers') {
-            setStaffModalDefaultTab('teachers');
-            setIsStaffModalOpen(true);
-            return;
-          }
-          if (tab === 'students') {
-            setPupilModalDefaultTab('pupils');
-            setIsPupilModalOpen(true);
-            return;
-          }
-          if (tab === 'classes') {
-            setStaffModalDefaultTab('classes');
-            setIsStaffModalOpen(true);
-            return;
-          }
-          if (tab === 'subjects') {
-            setStaffModalDefaultTab('subjects');
-            setIsStaffModalOpen(true);
-            return;
-          }
-          setActiveNavTab(tab);
-        }}
+        setActiveNavTab={setActiveNavTab}
         onOpenTeacherLogin={() => {
           setTeacherLoginError(null);
           setTeacherLoginHint(null);
@@ -1517,11 +1495,11 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           setIsAdminModalOpen(true);
         }}
         onLogout={handleStaffLogout}
-        onOpenPupilDatabase={(tab) => {
+        onOpenPupilDatabase={(tab?: 'pupils' | 'add_pupil' | 'bulk_import' | 'transfer') => {
           setPupilModalDefaultTab(tab || 'pupils');
           setIsPupilModalOpen(true);
         }}
-        onOpenStaffDatabase={(tab) => {
+        onOpenStaffDatabase={(tab?: 'teachers' | 'classes' | 'subjects') => {
           setStaffModalDefaultTab(tab || 'teachers');
           setIsStaffModalOpen(true);
         }}
@@ -1530,6 +1508,8 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
           setIsBrandingModalOpen(true);
         }}
         onOpenAuditLogs={() => setIsAuditModalOpen(true)}
+        onDataUpdated={refreshData}
+        onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
         theme={theme}
         toggleTheme={toggleTheme}
       >
