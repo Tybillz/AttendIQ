@@ -72,7 +72,6 @@ import { HomeroomBroadsheet } from './HomeroomBroadsheet';
 import { PupilDatabaseModal } from './PupilDatabaseModal';
 import { StaffDatabaseModal } from './StaffDatabaseModal';
 import { WhitelabelModal } from './WhitelabelModal';
-import { VendorLicensingModal } from './VendorLicensingModal';
 import { AuditLogModal } from './AuditLogModal';
 import {
   AuthSession,
@@ -114,7 +113,6 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   const [teachers, setTeachers] = useState<Teacher[]>(initialTeachers);
   const [branding, setBranding] = useState<SchoolBranding>(getSchoolBranding());
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusResult>(getLicenseStatus());
-  const [brandingModalTab, setBrandingModalTab] = useState<'branding' | 'licensing'>('branding');
 
   // Synchronize state with props and cloud storage updates
   useEffect(() => {
@@ -201,12 +199,6 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     serial: string;
     verifiedContact: string;
   } | null>(null);
-
-  // Reinstated Licensing Architecture State
-  const [isVendorModalOpen, setIsVendorModalOpen] = useState<boolean>(false);
-  const [isVendorAuthModalOpen, setIsVendorAuthModalOpen] = useState<boolean>(false);
-  const [vendorPasscodeInput, setVendorPasscodeInput] = useState<string>('');
-  const [vendorAuthError, setVendorAuthError] = useState<string | null>(null);
 
   // Authentication Sessions: Distinct Separated Teacher vs Principal Modals
   const [authSession, setAuthSession] = useState<AuthSession | null>(getAuthSession());
@@ -1045,21 +1037,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
     setAuthSession(null);
   };
 
-  // 3. VENDOR PASSCODE VERIFICATION HANDLER
-  const handleVendorUnlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    setVendorAuthError(null);
-    const pass = vendorPasscodeInput.trim();
-    if (pass === 'vendor2026' || pass === 'admin123' || pass === 'resultiq' || pass === 'resultiq2026') {
-      setIsVendorAuthModalOpen(false);
-      setVendorPasscodeInput('');
-      setIsVendorModalOpen(true);
-    } else {
-      setVendorAuthError('Invalid Security Key. Access denied.');
-    }
-  };
-
-  // 4. PARENT AUTHENTICATOR SETUP VERIFICATION HANDLER
+  // 3. PARENT AUTHENTICATOR SETUP VERIFICATION HANDLER
   const handleVerifyForSetup = (e: React.FormEvent) => {
     e.preventDefault();
     setSetupError(null);
@@ -1506,26 +1484,6 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
               )}
             </button>
 
-            {!authSession ? (
-              <button
-                type="button"
-                onClick={() => setIsVendorAuthModalOpen(true)}
-                className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer"
-                title="Open Vendor Licensing Authority"
-              >
-                <Key className="w-3 h-3" />
-                <span>Licensing Authority</span>
-              </button>
-            ) : (
-              <span
-                className="text-slate-600 font-medium flex items-center gap-1 cursor-not-allowed select-none pointer-events-none opacity-40"
-                title="Licensing Authority is restricted to Vendor/Parent Login Homepage"
-                aria-disabled="true"
-              >
-                <Key className="w-3 h-3 text-slate-600" />
-                <span>Licensing Authority (Restricted)</span>
-              </span>
-            )}
             <span className="text-slate-400 font-semibold hidden md:inline">{branding.currentTerm || 'Second Term (Lent) 2026/2027'}</span>
           </div>
         </div>
@@ -1782,14 +1740,12 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setBrandingModalTab('branding');
-                        setIsBrandingModalOpen(true);
-                      }}
+                      onClick={() => setIsBrandingModalOpen(true)}
                       className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer text-left"
+                      title="Manage school name, crest, principal endorsement signature, and contact details"
                     >
                       <Building2 className="w-4 h-4 shrink-0 text-slate-400" />
-                      <span className="flex-1">School Whitelabeling & Seal</span>
+                      <span className="flex-1">School Branding & Crest</span>
                     </button>
                   </>
                 ) : (
@@ -2399,77 +2355,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
         </div>
       )}
 
-      {/* 3. REINSTATED VENDOR PASSCODE VERIFICATION MODAL (Parent Homepage Only) */}
-      {!authSession && isVendorAuthModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-sm w-full overflow-hidden">
-            <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Key className="w-4 h-4 text-amber-400" />
-                <h3 className="font-bold text-sm">Vendor Authority Authorization</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsVendorAuthModalOpen(false);
-                  setVendorAuthError(null);
-                }}
-                className="text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleVendorUnlock} className="p-5 space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Authorized vendor and proprietor access only. Enter the licensor master passcode to generate signed commercial product keys.
-              </p>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Vendor Master Passcode:
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter vendor security key"
-                  value={vendorPasscodeInput}
-                  onChange={(e) => setVendorPasscodeInput(e.target.value)}
-                  className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              {vendorAuthError && (
-                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
-                  {vendorAuthError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-2.5 px-4 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow-xs"
-              >
-                Unlock Vendor Console &rarr;
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 4. REINSTATED VENDOR LICENSING AUTHORITY MODAL (KEY GENERATOR) */}
-      {!authSession && isVendorModalOpen && (
-        <VendorLicensingModal
-          isOpen={isVendorModalOpen}
-          onClose={() => {
-            setIsVendorModalOpen(false);
-            refreshData();
-          }}
-          currentSchoolName={branding.schoolName}
-          onLicenseActivated={refreshData}
-        />
-      )}
-
-      {/* 5. FORGOT PASSWORD / EMAIL PASSCODE VERIFICATION MODAL */}
+      {/* 3. FORGOT PASSWORD / EMAIL PASSCODE VERIFICATION MODAL */}
       {isForgotPasswordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
           <div className="bg-white rounded-2xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden animate-fadeIn">
@@ -2771,7 +2657,6 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
             setIsBrandingModalOpen(false);
             refreshData();
           }}
-          defaultTab={brandingModalTab}
           onBrandingUpdated={refreshData}
         />
       )}

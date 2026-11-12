@@ -179,6 +179,101 @@ export function generateLicenseKey(
   return generateSignedLicenseKey(schoolName, planType, durationMonths, maxPupils, maxStaff).licenseKey;
 }
 
+export interface VendorProvisionOptions {
+  schoolName: string;
+  validFrom: string; // YYYY-MM-DD Start Date
+  validUntil: string; // YYYY-MM-DD Expiry Date
+  planType?: LicensePlanType;
+  maxPupils?: number;
+  maxStaff?: number;
+  vendorNotes?: string;
+  updateBrandingSchoolName?: boolean;
+}
+
+/**
+ * Vendor Authority: Directly provision, license, and bind this system to a particular school
+ * with specified start date and expiry date.
+ */
+export function vendorProvisionSchoolLicense(options: VendorProvisionOptions): {
+  success: boolean;
+  message: string;
+  license: SchoolLicense;
+} {
+  const schoolName = (options.schoolName || '').trim();
+  if (!schoolName) {
+    throw new Error('School name is required.');
+  }
+  if (!options.validFrom || !options.validUntil) {
+    throw new Error('Both Start Date and Expiry Date are required.');
+  }
+
+  const planType: LicensePlanType = options.planType || 'annual';
+  const maxPupils = options.maxPupils || 1000;
+  const maxStaff = options.maxStaff || 100;
+  const signature = computeLicenseSignature(schoolName, planType, options.validUntil, maxPupils);
+
+  const schoolAcronym =
+    schoolName
+      .split(' ')
+      .map((w) => w[0]?.toUpperCase() || '')
+      .join('')
+      .slice(0, 4) || 'SCH';
+  const dateTag = options.validUntil.replace(/-/g, '').slice(2);
+  const licenseKey = `RIQ-${planType.toUpperCase()}-${schoolAcronym}-${dateTag}-${signature}`;
+
+  const license: SchoolLicense = {
+    licenseKey,
+    schoolName,
+    planType,
+    issuedAt: new Date().toISOString(),
+    validFrom: options.validFrom,
+    validUntil: options.validUntil,
+    maxPupils,
+    maxStaff,
+    features: [
+      'result_checking_portal',
+      'multi_factor_parent_2fa',
+      'nerdc_subject_gradebook',
+      'official_watermark_seal',
+      'pdf_terminal_reports',
+      'whatsapp_result_dispatch',
+      'csv_bulk_import',
+    ],
+    signature,
+    activatedAt: new Date().toISOString(),
+    vendorNotes: options.vendorNotes || `Provisioned directly for ${schoolName} by Vendor Authority.`,
+    isRevoked: false,
+  };
+
+  if (typeof window !== 'undefined') {
+    // Save license
+    localStorage.setItem(STORAGE_KEYS.LICENSE, JSON.stringify(license));
+
+    // Remove from blacklist if present
+    const blacklist = getRevocationBlacklist().filter((r) => r.key !== licenseKey);
+    localStorage.setItem(STORAGE_KEYS.REVOCATION_BLACKLIST, JSON.stringify(blacklist));
+
+    // Update branding school name to match
+    if (options.updateBrandingSchoolName !== false) {
+      const currentBranding = getSchoolBranding();
+      if (currentBranding.schoolName !== schoolName) {
+        currentBranding.schoolName = schoolName;
+        currentBranding.updatedAt = new Date().toISOString();
+        localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(currentBranding));
+        window.dispatchEvent(new CustomEvent('attendiq:branding-updated', { detail: currentBranding }));
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('attendiq:license-updated', { detail: license }));
+  }
+
+  return {
+    success: true,
+    message: `System successfully licensed to "${schoolName}" from ${options.validFrom} until ${options.validUntil}.`,
+    license,
+  };
+}
+
 /**
  * Verify if a raw license payload is mathematically authentic and untampered
  */
