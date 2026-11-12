@@ -253,7 +253,10 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
   // Staff back-office views
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
-  const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'broadsheet'>('gradebook');
+  const [staffActiveTab, setStaffActiveTab] = useState<'gradebook' | 'broadsheet'>(() => {
+    const sess = getAuthSession();
+    return sess?.role === 'admin' ? 'broadsheet' : 'gradebook';
+  });
   const [isPupilModalOpen, setIsPupilModalOpen] = useState<boolean>(false);
   const [pupilModalDefaultTab, setPupilModalDefaultTab] = useState<'pupils' | 'add_pupil' | 'bulk_import' | 'transfer'>('pupils');
   const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
@@ -1015,6 +1018,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
       };
       saveAuthSession(session);
       setAuthSession(session);
+      setStaffActiveTab('broadsheet');
       setIsAdminModalOpen(false);
       setAdminPasswordInput('');
       setAdminLoginError(null);
@@ -1640,22 +1644,7 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
 
               {/* Navigation Actions (Strictly Faculty Tools, No License & No Parent Redirection) */}
               <nav className="space-y-1.5">
-                {/* 1. Score Entry & Gradebook (Subject Teacher Mode) */}
-                <button
-                  type="button"
-                  onClick={() => setStaffActiveTab('gradebook')}
-                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
-                    staffActiveTab === 'gradebook'
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                  title="Subject Teacher Mode: Enter CA1, CA2, Assignment & Exam marks"
-                >
-                  <BookOpen className="w-4 h-4 shrink-0" />
-                  <span className="flex-1">Subject Score Entry</span>
-                </button>
-
-                {/* 2. Homeroom Broadsheet & Results (Form Master Mode) */}
+                {/* 1. Homeroom / Master Broadsheet (Primary for Admin, Secondary for Teacher) */}
                 <button
                   type="button"
                   onClick={() => setStaffActiveTab('broadsheet')}
@@ -1664,11 +1653,51 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                       ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800'
                   }`}
-                  title="Form Master Mode: View compiled broadsheet, verify all subjects, and sign report cards"
+                  title={
+                    authSession.role === 'admin'
+                      ? 'Executive Master Broadsheet: View final computed results across all subjects and classes'
+                      : 'Form Master Mode: View compiled broadsheet, verify all subjects, and sign report cards'
+                  }
                 >
                   <Award className="w-4 h-4 shrink-0 text-amber-400" />
-                  <span className="flex-1">Homeroom Broadsheet</span>
+                  <span className="flex-1 font-bold">
+                    {authSession.role === 'admin' ? 'Master Broadsheet (Final Results)' : 'Homeroom Broadsheet'}
+                  </span>
                 </button>
+
+                {/* 2. Score Entry (For Teacher) / Read-Only Audit View (For Admin) */}
+                {authSession.role !== 'admin' ? (
+                  <button
+                    type="button"
+                    onClick={() => setStaffActiveTab('gradebook')}
+                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
+                      staffActiveTab === 'gradebook'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                    title="Subject Teacher Mode: Enter CA1, CA2, Assignment & Exam marks"
+                  >
+                    <BookOpen className="w-4 h-4 shrink-0" />
+                    <span className="flex-1">Subject Score Entry</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setStaffActiveTab('gradebook')}
+                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
+                      staffActiveTab === 'gradebook'
+                        ? 'bg-slate-800 text-amber-400 font-bold border border-amber-500/40 shadow-xs'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                    title="Inspect raw CA & Exam breakdowns per subject (Read-Only Audit Mode)"
+                  >
+                    <BookOpen className="w-4 h-4 shrink-0 text-amber-400/80" />
+                    <span className="flex-1">Subject Gradebook (Audit)</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono">
+                      View-Only
+                    </span>
+                  </button>
+                )}
 
                 {/* 2. ADMIN ONLY MODULES */}
                 {authSession.role === 'admin' ? (
@@ -1809,14 +1838,24 @@ export const ResultCheckerPortal: React.FC<ResultCheckerPortalProps> = ({
                 <>
                   <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
                     <div>
-                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Subject Score Entry &amp; Continuous Assessment</h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Record CA1 (15), CA2 (15), Assignment (10), and Exam (60) for classes you teach.</p>
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                        {authSession.role === 'admin'
+                          ? 'Subject Score Oversight (Audit View)'
+                          : 'Subject Score Entry & Continuous Assessment'}
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {authSession.role === 'admin'
+                          ? 'Review raw Continuous Assessment (CA1, CA2, Assignment) and Exam entries submitted by subject teachers in read-only mode.'
+                          : 'Record CA1 (15), CA2 (15), Assignment (10), and Exam (60) for classes you teach.'}
+                      </p>
                     </div>
                   </div>
                   <SubjectGradebook
                     currentTeacher={currentStaffTeacher}
                     assignedClasses={classes}
                     allStudents={students}
+                    allTeachers={teachers}
+                    isAdmin={authSession.role === 'admin'}
                     onDataUpdated={refreshData}
                     onSelectStudentProfile={(s) => setSelectedStudentForProfile(s)}
                   />

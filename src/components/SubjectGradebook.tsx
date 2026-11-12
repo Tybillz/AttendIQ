@@ -17,6 +17,7 @@ import {
   FileSpreadsheet,
   AlertCircle,
   HelpCircle,
+  Lock,
 } from 'lucide-react';
 import {
   Student,
@@ -30,6 +31,7 @@ import {
   exportSubjectGradesCSV,
   downloadCSVFile,
   getSubjectLevel,
+  getSchoolSubjects,
 } from '@/lib/storage';
 import { downloadStudentReportCardPDF } from '@/lib/pdfReportGenerator';
 import { computeGrade, getClassLevel } from '@/lib/academicCalculations';
@@ -39,6 +41,8 @@ interface SubjectGradebookProps {
   currentTeacher: Teacher | undefined;
   assignedClasses: ClassSection[];
   allStudents: Student[];
+  allTeachers?: Teacher[];
+  isAdmin?: boolean;
   onDataUpdated?: () => void;
   onSelectStudentProfile?: (student: Student) => void;
   isLicenseLocked?: boolean;
@@ -48,13 +52,19 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
   currentTeacher,
   assignedClasses,
   allStudents,
+  allTeachers = [],
+  isAdmin = false,
   onDataUpdated,
   onSelectStudentProfile,
   isLicenseLocked = false,
 }) => {
-  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted();
-  // Determine available subjects for this teacher
+  const isStrictReadOnly = isLicenseLocked || isLicenseWriteRestricted() || isAdmin;
+  // Determine available subjects for this teacher or all curriculum subjects for Admin
   const teacherSubjects = useMemo(() => {
+    if (isAdmin) {
+      const allSubs = getSchoolSubjects();
+      return allSubs.length > 0 ? allSubs : ['Mathematics', 'English Language', 'Basic Science', 'Civic Education'];
+    }
     if (currentTeacher?.subjects && currentTeacher.subjects.length > 0) {
       return currentTeacher.subjects;
     }
@@ -62,7 +72,7 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
       return [currentTeacher.subject];
     }
     return ['Mathematics', 'English Language', 'Basic Science', 'Civic Education'];
-  }, [currentTeacher]);
+  }, [currentTeacher, isAdmin]);
 
   const [selectedSubject, setSelectedSubject] = useState<string>(teacherSubjects[0] || 'Mathematics');
   const [selectedClassId, setSelectedClassId] = useState<string>('all'); // 'all' or class ID
@@ -70,6 +80,16 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Identify assigned teacher for the active subject
+  const assignedTeacherForSubject = useMemo(() => {
+    if (!allTeachers || allTeachers.length === 0) return null;
+    return allTeachers.find(
+      (t) =>
+        t.subject?.toLowerCase() === selectedSubject.toLowerCase() ||
+        (Array.isArray(t.subjects) && t.subjects.some((s) => s.toLowerCase() === selectedSubject.toLowerCase()))
+    );
+  }, [allTeachers, selectedSubject]);
 
   const activeClass = useMemo(() => {
     if (selectedClassId === 'all') return null;
@@ -305,6 +325,28 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in">
+      {/* Principal Executive Oversight Notice */}
+      {isAdmin && (
+        <div className="p-4 rounded-3xl bg-amber-50/90 border border-amber-200/90 shadow-xs flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-700 flex items-center justify-center font-bold text-lg shrink-0 border border-amber-500/30">
+              <Lock className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-900 text-xs">
+                Principal Executive Oversight &amp; Audit Mode
+              </p>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Raw Continuous Assessment (CA) and Exam marks can only be entered and modified by the assigned subject teacher ({assignedTeacherForSubject?.name || 'Assigned Faculty'}) to protect grade integrity.
+              </p>
+            </div>
+          </div>
+          <span className="hidden sm:inline-flex px-3 py-1 rounded-full bg-amber-200/80 text-amber-900 font-mono text-[10px] font-bold shrink-0 border border-amber-300">
+            PROTECTED
+          </span>
+        </div>
+      )}
+
       {/* Teacher Subject & Filter Card */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-sm relative overflow-hidden">
         <div className="h-1.5 w-full absolute top-0 left-0 bg-gradient-to-r from-indigo-600 via-sky-600 to-indigo-700" />
@@ -316,37 +358,51 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
                 <BookOpen className="h-4 w-4" />
               </span>
               <span className="text-xs font-bold uppercase tracking-wider text-indigo-800">
-                Subject Gradebook & Continuous Assessment
+                Subject Gradebook &amp; Continuous Assessment
               </span>
               <span className="text-[11px] font-semibold text-slate-500">
-                • {currentTeacher?.name} ({assignedClasses.length} {assignedClasses.length === 1 ? 'Class' : 'Classes'})
+                • {isAdmin ? 'Executive Review' : currentTeacher?.name} ({assignedClasses.length} {assignedClasses.length === 1 ? 'Class' : 'Classes'})
               </span>
             </div>
             <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-              <span>Grade Pupils by Subject</span>
+              <span>{isAdmin ? 'Subject Gradebook (Audit & Oversight)' : 'Grade Pupils by Subject'}</span>
+              {isAdmin && (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                  🔒 View-Only
+                </span>
+              )}
             </h2>
             <p className="text-xs text-slate-600 mt-1 max-w-2xl">
-              Breakdown: <strong>CA 1 (/15)</strong> + <strong>CA 2 (/15)</strong> + <strong>Assignment (/10)</strong> + <strong>Exam (/60)</strong> = <strong>100 Marks</strong>. All pupil names taking your selected subject appear automatically.
+              {isAdmin
+                ? `Assigned Subject Instructor: ${assignedTeacherForSubject?.name || 'Assigned Faculty'}. As Principal, continuous assessment scores are view-only to safeguard academic integrity.`
+                : 'Breakdown: CA 1 (/15) + CA 2 (/15) + Assignment (/10) + Exam (/60) = 100 Marks. All pupil names taking your selected subject appear automatically.'}
             </p>
           </div>
 
           {/* Quick Actions (Save & Export) */}
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handleSaveGrades}
-              disabled={isStrictReadOnly}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs shadow-sm transition active:scale-95 ${
-                isStrictReadOnly
-                  ? 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'
-                  : hasUnsavedChanges
-                  ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-emerald-600/30 ring-2 ring-emerald-500/50'
-                  : 'bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-              }`}
-              title={isStrictReadOnly ? 'Score submissions disabled: System in Read-Only Mode' : 'Save all grades to database & student dossiers'}
-            >
-              <Save className="h-4 w-4" />
-              <span>{isStrictReadOnly ? 'Read-Only Mode' : hasUnsavedChanges ? 'Save Changes *' : 'Grades Saved'}</span>
-            </button>
+            {isAdmin ? (
+              <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 font-bold text-xs shadow-2xs">
+                <Lock className="h-4 w-4 text-amber-600" />
+                <span>Executive View-Only</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleSaveGrades}
+                disabled={isStrictReadOnly}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs shadow-sm transition active:scale-95 ${
+                  isStrictReadOnly
+                    ? 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'
+                    : hasUnsavedChanges
+                    ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-emerald-600/30 ring-2 ring-emerald-500/50'
+                    : 'bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                }`}
+                title={isStrictReadOnly ? 'Score submissions disabled: System in Read-Only Mode' : 'Save all grades to database & student dossiers'}
+              >
+                <Save className="h-4 w-4" />
+                <span>{isStrictReadOnly ? 'Read-Only Mode' : hasUnsavedChanges ? 'Save Changes *' : 'Grades Saved'}</span>
+              </button>
+            )}
 
             <button
               onClick={handleExportCSV}
@@ -736,10 +792,12 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
                       <td className="py-3 px-4">
                         <input
                           type="text"
-                          placeholder="Add vital comment, mastery note, or weakness..."
+                          disabled={isStrictReadOnly}
+                          readOnly={isStrictReadOnly}
+                          placeholder={isAdmin ? "Subject Teacher's vital observation" : "Add vital comment, mastery note, or weakness..."}
                           value={rec.vitalNotes}
                           onChange={(e) => handleNoteChange(student.id, e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
                     </tr>
@@ -756,12 +814,14 @@ export const SubjectGradebook: React.FC<SubjectGradebookProps> = ({
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <span>Grading is auto-calculated per the Nigerian School Assessment standard: CA 1 (15) + CA 2 (15) + Assignment (10) + Exam (60) = 100 Marks.</span>
           </div>
-          <button
-            onClick={handleSaveGrades}
-            className="text-xs font-bold text-indigo-700 hover:text-indigo-800 underline"
-          >
-            Save all grades now &rarr;
-          </button>
+          {!isAdmin && (
+            <button
+              onClick={handleSaveGrades}
+              className="text-xs font-bold text-indigo-700 hover:text-indigo-800 underline"
+            >
+              Save all grades now &rarr;
+            </button>
+          )}
         </div>
       </div>
     </div>

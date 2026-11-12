@@ -272,11 +272,15 @@ export const HomeroomBroadsheet: React.FC<HomeroomBroadsheetProps> = ({
     const evaluation: TerminalEvaluation = {
       affective: quickAffective,
       psychomotor: quickPsychomotor,
-      teacherRemark: quickRemark.trim(),
-      teacherSignature: quickSignature.trim() || classFormMaster?.name || 'Form Master',
-      principalRecommendation:
-        editingStudent.terminalEvaluation?.principalRecommendation ||
-        'Approved for promotion with commendable academic merit.',
+      teacherRemark: isAdmin
+        ? (editingStudent.terminalEvaluation?.teacherRemark || quickRemark.trim())
+        : quickRemark.trim(),
+      teacherSignature: isAdmin
+        ? (editingStudent.terminalEvaluation?.teacherSignature || classFormMaster?.name || 'Form Master')
+        : (quickSignature.trim() || classFormMaster?.name || 'Form Master'),
+      principalRecommendation: isAdmin
+        ? quickRemark.trim()
+        : (editingStudent.terminalEvaluation?.principalRecommendation || 'Approved for promotion with commendable academic merit.'),
       nextTermResumptionDate:
         editingStudent.terminalEvaluation?.nextTermResumptionDate || 'Monday, 11th January 2027',
     };
@@ -355,22 +359,28 @@ export const HomeroomBroadsheet: React.FC<HomeroomBroadsheetProps> = ({
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 text-white flex items-center justify-center shrink-0 shadow-md">
+            <div className={`h-12 w-12 rounded-2xl ${isAdmin ? 'bg-gradient-to-tr from-indigo-600 to-indigo-700' : 'bg-gradient-to-tr from-amber-500 to-amber-600'} text-white flex items-center justify-center shrink-0 shadow-md`}>
               <Award className="h-6 w-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
-                  Class Broadsheet & Terminal Reports
+                  {isAdmin ? 'Master School Broadsheet & Final Results' : 'Class Broadsheet & Terminal Reports'}
                 </h3>
-                {isMyHomeroom && (
+                {isAdmin ? (
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-800">
+                    👑 Principal Executive Review
+                  </span>
+                ) : isMyHomeroom ? (
                   <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
                     ★ Your Homeroom Class
                   </span>
-                )}
+                ) : null}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Master terminal broadsheet combining all subject teachers’ scores with live ranking and PDF generation
+                {isAdmin
+                  ? 'Master compilation of all subject teacher scores across all classes. View submission completion, audit rankings, and officially endorse report cards.'
+                  : 'Master terminal broadsheet combining all subject teachers’ scores with live ranking and PDF generation'}
               </p>
             </div>
           </div>
@@ -405,7 +415,7 @@ export const HomeroomBroadsheet: React.FC<HomeroomBroadsheetProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div>
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-              Select Homeroom Class:
+              {isAdmin ? 'Select Class to Audit:' : 'Select Homeroom Class:'}
             </label>
             <select
               value={selectedClassId}
@@ -414,9 +424,10 @@ export const HomeroomBroadsheet: React.FC<HomeroomBroadsheetProps> = ({
             >
               {classes.map((c) => {
                 const isFormTeacher = currentTeacher?.permanentClassId === c.id;
+                const formMasterTeacher = allTeachers.find((t) => t.permanentClassId === c.id || t.id === c.teacherId);
                 return (
                   <option key={c.id} value={c.id}>
-                    {c.name} ({c.grade}) {isFormTeacher ? '★ [Your Homeroom]' : ''}
+                    {c.name} ({c.grade}) {isAdmin ? `• Form Master: ${formMasterTeacher?.name || 'Unassigned'}` : isFormTeacher ? '★ [Your Homeroom]' : ''}
                   </option>
                 );
               })}
@@ -874,15 +885,20 @@ export const HomeroomBroadsheet: React.FC<HomeroomBroadsheetProps> = ({
               {/* Presets */}
               <div>
                 <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
-                  1-Click Preset Remarks:
+                  1-Click Preset Remarks ({isAdmin ? "Principal Endorsements" : "Form Teacher"}):
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {[
+                  {(isAdmin ? [
+                    'Outstanding academic attainment and exemplary leadership! Promoted with honours.',
+                    'Very good academic results this term. Demonstrates sound mastery across subjects.',
+                    'Satisfactory performance. Recommended for promotion with advice to strengthen weak areas.',
+                    'Promoted on trial. Consistent holiday revision advised in core subjects.',
+                  ] : [
                     'Outstanding academic performance! Keeps up an exemplary attitude.',
                     'A disciplined, hardworking, and attentive scholar with great promise.',
                     'Good progress shown this term. Capable of higher attainment with consistency.',
                     'Shows genuine enthusiasm in class activities. Recommended to focus on mathematics.',
-                  ].map((preset) => (
+                  ]).map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -895,10 +911,10 @@ export const HomeroomBroadsheet: React.FC<HomeroomBroadsheetProps> = ({
                 </div>
               </div>
 
-              {/* Form Teacher Remark Text */}
+              {/* Remark Text */}
               <div>
                 <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-1">
-                  Form Teacher Remark *
+                  {isAdmin ? "Principal Official Endorsement & Recommendation *" : "Form Teacher Remark *"}
                 </label>
                 <textarea
                   rows={3}
@@ -906,20 +922,20 @@ export const HomeroomBroadsheet: React.FC<HomeroomBroadsheetProps> = ({
                   value={quickRemark}
                   onChange={(e) => setQuickRemark(e.target.value)}
                   className="w-full text-xs p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  placeholder="Type your official end-of-term remark here..."
+                  placeholder={isAdmin ? "Type official Principal's recommendation for report card..." : "Type your official end-of-term remark here..."}
                 />
               </div>
 
               {/* Signature Name */}
               <div>
                 <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-1">
-                  Form Master Sign-off Name:
+                  {isAdmin ? "Principal / Approver Official Title:" : "Form Master Sign-off Name:"}
                 </label>
                 <input
                   type="text"
                   value={quickSignature}
                   onChange={(e) => setQuickSignature(e.target.value)}
-                  placeholder="e.g. Mrs. Victoria Adebayo"
+                  placeholder={isAdmin ? "e.g. Dr. A. O. Balogun (Principal)" : "e.g. Mrs. Victoria Adebayo"}
                   className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
